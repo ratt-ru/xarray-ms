@@ -1,0 +1,28 @@
+import numpy as np
+import pytest
+from arcae.lib.arrow_tables import Table, ms_descriptor
+
+from xarray_ms.testing.simulator import MSStructureSimulator
+
+DEFAULT_SIM_PARAMS = {"ntime": 5, "data_description": [(8, ["XX", "XY", "YX", "YY"])]}
+
+
+@pytest.fixture(scope="session", params=[DEFAULT_SIM_PARAMS])
+def simmed_ms(request, tmp_path_factory):
+  ms = tmp_path_factory.mktemp("simulated") / request.param.pop("name", "test.ms")
+  simulator = MSStructureSimulator(**{**DEFAULT_SIM_PARAMS, **request.param})
+  simulator.simulate_ms(str(ms))
+  return str(ms)
+
+
+@pytest.fixture
+def partitioned_ms(tmp_path):
+  name = str(tmp_path / "partitioned.ms")
+
+  table_desc = ms_descriptor("MAIN")
+
+  with Table.ms_from_descriptor(name, "MAIN", table_desc) as T:
+    T.addrows(10)
+    T.putcol("TIME", np.arange(10, dtype=np.float64))
+
+  return name
