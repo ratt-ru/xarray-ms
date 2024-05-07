@@ -3,7 +3,7 @@ import pickle
 import pytest
 from arcae.lib.arrow_tables import Table
 
-from xarray_ms.table_proxy import _TABLE_CACHE, TableProxy
+from xarray_ms.backend.msv2.table_proxy import _TABLE_CACHE, TableProxy
 
 
 @pytest.mark.parametrize("simmed_ms", [{"name": "proxy.ms"}], indirect=True)

@@ -5,16 +5,14 @@ from threading import Lock
 from typing import TYPE_CHECKING, Any, Callable, Dict, Tuple
 from weakref import WeakValueDictionary, finalize
 
-from xarray_ms.utils import freeze
+from xarray_ms.utils import FrozenKey
 
 if TYPE_CHECKING:
   from arcae import Table as ArcaeTable
 
   FactoryFunctionT = Callable[..., ArcaeTable]
-else:
-  FactoryFunctionT = Callable[..., Any]
 
-_TABLE_CACHE: WeakValueDictionary[Any, Any] = WeakValueDictionary()
+_TABLE_CACHE: WeakValueDictionary[Any, ArcaeTable] = WeakValueDictionary()
 _TABLE_LOCK: Lock = Lock()
 
 
@@ -25,17 +23,18 @@ class TableProxyMetaClass(type):
     # Normalise positional arguments passed as keyword arguments
     if kw:
       argspec = inspect.getfullargspec(factory)
-      for i, arg in enumerate(argspec.args):
-        if arg in kw:
-          args = args[:i] + (kw.pop(arg),) + args[i:]
+      for i, argname in enumerate(argspec.args):
+        if argname in kw:
+          args = args[:i] + (kw.pop(argname),) + args[i:]
 
-    key = freeze((cls, factory) + args + (kw,))
+    key = FrozenKey(cls, factory, *args, **kw)
 
     with _TABLE_LOCK:
       try:
         return _TABLE_CACHE[key]
       except KeyError:
         instance = type.__call__(cls, factory, *args, **kw)
+        instance._key = key
         _TABLE_CACHE[key] = instance
         return instance
 

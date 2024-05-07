@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_array_equal
 
-from xarray_ms.msv2 import partition
+from xarray_ms.backend.msv2.partition import partition
 
 
 # @pytest.mark.skip
@@ -27,6 +27,8 @@ def test_partioning(partitioned_ms):
 
 @pytest.mark.parametrize("na", [7])
 def test_lexical_binary_search(na):
+  rng = np.random.default_rng(seed=42)
+
   time = np.arange(20.0, dtype=np.float64)[:, None]
   ant1, ant2 = (a.astype(np.int32)[None, :] for a in np.triu_indices(na, 1))
   named_arrays = [("time", time), ("antenna1", ant1), ("antenna2", ant2)]
@@ -38,11 +40,13 @@ def test_lexical_binary_search(na):
   for n, a in zip(names, arrays):
     carray[n] = a
 
-  sarray = np.zeros(3, structured_dtype)
-  sarray["time"] = [1.0, 3.0, 5.0]
-  sarray["antenna1"] = [1, 5, 7]
-  sarray["antenna2"] = [2, 8, 9]
+  choice = rng.choice(np.arange(carray.size), 10)
+
+  sarray = np.zeros(choice.size, structured_dtype)
+
+  sarray["time"] = carray["time"][choice]
+  sarray["antenna1"] = carray["antenna1"][choice]
+  sarray["antenna2"] = carray["antenna2"][choice]
 
   idx = np.searchsorted(carray, sarray)
-
-  print(carray[idx] == sarray, carray[idx])
+  assert_array_equal(carray[idx], sarray)

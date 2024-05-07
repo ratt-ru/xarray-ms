@@ -13,6 +13,9 @@ xarray = "^2024.3.0"
 [tool.poetry.extras]
 testing = ["pytest"]
 
+[tool.poetry.plugins."xarray.backends"]
+casa_msv2 = "xarray_ms.backend.msv2.entrypoint:MSv2PartitionEntryPoint"
+
 [tool.ruff]
 line-length = 88
 indent-width = 2

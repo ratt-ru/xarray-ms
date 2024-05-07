@@ -10,8 +10,8 @@ from xarray.backends import BackendArray
 if TYPE_CHECKING:
   from xarray.core.types import _ShapeLike
 
-  from xarray_ms.msv2 import PartitionIndex
-  from xarray_ms.table_proxy import TableProxy
+  from xarray_ms.backend.msv2.partition import PartitionIndex
+  from xarray_ms.backend.msv2.table_proxy import TableProxy
 
 
 class MSv4ColumnAdapter(BackendArray):
