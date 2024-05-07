@@ -1,4 +1,7 @@
+from contextlib import ExitStack
+
 import pytest
+import xarray
 
 from xarray_ms.backend.msv2.entrypoint import MSv2PartitionEntryPoint
 
@@ -14,14 +17,33 @@ from xarray_ms.backend.msv2.entrypoint import MSv2PartitionEntryPoint
   indirect=True,
 )
 def test_msv2_backend(simmed_ms):
+  distributed = pytest.importorskip("dask.distributed")
+  da = pytest.importorskip("dask.array")
+  np = pytest.importorskip("numpy")
+
+  Client = distributed.Client
+  LocalCluster = distributed.LocalCluster
+
   entrypoint = MSv2PartitionEntryPoint()
   assert entrypoint.guess_can_open(simmed_ms) is True
 
-  # ds = entrypoint.open_dataset(simmed_ms, partition=None)
+  with ExitStack() as stack:
+    mem_ds = stack.enter_context(xarray.open_dataset(simmed_ms))
+    mem_ds.load()
+    assert isinstance(mem_ds.DATA.data, np.ndarray)
 
-  import xarray
+  chunks = {"time": 2, "frequency": 2}
 
-  ds = xarray.open_dataset(simmed_ms)
-  ds.compute()
-  # breakpoint()
-  None
+  # with ExitStack() as stack:
+  #   ds = stack.enter_context(xarray.open_dataset(simmed_ms, chunks=chunks))
+  #   assert isinstance(ds.DATA.data, da.Array)
+
+  with ExitStack() as stack:
+    cluster = stack.enter_context(LocalCluster(processes=True, n_workers=4))
+    stack.enter_context(Client(cluster))
+    ds = stack.enter_context(xarray.open_dataset(simmed_ms, chunks=chunks))
+    assert isinstance(ds.DATA.data, da.Array)
+    assert ds.equals(mem_ds)
+    assert ds.identical(mem_ds)
+    # breakpoint()
+    None
