@@ -4,6 +4,8 @@ import inspect
 from threading import Lock
 from typing import TYPE_CHECKING, Any, Callable, Dict, Tuple
 
+from xarray.core.utils import ReprObject
+
 from xarray_ms.utils import FrozenKey
 
 if TYPE_CHECKING:
@@ -13,6 +15,8 @@ if TYPE_CHECKING:
 
 
 class TableFactory:
+  """Hashable Callable for creating an Arcae Table"""
+
   _factory: FactoryFunctionT
   _args: Tuple[Any, ...]
   _kw: Dict[str, Any]
@@ -48,19 +52,23 @@ class TableFactory:
   def __hash__(self) -> int:
     return hash(self._key)
 
-  def __call__(self) -> ArcaeTable:
+  def __eq__(self, other: Any) -> bool:
+    if not isinstance(other, TableFactory):
+      return NotImplemented
+    return self._key == other._key
+
+  def __call__(self, *args, **kw) -> ArcaeTable:
     with self._lock:
       try:
         return self._table
       except AttributeError:
-        # CachingFileManager can pass an mode argument through
-        # ignore it
-        if "mode" in self._kw:
-          kw = self._kw.copy()
-          kw.pop("mode", None)
-        else:
-          kw = self._kw
+        args += self._args
+        kw.update(self._kw)
 
-        print(f"Calling {self._factory}(*{self._args},**{self._kw})")
-        self._table = table = self._factory(*self._args, **kw)
+        if "mode" in kw:
+          mode = kw.pop("mode")
+          if not isinstance(mode, ReprObject) and mode.value != "<unused>":
+            raise NotImplementedError(f"mode argument '{mode}' is not supported")
+
+        self._table = table = self._factory(*args, **kw)
         return table
