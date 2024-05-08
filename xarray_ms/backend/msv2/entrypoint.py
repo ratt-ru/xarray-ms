@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import os
+import warnings
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from numbers import Number
-import os
 from typing import TYPE_CHECKING, Any, Tuple
-import warnings
+from uuid import uuid4
 
 import arcae
 import numpy as np
@@ -23,9 +24,9 @@ from xarray.core.indexing import (
 from xarray.core.utils import FrozenDict, try_read_magic_number_from_file_or_path
 from xarray.core.variable import Variable
 
+from xarray_ms.backend.msv2.cacheset import CACHESET
 from xarray_ms.backend.msv2.table_factory import TableFactory
 from xarray_ms.testing.casa_types import Polarisations
-from xarray_ms.backend.msv2.cacheset import CACHESET
 
 if TYPE_CHECKING:
   from io import BufferedIOBase
@@ -192,9 +193,9 @@ class MSv2Array(BackendArray):
 class MSv2Store(AbstractWritableDataStore):
   """Store for reading and writing data via arcae"""
 
-  __slots__ = ("_factory", "_partition", "_structure")
+  __slots__ = ("_factory", "_partition", "_epoch", "_structure")
 
-  def __init__(self, factory, partition=None, structure=None):
+  def __init__(self, factory, partition=None, structure=None, epoch=None):
     if not partition:
       partition = next(iter(structure.keys()))
       warnings.warn(f"No partition was supplied. Randomly selected {partition}")
@@ -203,10 +204,11 @@ class MSv2Store(AbstractWritableDataStore):
 
     self._factory = factory
     self._partition = partition
+    self._epoch = epoch or uuid4().hex[:8]
     self._structure = structure
 
   @classmethod
-  def open(cls, ms: str, drop_variables=None, partition=None):
+  def open(cls, ms: str, drop_variables=None, partition=None, epoch=None):
     if not isinstance(ms, str):
       raise ValueError("Measurement Sets paths can only be strings")
 
@@ -316,10 +318,11 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
     *,
     drop_variables=None,
     partition=None,
+    epoch=None,
   ) -> Dataset:
     filename_or_obj = _normalize_path(filename_or_obj)
     store = MSv2Store.open(
-      filename_or_obj, drop_variables=drop_variables, partition=partition
+      filename_or_obj, drop_variables=drop_variables, partition=partition, epoch=epoch
     )
     store_entrypoint = StoreBackendEntrypoint()
     return store_entrypoint.open_dataset(store)
