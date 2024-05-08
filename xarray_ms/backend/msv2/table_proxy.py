@@ -43,6 +43,7 @@ class TableProxy(metaclass=TableProxyMetaClass):
   _factory: FactoryFunctionT
   _args: Tuple[Any, ...]
   _kw: Dict[str, Any]
+  _key: FrozenKey
   _table: ArcaeTable
   _lock: Lock
 

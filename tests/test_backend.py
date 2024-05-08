@@ -47,3 +47,9 @@ def test_msv2_backend(simmed_ms):
     assert ds.identical(mem_ds)
     # breakpoint()
     None
+
+  del mem_ds
+  del ds
+  import gc
+
+  gc.collect()

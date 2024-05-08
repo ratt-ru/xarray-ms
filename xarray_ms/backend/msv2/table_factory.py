@@ -65,6 +65,10 @@ class TableFactory:
         args += self._args
         kw.update(self._kw)
 
+        import os
+
+        print(f"Calling {self._factory}(*{args},**{kw}) {os.getpid()}")
+
         if "mode" in kw:
           mode = kw.pop("mode")
           if not isinstance(mode, ReprObject) and mode.value != "<unused>":

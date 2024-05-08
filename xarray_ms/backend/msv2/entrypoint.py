@@ -12,9 +12,9 @@ import numpy as np
 import numpy.typing as npt
 import pyarrow as pa
 from arcae.lib.arrow_tables import Table
+from cacheout import CacheManager, LRUCache
 from xarray.backends import BackendArray, BackendEntrypoint
 from xarray.backends.common import AbstractWritableDataStore, _normalize_path
-from xarray.backends.file_manager import CachingFileManager
 from xarray.backends.store import StoreBackendEntrypoint
 from xarray.core.indexing import (
   IndexingSupport,
@@ -25,7 +25,6 @@ from xarray.core.utils import FrozenDict, try_read_magic_number_from_file_or_pat
 from xarray.core.variable import Variable
 
 from xarray_ms.backend.msv2.table_factory import TableFactory
-from xarray_ms.backend.msv2.table_proxy import TableProxy
 from xarray_ms.testing.casa_types import Polarisations
 
 if TYPE_CHECKING:
@@ -38,6 +37,31 @@ if TYPE_CHECKING:
 
 PARTITION_COLUMNS = ["FIELD_ID", "PROCESSOR_ID", "DATA_DESC_ID", "FEED1", "FEED2"]
 SORTING_COLUMNS = ["TIME", "ANTENNA1", "ANTENNA2"]
+
+
+def on_delete(key, value, cause):
+  print(f"Removing {key} due to {cause}")
+
+
+cacheset = CacheManager(
+  {
+    "tables": {
+      "cache_class": LRUCache,
+      "maxsize": 100,
+      "ttl": 5 * 60,
+      "on_delete": on_delete,
+    },
+    "row_maps": {
+      "cache_class": LRUCache,
+      "maxsize": 100,
+      "ttl": 5 * 60,
+      "on_delete": on_delete,
+    },
+  }
+)
+
+assert isinstance(cacheset["tables"], LRUCache)
+assert isinstance(cacheset["row_maps"], LRUCache)
 
 
 @dataclass
@@ -159,8 +183,8 @@ class MSv2Structure(Mapping):
 
 
 class MSv2Array(BackendArray):
-  def __init__(self, proxy, partition, column, shape, dtype):
-    self._proxy = proxy
+  def __init__(self, factory, partition, column, shape, dtype):
+    self._factory = factory
     self._partition = partition
     self._column = column
     self.shape = shape
@@ -177,23 +201,32 @@ class MSv2Array(BackendArray):
   def _getitem(self, key):
     rows = self._partition.tbl_to_row[key[:2]]
     xkey = (rows.ravel(),) + key[2:]
-    row_data = self._proxy.table.getcol(self._column, xkey)
+    import os
+
+    print(
+      os.getpid(),
+      cacheset["tables"].size(),
+      self._factory._key,
+      self._factory in cacheset["tables"],
+    )
+    table = cacheset["tables"].get(self._factory, lambda k: k())
+    row_data = table.getcol(self._column, xkey)
     return row_data.reshape(rows.shape + row_data.shape[1:])
 
 
 class MSv2Store(AbstractWritableDataStore):
   """Store for reading and writing data via arcae"""
 
-  __slots__ = ("_table_proxy", "_partition", "_structure")
+  __slots__ = ("_factory", "_partition", "_structure")
 
-  def __init__(self, table_proxy, partition=None, structure=None):
+  def __init__(self, factory, partition=None, structure=None):
     if not partition:
       partition = next(iter(structure.keys()))
       warnings.warn(f"No partition was supplied. Randomly selected {partition}")
     elif partition not in structure:
       raise ValueError(f"{partition} not in {list(structure.keys())}")
 
-    self._table_proxy = table_proxy
+    self._factory = factory
     self._partition = partition
     self._structure = structure
 
@@ -204,13 +237,10 @@ class MSv2Store(AbstractWritableDataStore):
 
     structure = MSv2Structure(ms)
     factory = TableFactory(Table.from_filename, ms, readonly=True, lockoptions="nolock")
-    manager = CachingFileManager(factory)
-    manager._make_key()
+    return cls(factory, partition, structure=structure)
 
-    table_proxy = TableProxy(
-      Table.from_filename, ms, readonly=True, lockoptions="nolock"
-    )
-    return cls(table_proxy, partition, structure=structure)
+  def close(self, **kwargs):
+    print("Closing MSv2Store")
 
   def get_variables(self):
     partition = self._structure[self._partition]
@@ -220,18 +250,18 @@ class MSv2Store(AbstractWritableDataStore):
     utime = np.unique(partition.time)
     ntime, nbl = partition.tbl_to_row.shape
 
-    uvw = MSv2Array(self._table_proxy, partition, "UVW", (ntime, nbl, 3), np.float64)
+    uvw = MSv2Array(self._factory, partition, "UVW", (ntime, nbl, 3), np.float64)
     data = MSv2Array(
-      self._table_proxy, partition, "DATA", (ntime, nbl, nfreq, npol), np.complex64
+      self._factory, partition, "DATA", (ntime, nbl, nfreq, npol), np.complex64
     )
     flag = MSv2Array(
-      self._table_proxy, partition, "FLAG", (ntime, nbl, nfreq, npol), np.uint8
+      self._factory, partition, "FLAG", (ntime, nbl, nfreq, npol), np.uint8
     )
 
     data_vars = [
       ("UVW", (("time", "baseline", "uvw_label"), uvw, None)),
       ("DATA", (("time", "baseline", "frequency", "polarization"), data, None)),
-      ("FLAG", (("time", "baseline", "frequeny", "polarization"), flag, None)),
+      ("FLAG", (("time", "baseline", "frequency", "polarization"), flag, None)),
     ]
 
     data_vars = [(n, (d, LazilyIndexedArray(v), a)) for n, (d, v, a) in data_vars]
