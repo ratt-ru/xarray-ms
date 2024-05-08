@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-import os
-import warnings
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from numbers import Number
+import os
 from typing import TYPE_CHECKING, Any, Tuple
+import warnings
 
 import arcae
 import numpy as np
 import numpy.typing as npt
 import pyarrow as pa
 from arcae.lib.arrow_tables import Table
-from cacheout import CacheManager, LRUCache
 from xarray.backends import BackendArray, BackendEntrypoint
 from xarray.backends.common import AbstractWritableDataStore, _normalize_path
 from xarray.backends.store import StoreBackendEntrypoint
@@ -26,6 +25,7 @@ from xarray.core.variable import Variable
 
 from xarray_ms.backend.msv2.table_factory import TableFactory
 from xarray_ms.testing.casa_types import Polarisations
+from xarray_ms.backend.msv2.cacheset import CACHESET
 
 if TYPE_CHECKING:
   from io import BufferedIOBase
@@ -37,31 +37,6 @@ if TYPE_CHECKING:
 
 PARTITION_COLUMNS = ["FIELD_ID", "PROCESSOR_ID", "DATA_DESC_ID", "FEED1", "FEED2"]
 SORTING_COLUMNS = ["TIME", "ANTENNA1", "ANTENNA2"]
-
-
-def on_delete(key, value, cause):
-  print(f"Removing {key} due to {cause}")
-
-
-cacheset = CacheManager(
-  {
-    "tables": {
-      "cache_class": LRUCache,
-      "maxsize": 100,
-      "ttl": 5 * 60,
-      "on_delete": on_delete,
-    },
-    "row_maps": {
-      "cache_class": LRUCache,
-      "maxsize": 100,
-      "ttl": 5 * 60,
-      "on_delete": on_delete,
-    },
-  }
-)
-
-assert isinstance(cacheset["tables"], LRUCache)
-assert isinstance(cacheset["row_maps"], LRUCache)
 
 
 @dataclass
@@ -205,11 +180,11 @@ class MSv2Array(BackendArray):
 
     print(
       os.getpid(),
-      cacheset["tables"].size(),
+      CACHESET["tables"].size(),
       self._factory._key,
-      self._factory in cacheset["tables"],
+      self._factory in CACHESET["tables"],
     )
-    table = cacheset["tables"].get(self._factory, lambda k: k())
+    table = CACHESET["tables"].get(self._factory, lambda k: k())
     row_data = table.getcol(self._column, xkey)
     return row_data.reshape(rows.shape + row_data.shape[1:])
 
