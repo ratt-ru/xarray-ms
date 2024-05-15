@@ -23,7 +23,7 @@ def on_table_delete(key, value, cause):
 class TableFactory:
   """Hashable Callable for creating an Arcae Table"""
 
-  _table_cache: ClassVar[LRUCache] = LRUCache(
+  _TABLE_CACHE: ClassVar[LRUCache] = LRUCache(
     maxsize=100, ttl=5 * 60, on_delete=on_table_delete
   )
   _factory: FactoryFunctionT
@@ -73,11 +73,11 @@ class TableFactory:
 
     print(
       os.getpid(),
-      table_factory._table_cache.size(),
+      table_factory._TABLE_CACHE.size(),
       table_factory._key,
-      table_factory in table_factory._table_cache,
+      table_factory in table_factory._TABLE_CACHE,
     )
     return table_factory._factory(*args, **kw)
 
   def __call__(self, *args, **kw) -> ArcaeTable:
-    return self._table_cache.get(self, partial(self.create_table, args=args, kw=kw))
+    return self._TABLE_CACHE.get(self, partial(self.create_table, args=args, kw=kw))
