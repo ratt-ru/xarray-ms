@@ -52,7 +52,10 @@ class FrozenKey(Hashable):
 
 
 def baseline_id(
-  ant1: npt.NDArray, ant2: npt.NDArray, na: int, auto_corrs: bool = True
+  ant1: npt.NDArray[np.integer],
+  ant2: npt.NDArray[np.integer],
+  na: int,
+  auto_corrs: bool = True,
 ) -> npt.NDArray[np.int64]:
   """Generates a baseline identity from antenna pairs
 
