@@ -18,7 +18,6 @@ from xarray.core.indexing import (
 from xarray.core.utils import FrozenDict, try_read_magic_number_from_file_or_path
 from xarray.core.variable import Variable
 
-from xarray_ms.backend.msv2.cacheset import CACHESET
 from xarray_ms.backend.msv2.structure import MSv2Structure
 from xarray_ms.backend.msv2.table_factory import TableFactory
 
@@ -49,16 +48,7 @@ class MSv2Array(BackendArray):
   def _getitem(self, key):
     rows = self._partition.tbl_to_row[key[:2]]
     xkey = (rows.ravel(),) + key[2:]
-    import os
-
-    print(
-      os.getpid(),
-      CACHESET["tables"].size(),
-      self._factory._key,
-      self._factory in CACHESET["tables"],
-    )
-    table = CACHESET["tables"].get(self._factory, lambda k: k())
-    row_data = table.getcol(self._column, xkey)
+    row_data = self._factory().getcol(self._column, xkey)
     return row_data.reshape(rows.shape + row_data.shape[1:])
 
 
@@ -84,9 +74,9 @@ class MSv2Store(AbstractWritableDataStore):
     if not isinstance(ms, str):
       raise ValueError("Measurement Sets paths can only be strings")
 
-    structure = MSv2Structure(ms)
     factory = TableFactory(Table.from_filename, ms, readonly=True, lockoptions="nolock")
-    return cls(factory, partition, structure=structure)
+    structure = MSv2Structure(ms)
+    return cls(factory, partition=partition, epoch=epoch, structure=structure)
 
   def close(self, **kwargs):
     print("Closing MSv2Store")

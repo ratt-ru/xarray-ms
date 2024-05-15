@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import inspect
+from functools import partial
 from threading import Lock
-from typing import TYPE_CHECKING, Any, Callable, Dict, Tuple
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Tuple
 
-from xarray.core.utils import ReprObject
+from cacheout import LRUCache
 
 from xarray_ms.utils import FrozenKey
 
@@ -14,15 +15,22 @@ if TYPE_CHECKING:
   FactoryFunctionT = Callable[..., ArcaeTable]
 
 
+def on_table_delete(key, value, cause):
+  """Close arcae tables on cache eviction"""
+  value.close()
+
+
 class TableFactory:
   """Hashable Callable for creating an Arcae Table"""
 
+  _table_cache: ClassVar[LRUCache] = LRUCache(
+    maxsize=100, ttl=5 * 60, on_delete=on_table_delete
+  )
   _factory: FactoryFunctionT
   _args: Tuple[Any, ...]
   _kw: Dict[str, Any]
   _lock: Lock
   _key: FrozenKey
-  _table: ArcaeTable
 
   def __init__(self, factory: FactoryFunctionT, *args: Any, **kw: Any):
     # Normalise args with any arguments present in kw
@@ -57,22 +65,19 @@ class TableFactory:
       return NotImplemented
     return self._key == other._key
 
+  @staticmethod
+  def create_table(table_factory, args, kw) -> ArcaeTable:
+    args += table_factory._args
+    kw.update(table_factory._kw)
+    import os
+
+    print(
+      os.getpid(),
+      table_factory._table_cache.size(),
+      table_factory._key,
+      table_factory in table_factory._table_cache,
+    )
+    return table_factory._factory(*args, **kw)
+
   def __call__(self, *args, **kw) -> ArcaeTable:
-    with self._lock:
-      try:
-        return self._table
-      except AttributeError:
-        args += self._args
-        kw.update(self._kw)
-
-        import os
-
-        print(f"Calling {self._factory}(*{args},**{kw}) {os.getpid()}")
-
-        if "mode" in kw:
-          mode = kw.pop("mode")
-          if not isinstance(mode, ReprObject) and mode.value != "<unused>":
-            raise NotImplementedError(f"mode argument '{mode}' is not supported")
-
-        self._table = table = self._factory(*args, **kw)
-        return table
+    return self._table_cache.get(self, partial(self.create_table, args=args, kw=kw))
