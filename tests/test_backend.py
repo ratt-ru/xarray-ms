@@ -30,22 +30,21 @@ def test_msv2_backend(simmed_ms):
   with ExitStack() as stack:
     mem_ds = stack.enter_context(xarray.open_dataset(simmed_ms))
     mem_ds.load()
-    assert isinstance(mem_ds.DATA.data, np.ndarray)
+    assert isinstance(mem_ds.VISIBILITY.data, np.ndarray)
 
   chunks = {"time": 2, "frequency": 2}
 
-  # with ExitStack() as stack:
-  #   ds = stack.enter_context(xarray.open_dataset(simmed_ms, chunks=chunks))
-  #   assert isinstance(ds.DATA.data, da.Array)
+  with ExitStack() as stack:
+    ds = stack.enter_context(xarray.open_dataset(simmed_ms, chunks=chunks))
+    assert isinstance(ds.VISIBILITY.data, da.Array)
 
   with ExitStack() as stack:
     cluster = stack.enter_context(LocalCluster(processes=True, n_workers=4))
     stack.enter_context(Client(cluster))
     ds = stack.enter_context(xarray.open_dataset(simmed_ms, chunks=chunks))
-    assert isinstance(ds.DATA.data, da.Array)
+    assert isinstance(ds.VISIBILITY.data, da.Array)
     assert ds.equals(mem_ds)
     assert ds.identical(mem_ds)
-    # breakpoint()
     None
 
   del mem_ds

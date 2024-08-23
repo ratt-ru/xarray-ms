@@ -17,7 +17,7 @@ cacheout = "^0.16.0"
 testing = ["dask", "distributed", "pytest"]
 
 [tool.poetry.plugins."xarray.backends"]
-xarray_ms_msv2 = "xarray_ms.backend.msv2.entrypoint:MSv2PartitionEntryPoint"
+"xarray-ms:msv2" = "xarray_ms.backend.msv2.entrypoint:MSv2PartitionEntryPoint"
 
 [tool.ruff]
 line-length = 88

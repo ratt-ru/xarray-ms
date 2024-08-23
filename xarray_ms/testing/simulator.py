@@ -12,7 +12,7 @@ import numpy as np
 import numpy.typing as npt
 from arcae.lib.arrow_tables import Table
 
-from xarray_ms.testing.casa_types import DataDescArgType, DataDescription, Feed
+from xarray_ms.casa_types import DataDescArgType, DataDescription, Feed
 
 # First of February 2023
 FIRST_FEB_2023_MJDS = 2459976.50000 * 86400
@@ -79,7 +79,7 @@ class PartitionDescriptor:
 
   chunk_id: int
   simulate_data: bool = False
-  auto_corrs: bool = False
+  auto_corrs: bool = True
   dump_rate: float = 8.0
 
 
@@ -97,6 +97,7 @@ class MSStructureSimulator:
 
   ntime: int
   nantenna: int
+  auto_corrs: bool
   dump_rate: float
   time_chunks: int
   time_start: float
@@ -117,7 +118,7 @@ class MSStructureSimulator:
     nantenna: int = 3,
     data_description: DataDescArgType | None = None,
     partition: Tuple[str, ...] = ("PROCESSOR_ID", "FIELD_ID", "DATA_DESC_ID"),
-    auto_corrs: bool = False,
+    auto_corrs: bool = True,
     simulate_data: bool = True,
   ):
     assert ntime >= 1
@@ -133,7 +134,7 @@ class MSStructureSimulator:
     # Generate antenna1 and antenna2 from a range of antenna ids
     antenna_id = np.arange(nantenna, dtype=np.int32)
     antenna_square = antenna_id - antenna_id[:, None]
-    ant1, ant2 = np.triu_indices_from(antenna_square, int(auto_corrs))
+    ant1, ant2 = np.triu_indices_from(antenna_square, 0 if auto_corrs else 1)
     ant1, ant2 = ant1.astype(np.int32), ant2.astype(np.int32)
 
     # Generate feed1 and feed2 from a range of feed ids
@@ -166,6 +167,7 @@ class MSStructureSimulator:
 
     self.ntime = ntime
     self.nantenna = nantenna
+    self.auto_corrs = auto_corrs
     self.dump_rate = dump_rate
     self.time_chunks = time_chunks
     self.time_start = time_start
@@ -283,6 +285,7 @@ class MSStructureSimulator:
             "TIME": time,
             "chunk_id": chunk_id,
             "simulate_data": self.simulate_data,
+            "auto_corrs": self.auto_corrs,
             **self.model,
             **dict(partition),
           }

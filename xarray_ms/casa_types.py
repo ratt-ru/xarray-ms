@@ -8,27 +8,44 @@ from typing import Any, Dict, Iterable, List, Tuple, overload
 import numpy as np
 import numpy.typing as npt
 
-PRIMARY_KEY_COLUMNS = [
-  "FIELD_ID",
-  "DATA_DESC_ID",
-  "PROCESSOR_ID",
-  "FEED1",
-  "FEED2",
-  "FEED3",
-  "ANTENNA1",
-  "ANTENNA2",
-  "ANTENNA3",
-  "TIME",
-  "TIME_EXTRA_PREC",
-]
 
-INDEXABLE_COLUMNS = PRIMARY_KEY_COLUMNS + [
-  "ARRAY_ID",
-  "OBSERVATION_ID",
-  "PHASE_ID",
-  "SCAN_NUMBER",
-  "STATE_ID",
-]
+class DataType(IntEnum):
+  """
+  Enumeration of CASA Data Types, defined at
+  casacore/casa/Utilities/DataType.h
+  """
+
+  TpBool = 0
+  TpChar = 1
+  TpUChar = 2
+  TpShort = 3
+  TpUShort = 4
+  TpInt = 5
+  TpUInt = 6
+  TpFloat = 7
+  TpDouble = 8
+  TpComplex = 9
+  TpDComplex = 10
+  TpString = 11
+  TpTable = 12
+  TpArrayBool = 13
+  TpArrayChar = 14
+  TpArrayUChar = 15
+  TpArrayShort = 16
+  TpArrayUShort = 17
+  TpArrayInt = 18
+  TpArrayUInt = 19
+  TpArrayFloat = 20
+  TpArrayDouble = 21
+  TpArrayComplex = 22
+  TpArrayDComplex = 23
+  TpArrayString = 24
+  TpRecord = 25
+  TpOther = 26
+  TpQuantity = 27
+  TpArrayQuantity = 28
+  TpInt64 = 29
+  TpArrayInt64 = 30
 
 
 class Stokes(IntEnum):

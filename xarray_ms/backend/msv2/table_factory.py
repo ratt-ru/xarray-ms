@@ -5,7 +5,7 @@ from functools import partial
 from threading import Lock
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Tuple
 
-from cacheout import LRUCache
+from cacheout import Cache
 
 from xarray_ms.utils import FrozenKey
 
@@ -15,16 +15,23 @@ if TYPE_CHECKING:
   FactoryFunctionT = Callable[..., ArcaeTable]
 
 
+def on_get_keep_alive(key, value, exists):
+  """Re-insert on get to update the TTL"""
+  if exists:
+    # Re-insert to update the TTL
+    TableFactory._TABLE_CACHE.set(key, value)
+
+
 def on_table_delete(key, value, cause):
   """Close arcae tables on cache eviction"""
   value.close()
 
 
 class TableFactory:
-  """Hashable Callable for creating an Arcae Table"""
+  """Hashable, callable and pickleable factory class for creating an Arcae Table"""
 
-  _TABLE_CACHE: ClassVar[LRUCache] = LRUCache(
-    maxsize=100, ttl=5 * 60, on_delete=on_table_delete
+  _TABLE_CACHE: ClassVar[Cache] = Cache(
+    maxsize=100, ttl=5 * 60, on_get=on_get_keep_alive, on_delete=on_table_delete
   )
   _factory: FactoryFunctionT
   _args: Tuple[Any, ...]
@@ -69,15 +76,8 @@ class TableFactory:
   def create_table(table_factory, args, kw) -> ArcaeTable:
     args += table_factory._args
     kw.update(table_factory._kw)
-    import os
-
-    print(
-      os.getpid(),
-      table_factory._TABLE_CACHE.size(),
-      table_factory._key,
-      table_factory in table_factory._TABLE_CACHE,
-    )
     return table_factory._factory(*args, **kw)
 
   def __call__(self, *args, **kw) -> ArcaeTable:
+    # assert not args and not kw
     return self._TABLE_CACHE.get(self, partial(self.create_table, args=args, kw=kw))

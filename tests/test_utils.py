@@ -1,8 +1,6 @@
 import numpy as np
-import pytest
-from numpy.testing import assert_array_equal
 
-from xarray_ms.utils import FrozenKey, baseline_id
+from xarray_ms.utils import FrozenKey
 
 
 def test_frozen_key():
@@ -37,11 +35,3 @@ def test_frozen_key():
       ),
     )
   )
-
-
-@pytest.mark.parametrize("na", [4, 7])
-@pytest.mark.parametrize("auto_corrs", [True, False])
-def test_baseline_id(na, auto_corrs):
-  ant1, ant2 = np.triu_indices(na, 0 if auto_corrs else 1)
-  bl_id = baseline_id(ant1, ant2, na, auto_corrs)
-  assert_array_equal(np.arange(ant1.size), bl_id)

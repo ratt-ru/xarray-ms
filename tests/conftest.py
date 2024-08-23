@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 from arcae.lib.arrow_tables import Table, ms_descriptor
 
+from xarray_ms.backend.msv2.structure import MSv2StructureFactory
 from xarray_ms.backend.msv2.table_factory import TableFactory
 from xarray_ms.testing.simulator import MSStructureSimulator
 
@@ -12,6 +13,7 @@ DEFAULT_SIM_PARAMS = {"ntime": 5, "data_description": [(8, ["XX", "XY", "YX", "Y
 def clear_caches():
   yield
   TableFactory._TABLE_CACHE.clear()
+  MSv2StructureFactory._STRUCTURE_CACHE.clear()
 
 
 @pytest.fixture(scope="session", params=[DEFAULT_SIM_PARAMS])

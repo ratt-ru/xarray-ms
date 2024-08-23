@@ -1,28 +1,6 @@
-import arcae
 import numpy as np
 import pytest
 from numpy.testing import assert_array_equal
-
-from xarray_ms.backend.msv2.partition import partition
-
-
-# @pytest.mark.skip
-@pytest.mark.parametrize(
-  "ms",
-  [
-    "/home/simon/data/HLTau_B6cont.calavg.tav300s",
-    # "/home/simon/data/C147_unflagged.MS"
-    # "/home/simon/data/WSRT_polar.MS_p0"
-  ],
-)
-def test_partition(ms):
-  pmap = partition(ms)  # noqa
-
-
-def test_partioning(partitioned_ms):
-  with arcae.table(partitioned_ms) as T:
-    assert_array_equal(T.getcol("TIME"), np.arange(10, dtype=np.float64))
-    assert T.nrow() == 10
 
 
 @pytest.mark.parametrize("na", [7])
