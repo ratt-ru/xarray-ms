@@ -42,7 +42,7 @@ MSV4_to_MSV2_COLUMN_SCHEMAS = {
   ),
 }
 
-FIXED_DIMENSION_SIZES = {"uvw": 3}
+FIXED_DIMENSION_SIZES = {"uvw_label": 3}
 
 
 class MainDatasetFactory:
