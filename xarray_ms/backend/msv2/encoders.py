@@ -13,8 +13,16 @@ TableMeasRefDesc::TableMeasRefDesc
 
 from __future__ import annotations
 
+import sys
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Self
+from typing import TYPE_CHECKING, Any, Dict, List
+
+if TYPE_CHECKING:
+  if sys.version_info >= (3, 11):
+    from typing import Self
+  else:
+    from typing_extensions import Self
+
 
 import numpy as np
 import numpy.testing as npt
