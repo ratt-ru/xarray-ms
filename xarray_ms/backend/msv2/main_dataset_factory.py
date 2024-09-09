@@ -32,7 +32,7 @@ MSV4_to_MSV2_COLUMN_SCHEMAS = {
   "INTEGRATION_TIME": MSv2ColumnSchema("INTERVAL", (), np.nan, QuantityCoder),
   "TIME_CENTROID": MSv2ColumnSchema("TIME_CENTROID", (), np.nan, TimeCoder),
   "EFFECTIVE_INTEGRATION_TIME": MSv2ColumnSchema("EXPOSURE", (), np.nan, QuantityCoder),
-  "UVW": MSv2ColumnSchema("UVW", ("uvw",), np.nan, None),
+  "UVW": MSv2ColumnSchema("UVW", ("uvw_label",), np.nan, None),
   "FLAG": MSv2ColumnSchema("FLAG", ("frequency", "polarization"), 1, None),
   "VISIBILITY": MSv2ColumnSchema(
     "DATA", ("frequency", "polarization"), np.nan + np.nan * 1j, None
