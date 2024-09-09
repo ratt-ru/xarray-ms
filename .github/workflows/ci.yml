@@ -1,0 +1,107 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches:
+    - main
+    tags:
+    - "*"
+  pull_request:
+  schedule:
+    - cron: '30 2 * * 1,4' # Every Monday and Thursday @ 2h30am UTC
+
+env:
+  POETRY_VERSION: 1.8.3
+
+jobs:
+  check_skip:
+    runs-on: ubuntu-latest
+    if: |
+      !contains(format('{0} {1} {2}', github.event.head_commit.message, github.event.pull_request.title, github.event.pull_request.body), '[skip ci]')
+    steps:
+      - run: |
+          cat <<'MESSAGE'
+          github.event_name: ${{ toJson(github.event_name) }}
+          github.event:
+          ${{ toJson(github.event) }}
+          MESSAGE
+  test:
+    needs: check_skip
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install poetry
+        uses: abatilo/actions-poetry@v3
+        with:
+          poetry-version: ${{ env.POETRY_VERSION }}
+
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup a virtual environment appropriate to the python version
+        run: poetry env use python${{ matrix.python-version }}
+
+      - name: Install xarray-ms
+        run: poetry install --extras testing
+
+      - name: Test xarray-ms
+        run: poetry run py.test -s -vvv tests/
+
+      # - name: Debug with tmate on failure
+      #   if: ${{ failure() }}
+      #   uses: mxschmitt/action-tmate@v3
+
+  deploy:
+    needs: [test]
+    runs-on: ubuntu-latest
+    # Run on a push to a tag or main
+    if: >
+      github.event_name == 'push' &&
+      (startsWith(github.event.ref, 'refs/tags') ||
+       github.event.ref == 'refs/heads/main')
+
+    steps:
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+
+      - name: Install Poetry
+        uses: abatilo/actions-poetry@v3
+        with:
+          poetry-version: ${{ env.POETRY_VERSION }}
+
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Build distributions
+        run: poetry build
+
+      - name: Publish distribution 📦 to Test PyPI
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          user: __token__
+          password: ${{ secrets.test_pypi_token }}
+          repository_url: https://test.pypi.org/legacy/
+        continue-on-error: true
+
+      - name: Publish distribution 📦 to PyPI
+        uses: pypa/gh-action-pypi-publish@master
+        if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags')
+        with:
+          user: __token__
+          password: ${{ secrets.pypi_token }}
