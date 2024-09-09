@@ -42,24 +42,30 @@ def irregular_ms(tmp_path, request):
   ant1 = np.concatenate(ant1s)
   ant2 = np.concatenate(ant2s)
 
-  create_table_query = f"""
-    CREATE TABLE {fn}
-    [ANTENNA1 I4,
-    ANTENNA2 I4,
-    DATA_DESC_ID I4,
-    UVW R8 [NDIM=1, SHAPE=[3]],
-    TIME R8,
-    DATA C8 [NDIM=2, SHAPE=[4, 16]]]
-    LIMIT {ddid.size}
-  """
-
   rng = np.random.default_rng()
   data_shape = (len(time), 16, 4)
   data = rng.random(data_shape) + rng.random(data_shape) * 1j
   uvw = rng.random((len(time), 3)).astype(np.float64)
 
+  # table_desc = ms_descriptor("MAIN", False)
+  table_desc = {
+    "DATA": {
+      "_c_order": True,
+      "comment": "DATA column",
+      "dataManagerGroup": "StandardStMan",
+      "dataManagerType": "StandardStMan",
+      # "keywords": {},
+      "maxlen": 0,
+      "ndim": 2,
+      "option": 0,
+      # 'shape': ...,  # Variably shaped
+      "valueType": "COMPLEX",
+    }
+  }
+
   # Create the table
-  with Table.from_taql(create_table_query) as ms:
+  with Table.ms_from_descriptor(fn, "MAIN", table_desc) as ms:
+    ms.addrows(len(ddid))
     ms.putcol("DATA_DESC_ID", ddid)
     ms.putcol("TIME", time)
     ms.putcol("ANTENNA1", ant1)
@@ -70,7 +76,7 @@ def irregular_ms(tmp_path, request):
   yield fn
 
 
-@pytest.mark.skip(reason="Redo with MSv2Structure")
+@pytest.mark.skip
 @pytest.mark.parametrize("na", [4])
 @pytest.mark.parametrize("auto_corrs", [True, False])
 def test_row_mapping(irregular_ms, na, auto_corrs):
@@ -100,3 +106,4 @@ def test_row_mapping(irregular_ms, na, auto_corrs):
     ubl = np.unique(np.stack([ant1[mask], ant2[mask]], axis=1), axis=0)
     rowmap = structure.row_map(key)
     assert rowmap.shape == (utime.size, ubl.shape[0])
+    print(rowmap)

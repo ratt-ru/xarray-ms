@@ -1,20 +1,35 @@
 from __future__ import annotations
 
 import concurrent.futures as cf
+import dataclasses
+import logging
 import multiprocessing as mp
-import os
-from dataclasses import dataclass
+from collections import defaultdict
 from functools import partial
-from typing import Any, ClassVar, Dict, Iterator, List, Mapping, Sequence, Tuple
+from numbers import Integral
+from typing import (
+  Any,
+  ClassVar,
+  Dict,
+  Iterator,
+  List,
+  Mapping,
+  Sequence,
+  Tuple,
+)
 
 import arcae
 import numpy as np
 import numpy.typing as npt
 import pyarrow as pa
 from cacheout import Cache
+from xarray.core.utils import FrozenDict
 
 from xarray_ms.backend.msv2.table_factory import TableFactory
-from xarray_ms.casa_types import Polarisations
+from xarray_ms.casa_types import ColumnDesc, FrequencyMeasures, Polarisations
+from xarray_ms.errors import InvalidMeasurementSet, InvalidPartitionKey
+
+logger = logging.getLogger(__name__)
 
 
 def nr_of_baselines(na: int, auto_corrs: bool = True) -> int:
@@ -53,7 +68,7 @@ def baseline_id(
   nbl = nr_of_baselines(na, auto_corrs=False)
 
   # if auto_corrs:
-  #   return nbl - ant1 + ant2 + na - (na - ant1 + 1) * (na - ant1) // 2
+  #   return nbl - ant1 + ant2 + na - (na - ant1) * (na - ant1 + 1) // 2
   # else:
   #   return nbl - ant1 + ant2 - 1 - (na - ant1) * (na - ant1 - 1) // 2
 
@@ -79,27 +94,49 @@ def baseline_id(
   return result
 
 
-class IrregularGridError(ValueError):
-  """Raised when the intervals associated with each timestep are not homogenous"""
-
-  pass
-
-
-class InvalidMeasurementSet(ValueError):
-  """Raised when the Measurement Set foreign key indexing is invalid"""
-
-
-PARTITION_COLUMNS = ["FIELD_ID", "PROCESSOR_ID", "DATA_DESC_ID", "FEED1", "FEED2"]
+def is_partition_key(key: PartitionKeyT) -> bool:
+  return (
+    isinstance(key, tuple)
+    and len(key) == 2
+    and isinstance(key[0], str)
+    and isinstance(key[1], int)
+  )
 
 
-@dataclass
-class PartitionCoordinateData:
-  """Dataclass containing partition coordinates"""
+PARTITION_COLUMNS: List[str] = [
+  "DATA_DESC_ID",
+  "FIELD_ID",
+  "PROCESSOR_ID",
+  "FEED1",
+  "FEED2",
+]
+
+SHORT_TO_LONG_PARTITION_COLUMNS: Dict[str, str] = {
+  "D": "DATA_DESC_ID",
+  "F": "FIELD_ID",
+  "P": "PROCESSOR_ID",
+  "F1": "FEED1",
+  "F2": "FEED2",
+}
+
+
+SORT_COLUMNS: List[str] = ["TIME", "ANTENNA1", "ANTENNA2"]
+
+
+@dataclasses.dataclass
+class PartitionData:
+  """Dataclass described data unique to a partition"""
 
   time: npt.NDArray[np.float64]
-  interval: float
+  interval: npt.NDArray[np.float64]
   chan_freq: npt.NDArray[np.float64]
+  chan_width: npt.NDArray[np.float64]
   corr_type: npt.NDArray[np.int32]
+  spw_name: str
+  spw_freq_group_name: str
+  spw_ref_freq: float
+  spw_frame: str
+  row_map: npt.NDArray[np.int64]
 
 
 PartitionKeyT = Tuple[Tuple[str, int], ...]
@@ -163,7 +200,8 @@ def on_get_keep_alive(key, value, exists):
 
 
 class MSv2StructureFactory:
-  """Hashable, callable and picklable factory class for creating an MSv2Structure"""
+  """Hashable, callable and picklable factory class
+  for creating and caching an MSv2Structure"""
 
   _ms_factory: TableFactory
   _auto_corrs: bool
@@ -201,17 +239,15 @@ class MSv2Structure(Mapping):
 
   _ms_factory: TableFactory
   _auto_corrs: bool
-  _partitions: Mapping[PartitionKeyT, PartitionCoordinateData]
-  _table_desc: Dict[str, Any]
-  _columns: List[str]
-  _rowmap: Mapping[PartitionKeyT, npt.NDArray[np.int64]]
+  _partitions: Mapping[PartitionKeyT, PartitionData]
+  _column_descs: Dict[str, Dict[str, ColumnDesc]]
   _ant: pa.Table
   _ddid: pa.Table
   _feed: pa.Table
   _spw: pa.Table
   _pol: pa.Table
 
-  def __getitem__(self, key: PartitionKeyT) -> PartitionCoordinateData:
+  def __getitem__(self, key: PartitionKeyT) -> PartitionData:
     return self._partitions[key]
 
   def __iter__(self) -> Iterator[Any]:
@@ -220,13 +256,18 @@ class MSv2Structure(Mapping):
   def __len__(self) -> int:
     return len(self._partitions)
 
-  def __hash__(self) -> int:
-    return hash(self._ms_factory)
-
   @property
   def auto_corrs(self) -> bool:
     """Are auto-correlations included"""
     return self._auto_corrs
+
+  @property
+  def column_descs(self) -> Dict[str, Dict[str, ColumnDesc]]:
+    """Return the per-table column descriptors.
+    Outer key is "MAIN", "SPECTRAL_WINDOW", inner key
+    is the column name such as "FLAG" and "WEIGHT_SPECTRUM"
+    """
+    return self._column_descs
 
   @property
   def na(self) -> int:
@@ -243,9 +284,52 @@ class MSv2Structure(Mapping):
     """Number of baselines in the Measurement Set"""
     return nr_of_baselines(self.na, self.auto_corrs)
 
-  def row_map(self, key: PartitionKeyT) -> npt.NDArray:
-    """Returns the (time, baseline) => row map for the key partition"""
-    return self._row_map[key]
+  @staticmethod
+  def parse_partition_key(key: str) -> PartitionKeyT:
+    """Parses a "DATA_DESC_ID=0, FIELD_ID_1,..." style string
+    into a tuple of (column, id) tuples"""
+    pairs = []
+
+    for component in [k.strip() for k in key.split(",")]:
+      try:
+        column, value = component.split("=")
+      except ValueError as e:
+        raise InvalidPartitionKey(f"Invalid partition key {key!r}") from e
+      else:
+        pairs.append((column, int(value)))
+
+    return tuple(sorted(pairs))
+
+  def resolve_key(self, key: str | PartitionKeyT) -> List[PartitionKeyT]:
+    """Given a possibly incomplete key, resolves to a list of matching partition keys"""
+    if isinstance(key, str):
+      key = self.parse_partition_key(key)
+
+    column_set = set(PARTITION_COLUMNS)
+
+    # Check that the key columns and values are valid
+    new_key: List[Tuple[str, int]] = []
+    for column, value in key:
+      column = column.upper()
+      column = SHORT_TO_LONG_PARTITION_COLUMNS.get(column, column)
+      if column not in column_set:
+        raise InvalidPartitionKey(
+          f"{column} is not valid a valid partition column " f"{PARTITION_COLUMNS}"
+        )
+      if not isinstance(value, Integral):
+        raise InvalidPartitionKey(f"{value} is not a valid partition value")
+      new_key.append((column, value))
+
+    key_set = set(new_key)
+    partition_keys = list(self._partitions.keys())
+    partition_key_sets = list(map(set, partition_keys))
+    matches = []
+
+    for i, partition_key_set in enumerate(partition_key_sets):
+      if key_set.issubset(partition_key_set):
+        matches.append(partition_keys[i])
+
+    return matches
 
   def __init__(self, ms: TableFactory, auto_corrs: bool = True):
     import time as modtime
@@ -254,34 +338,59 @@ class MSv2Structure(Mapping):
 
     self._ms_factory = ms
     self._auto_corrs = auto_corrs
-    self._table_desc = ms().tabledesc()
-    self._columns = ms().columns()
-    name = ms().name()
+
+    table = ms()
+    name = table.name()
+    table_desc = table.tabledesc()
+    col_descs: Dict[str, Dict[str, ColumnDesc]] = defaultdict(dict)
+    col_descs["MAIN"] = FrozenDict(
+      {c: ColumnDesc.from_descriptor(c, table_desc) for c in table.columns()}
+    )
 
     with arcae.table(f"{name}::ANTENNA", lockoptions="nolock") as A:
       self._ant = A.to_arrow()
+      table_desc = A.tabledesc()
+      col_descs["ANTENNA"] = FrozenDict(
+        {c: ColumnDesc.from_descriptor(c, table_desc) for c in A.columns()}
+      )
 
     with arcae.table(f"{name}::FEED", lockoptions="nolock") as F:
       self._feed = F.to_arrow()
+      table_desc = F.tabledesc()
+      col_descs["FEED"] = FrozenDict(
+        {c: ColumnDesc.from_descriptor(c, table_desc) for c in F.columns()}
+      )
 
     with arcae.table(f"{name}::DATA_DESCRIPTION", lockoptions="nolock") as D:
       self._ddid = D.to_arrow()
+      table_desc = D.tabledesc()
+      col_descs["DATA_DESCRIPTION"] = FrozenDict(
+        {c: ColumnDesc.from_descriptor(c, table_desc) for c in D.columns()}
+      )
 
     with arcae.table(f"{name}::SPECTRAL_WINDOW", lockoptions="nolock") as S:
       self._spw = S.to_arrow()
+      table_desc = S.tabledesc()
+      col_descs["SPECTRAL_WINDOW"] = FrozenDict(
+        {c: ColumnDesc.from_descriptor(c, table_desc) for c in S.columns()}
+      )
 
     with arcae.table(f"{name}::POLARIZATION", lockoptions="nolock") as P:
       self._pol = P.to_arrow()
+      table_desc = P.tabledesc()
+      col_descs["POLARIZATION"] = FrozenDict(
+        {c: ColumnDesc.from_descriptor(c, table_desc) for c in P.columns()}
+      )
 
-    sort_columns = ["TIME", "ANTENNA1", "ANTENNA2"]
+    self._column_descs = FrozenDict(col_descs)
+
     other_columns = ["INTERVAL"]
-    read_columns = set(PARTITION_COLUMNS) | set(sort_columns) | set(other_columns)
-    index = ms().to_arrow(columns=read_columns)
-    partitions = TablePartitioner(sort_columns, other_columns + ["row"]).partition(
+    read_columns = set(PARTITION_COLUMNS) | set(SORT_COLUMNS) | set(other_columns)
+    index = table.to_arrow(columns=read_columns)
+    partitions = TablePartitioner(SORT_COLUMNS, other_columns + ["row"]).partition(
       index
     )
 
-    self._row_map = {}
     self._partitions = {}
 
     ncpus = mp.cpu_count()
@@ -313,11 +422,6 @@ class MSv2Structure(Mapping):
         uintervals = list(pool.map(np.unique, interval_chunks))
         uinterval = np.unique(np.concatenate(uintervals))
 
-        if uinterval.size != 1:
-          raise IrregularGridError(
-            f"INTERVAL values for partition {k} are not unique {uinterval}"
-          )
-
         try:
           ddid = next(i for (c, i) in k if c == "DATA_DESC_ID")
         except StopIteration:
@@ -343,18 +447,30 @@ class MSv2Structure(Mapping):
 
         corr_type = Polarisations.from_values(self._pol["CORR_TYPE"][pol_id].as_py())
         chan_freq = self._spw["CHAN_FREQ"][spw_id].as_py()
+        uchan_width = np.unique(self._spw["CHAN_WIDTH"][spw_id].as_py())
 
-        self._partitions[k] = PartitionCoordinateData(
-          time=utime,
-          interval=uinterval.item(),
-          chan_freq=chan_freq,
-          corr_type=corr_type.to_str(),
-        )
+        spw_name = self._spw["NAME"][spw_id].as_py()
+        spw_freq_group_name = self._spw["FREQ_GROUP_NAME"][spw_id].as_py()
+        spw_ref_freq = self._spw["REF_FREQUENCY"][spw_id].as_py()
+        spw_meas_freq_ref = self._spw["MEAS_FREQ_REF"][spw_id].as_py()
+        spw_frame = FrequencyMeasures(spw_meas_freq_ref).name.lower()
 
         nbl = self.nbl
         bl_id = baseline_id(ant1, ant2, self.na, auto_corrs=auto_corrs)
         row_map = np.full(utime.size * nbl, -1, dtype=np.int64)
         row_map[time_id * nbl + bl_id] = rows
-        self._row_map[k] = row_map.reshape(utime.size, nbl)
 
-    print(f"Reading {name} structure in {os.getpid()} took {modtime.time() - start}s")
+        self._partitions[k] = PartitionData(
+          time=utime,
+          interval=uinterval,
+          chan_freq=chan_freq,
+          chan_width=uchan_width,
+          corr_type=corr_type.to_str(),
+          spw_name=spw_name,
+          spw_freq_group_name=spw_freq_group_name,
+          spw_ref_freq=spw_ref_freq,
+          spw_frame=spw_frame,
+          row_map=row_map.reshape(utime.size, nbl),
+        )
+
+    logger.info("Reading %s structure in took %fs", name, modtime.time() - start)

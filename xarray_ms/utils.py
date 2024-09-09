@@ -1,4 +1,5 @@
-from collections.abc import Hashable, Mapping, Sequence, Set
+import inspect
+from collections.abc import Callable, Hashable, Mapping, Sequence, Set
 from typing import Any, Tuple
 
 from numpy import ndarray
@@ -47,3 +48,31 @@ class FrozenKey(Hashable):
 
   def __str__(self) -> str:
     return f"FrozenKey({self._hashvalue})"
+
+
+def normalise_args(
+  factory: Callable, args, kw
+) -> Tuple[Tuple[Any, ...], Mapping[str, Any]]:
+  """Normalise args and kwargs into a hashable representation
+
+  Args:
+    factory: factory function
+    args: positional arguments
+    kw: keyword arguments
+
+  Returns:
+    tuple containing the normalised positional arguments and keyword arguments
+  """
+  spec = inspect.getfullargspec(factory)
+  args = list(args)
+
+  for i, arg in enumerate(spec.args):
+    if i < len(args):
+      continue
+    elif arg in kw:
+      args.append(kw.pop(arg))
+    elif spec.defaults and len(spec.args) - len(spec.defaults) <= i:
+      default = spec.defaults[i - (len(spec.args) - len(spec.defaults))]
+      args.append(default)
+
+  return tuple(args), kw

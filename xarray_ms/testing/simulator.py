@@ -263,8 +263,10 @@ class MSStructureSimulator:
         self.nantenna, 3
       )
       T.putcol("POSITION", position)
-      T.putcol("OFFSET", position)
+      T.putcol("OFFSET", position)  # Use a ramp here too
       T.putcol("NAME", np.asarray([f"ANTENNA-{i}" for i in range(self.nantenna)]))
+      T.putcol("MOUNT", np.asarray(["ALT-AZ" for _ in range(self.nantenna)]))
+      T.putcol("STATION", np.asarray([f"STATION-{i}" for i in range(self.nantenna)]))
 
   def generate_descriptors(self) -> Generator[PartitionDescriptor, None, None]:
     """Generates a sequence of descriptors, each corresponding to a partition"""

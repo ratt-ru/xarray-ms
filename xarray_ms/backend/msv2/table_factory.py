@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import inspect
 from functools import partial
 from threading import Lock
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Tuple
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Mapping, Tuple
 
 from cacheout import Cache
 
-from xarray_ms.utils import FrozenKey
+from xarray_ms.utils import FrozenKey, normalise_args
 
 if TYPE_CHECKING:
   from arcae import Table as ArcaeTable
@@ -28,40 +27,33 @@ def on_table_delete(key, value, cause):
 
 
 class TableFactory:
-  """Hashable, callable and pickleable factory class for creating an Arcae Table"""
+  """Hashable, callable and pickleable factory class
+  for creating and caching an Arcae Table"""
 
   _TABLE_CACHE: ClassVar[Cache] = Cache(
     maxsize=100, ttl=5 * 60, on_get=on_get_keep_alive, on_delete=on_table_delete
   )
   _factory: FactoryFunctionT
   _args: Tuple[Any, ...]
-  _kw: Dict[str, Any]
+  _kw: Mapping[str, Any]
   _lock: Lock
   _key: FrozenKey
 
   def __init__(self, factory: FactoryFunctionT, *args: Any, **kw: Any):
-    # Normalise args with any arguments present in kw
-    if kw:
-      argspec = inspect.getfullargspec(factory)
-      for i, argname in enumerate(argspec.args):
-        if argname in kw:
-          args = args[:i] + (kw.pop(argname),) + args[i:]
-
     self._factory = factory
-    self._args = args
-    self._kw = kw
+    self._args, self._kw = normalise_args(factory, args, kw)
     self._lock = Lock()
-    self._key = FrozenKey(factory, *args, **kw)
+    self._key = FrozenKey(factory, *self._args, **self._kw)
 
   @staticmethod
   def from_reduce_args(
-    factory: FactoryFunctionT, args: Tuple[Any, ...], kw: Dict[str, Any]
+    factory: FactoryFunctionT, args: Tuple[Any, ...], kw: Mapping[str, Any]
   ) -> TableFactory:
     return TableFactory(factory, *args, **kw)
 
   def __reduce__(
     self,
-  ) -> Tuple[Callable, Tuple[Callable, Tuple[Any, ...], Dict[str, Any]]]:
+  ) -> Tuple[Callable, Tuple[Callable, Tuple[Any, ...], Mapping[str, Any]]]:
     return (self.from_reduce_args, (self._factory, self._args, self._kw))
 
   def __hash__(self) -> int:

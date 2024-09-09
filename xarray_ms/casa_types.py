@@ -1,12 +1,134 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, MutableSet, Sequence
+from dataclasses import dataclass
 from enum import IntEnum
 from numbers import Integral
+from pprint import pformat
 from typing import Any, Dict, Iterable, List, Tuple, overload
 
 import numpy as np
 import numpy.typing as npt
+
+from xarray_ms.errors import InvalidMeasurementSet
+
+CASA_TO_NUMPY_MAP = {
+  # Both CASA and NumPy booleans take up one byte
+  # https://github.com/ratt-ru/arcae/issues/118
+  "BOOL": np.uint8,
+  "BOOLEAN": np.uint8,
+  "BYTE": np.uint8,
+  "UCHAR": np.uint8,
+  "SMALLINT": np.int16,
+  "SHORT": np.int16,
+  "USMALLINT": np.uint16,
+  "USHORT": np.uint16,
+  "INT": np.int32,
+  "INTEGER": np.int32,
+  "UINTEGER": np.uint32,
+  "UINT": np.uint32,
+  "FLOAT": np.float32,
+  "DOUBLE": np.float64,
+  "FCOMPLEX": np.complex64,
+  "COMPLEX": np.complex64,
+  "DCOMPLEX": np.complex128,
+  "STRING": object,
+}
+
+
+@dataclass
+class ColumnDesc:
+  """Column Descriptor for a CASA column"""
+
+  name: str
+  dtype: npt.DTypeLike
+  ndim: int
+  shape: Tuple[int, ...] | None
+  options: int
+  keywords: Dict[str, Any]
+
+  @staticmethod
+  def from_descriptor(name: str, table_desc: Dict[str, Any]) -> "ColumnDesc":
+    """Creates a ColumnDesc from a CASA table descriptor"""
+
+    try:
+      desc = table_desc[name]
+    except KeyError:
+      raise InvalidMeasurementSet(
+        pformat(
+          f"Column {name} descriptor is not present in the supplied table descriptor"
+        )
+      )
+
+    try:
+      keywords = desc["keywords"]
+    except KeyError:
+      keywords = {}
+
+    try:
+      casa_type = desc["valueType"].upper()
+    except KeyError:
+      raise InvalidMeasurementSet(
+        pformat(f"Column {name} descriptor {desc} is missing a 'valueType' field")
+      )
+
+    try:
+      np_dtype = CASA_TO_NUMPY_MAP[casa_type]
+    except KeyError:
+      raise InvalidMeasurementSet(
+        f"Column {name} data type {casa_type} does not map to a numpy dtype"
+      )
+
+    try:
+      option = int(desc["option"])
+    except KeyError:
+      raise InvalidMeasurementSet(
+        pformat(
+          f"Column {name} descriptor {desc} is missing a mandatory 'option' field"
+        )
+      )
+
+    # missing ndim implies row only column
+    ndim = int(desc.get("ndim", 0))
+
+    # Extract shape if the column is fixed
+    if option & 4:
+      try:
+        shape = tuple(desc["shape"])
+      except KeyError:
+        raise InvalidMeasurementSet(
+          pformat(
+            f"Column {name} descriptor {desc} is missing a mandatory 'shape' field"
+          )
+        )
+    else:
+      shape = None
+
+    return ColumnDesc(
+      name=name,
+      dtype=np.dtype(np_dtype),
+      ndim=ndim,
+      shape=tuple(map(int, shape)) if shape else None,
+      options=option,
+      keywords=keywords,
+    )
+
+
+class FrequencyMeasures(IntEnum):
+  """
+  Enumeration of CASA Frequency Measure Types
+  defined at casacore/measures/Measures/MFrequency.h
+  """
+
+  REST = 0
+  LSRK = 1
+  LSRD = 2
+  BARY = 3
+  GEO = 4
+  TOPO = 5
+  GALACTO = 6
+  LGROUP = 7
+  CMB = 8
 
 
 class DataType(IntEnum):
