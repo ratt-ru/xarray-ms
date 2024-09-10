@@ -86,14 +86,9 @@ Why xarray-ms?
 Work in Progress
 ----------------
 
-.. warning::
-
-  xarray-ms is currently under active development and does not yet
-  have feature parity with xradio_.
-
-.. warning::
-
-  The Measurement Set v4 specification is currently under active development.
+The Measurement Set v4 specification is currently under active development.
+xarray-ms is currently under active development and does not yet
+have feature parity with xradio_.
 
 Most measures information and many secondary sub-tables are currently missing.
 However, the most important parts of the ``MAIN`` tables,
