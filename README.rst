@@ -119,7 +119,7 @@ for basic algorithm development.
 .. _arcae: https://github.com/ratt-ru/arcae
 .. _dask: https://www.dask.org/
 .. _python-casacore: https://github.com/casacore/python-casacore/
-.. _xarray: https://github.com/pydata/xarray
+.. _xarray: https://xarray.dev/
 .. _xarray_backend: https://docs.xarray.dev/en/stable/internals/how-to-add-new-backend.html
 .. _xarray_lazy: https://docs.xarray.dev/en/latest/internals/internal-design.html#lazy-indexing-classes
 .. _xarray_chunked_arrays: https://docs.xarray.dev/en/latest/internals/chunked-arrays.html
