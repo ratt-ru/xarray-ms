@@ -12,6 +12,8 @@ xarray-ms
         :target: https://xarray-ms.readthedocs.io/en/latest/?badge=latest
         :alt: Documentation Status
 
+====
+
 xarray-ms presents a Measurement Set v4 view (MSv4) over
 `CASA Measurement Sets <https://casa.nrao.edu/Memos/229.html>`_ (MSv2).
 It provides access to MSv2 data via the xarray API, allowing MSv4 compliant applications
