@@ -13,3 +13,4 @@ xarray-ms documentation
    readme
    install
    api
+   history
