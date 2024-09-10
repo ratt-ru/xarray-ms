@@ -76,3 +76,11 @@ def normalise_args(
       args.append(default)
 
   return tuple(args), kw
+
+
+def format_docstring(**subs):
+  def decorator(o):
+    o.__doc__ = o.__doc__.format(**subs)
+    return o
+
+  return decorator

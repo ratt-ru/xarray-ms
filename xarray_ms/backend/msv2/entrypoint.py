@@ -11,6 +11,7 @@ from arcae.lib.arrow_tables import Table
 from xarray.backends import BackendEntrypoint
 from xarray.backends.common import AbstractWritableDataStore, _normalize_path
 from xarray.backends.store import StoreBackendEntrypoint
+from xarray.core.dataset import Dataset
 from xarray.core.datatree import DataTree
 from xarray.core.utils import try_read_magic_number_from_file_or_path
 
@@ -22,13 +23,12 @@ from xarray_ms.backend.msv2.structure import (
 )
 from xarray_ms.backend.msv2.table_factory import TableFactory
 from xarray_ms.errors import InvalidPartitionKey
+from xarray_ms.utils import format_docstring
 
 if TYPE_CHECKING:
   from io import BufferedIOBase
 
   from xarray.backends.common import AbstractDataStore
-  from xarray.core.dataset import Dataset
-  from xarray.core.datatree import DataTree
 
   from xarray_ms.backend.msv2.structure import PartitionKeyT
 
@@ -248,18 +248,41 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
 
     return False
 
+  @format_docstring(DEFAULT_PARTITION_COLUMNS=DEFAULT_PARTITION_COLUMNS)
   def open_dataset(
     self,
     filename_or_obj: str | os.PathLike[Any] | BufferedIOBase | AbstractDataStore,
     *,
     drop_variables: str | Iterable[str] | None = None,
-    partition_columns=None,
-    partition_key=None,
-    auto_corrs=True,
-    ninstances=8,
-    epoch=None,
-    structure_factory=None,
+    partition_columns: List[str] | None = None,
+    partition_key: PartitionKeyT | None = None,
+    auto_corrs: bool = True,
+    ninstances: int = 8,
+    epoch: str | None = None,
+    structure_factory: MSv2StructureFactory | None = None,
   ) -> Dataset:
+    """Create a :class:`~xarray.Dataset` presenting an MSv4 view
+    over a partition of a MSv2 CASA Measurement Set
+
+    Args:
+      filename_or_obj: The path to the MSv2 CASA Measurement Set file.
+      drop_variables: Variables to drop from the dataset.
+      partition_columns: The columns to use for partitioning the Measurement set.
+        Defaults to :code:`{DEFAULT_PARTITION_COLUMNS}`.
+      partition_key: A key corresponding to an individual partition.
+        For example :code:`(('DATA_DESC_ID', 0), ('FIELD_ID', 0))`.
+        If :code:`None`, the first partition will be opened.
+      auto_corrs: Include/Exclude auto-correlations.
+      ninstances: The number of Measurement Set instances to open for parallel I/O.
+      epoch: A unique string identifying the creation of this Dataset.
+        This should not normally need to be set by the user
+      structure_factory: A factory for creating MSv2Structure objects.
+        This should not normally need to be set by the user
+
+    Returns:
+      A :class:`~xarray.Dataset` referring to the unique
+      partition specified by :code:`partition_columns` and :code:`partition_key`.
+    """
     filename_or_obj = _normalize_path(filename_or_obj)
     store = MSv2Store.open(
       filename_or_obj,
@@ -274,17 +297,34 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
     store_entrypoint = StoreBackendEntrypoint()
     return store_entrypoint.open_dataset(store)
 
+  @format_docstring(DEFAULT_PARTITION_COLUMNS=DEFAULT_PARTITION_COLUMNS)
   def open_datatree(
     self,
     filename_or_obj: str | os.PathLike[Any] | BufferedIOBase | AbstractDataStore,
     *,
     drop_variables: str | Iterable[str] | None = None,
-    partition_columns=None,
-    auto_corrs=True,
-    ninstances=8,
-    epoch=None,
+    partition_columns: List[str] | None = None,
+    auto_corrs: bool = True,
+    ninstances: int = 8,
+    epoch: str | None = None,
     **kwargs,
   ) -> DataTree:
+    """Create a :class:`~xarray.core.datatree.DataTree` presenting an MSv4 view
+    over multiple partitions of a MSv2 CASA Measurement Set.
+
+    Args:
+      filename_or_obj: The path to the MSv2 CASA Measurement Set file.
+      drop_variables: Variables to drop from the dataset.
+      partition_columns: The columns to use for partitioning the Measurement set.
+        Defaults to :code:`{DEFAULT_PARTITION_COLUMNS}`.
+      auto_corrs: Include/Exclude auto-correlations.
+      ninstances: The number of Measurement Set instances to open for parallel I/O.
+      epoch: A unique string identifying the creation of this Dataset.
+        This should not normally need to be set by the user
+
+    Returns:
+      An xarray :class:`~xarray.core.datatree.DataTree`
+    """
     if isinstance(filename_or_obj, os.PathLike):
       ms = str(filename_or_obj)
     elif isinstance(filename_or_obj, str):
