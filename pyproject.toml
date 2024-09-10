@@ -21,6 +21,21 @@ testing = ["dask", "distributed", "pytest"]
 [tool.poetry.plugins."xarray.backends"]
 "xarray-ms:msv2" = "xarray_ms.backend.msv2.entrypoint:MSv2PartitionEntryPoint"
 
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+pre-commit = "^3.8.0"
+
+[tool.poetry.group.doc]
+optional = true
+
+[tool.poetry.group.doc.dependencies]
+sphinx = "^8.0.2"
+pygments = "^2.18.0"
+sphinx-copybutton = "^0.5.2"
+pydata-sphinx-theme = "^0.15.4"
+
 [tool.ruff]
 line-length = 88
 indent-width = 2
