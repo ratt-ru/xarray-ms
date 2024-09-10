@@ -349,6 +349,9 @@ class MSv2Structure(Mapping):
 
     start = modtime.time()
 
+    if "DATA_DESC_ID" not in partition_columns:
+      raise ValueError("DATA_DESC_ID must be included as a partitioning column")
+
     self._ms_factory = ms
     self._partition_columns = partition_columns
     self._auto_corrs = auto_corrs
