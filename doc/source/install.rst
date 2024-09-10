@@ -5,6 +5,14 @@ Installation
 
     $ pip install xarray-ms
 
+xarray-ms has a minimal set of dependencies.
+If cubed_, dask_ or zarr_ support is required for use with xarray,
+they must be installed separately.
+
+.. code-block:: bash
+
+  pip install cubed dask[array] distributed zarr
+
 Development
 ===========
 
@@ -57,3 +65,7 @@ build the Sphinx documentation
   $ poetry shell
   $ cd doc
   $ make html
+
+.. _cubed: https://cubed-dev.github.io/cubed/
+.. _dask: https://www.dask.org/
+.. _zarr: https://zarr.dev/
