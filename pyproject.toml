@@ -27,14 +27,14 @@ optional = true
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.8.0"
 
-[tool.poetry.group.docs]
+[tool.poetry.group.doc]
 optional = true
 
-[tool.poetry.group.docs.dependencies]
-furo = "^2024.8.6"
+[tool.poetry.group.doc.dependencies]
 sphinx = "^8.0.2"
 pygments = "^2.18.0"
 sphinx-copybutton = "^0.5.2"
+pydata-sphinx-theme = "^0.15.4"
 
 [tool.ruff]
 line-length = 88
