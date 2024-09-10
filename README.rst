@@ -1,5 +1,16 @@
+=========
 xarray-ms
 =========
+
+.. image:: https://img.shields.io/pypi/v/xarray-ms.svg
+        :target: https://pypi.python.org/pypi/xarray-ms
+
+.. image:: https://github.com/ratt-ru/xarray-ms/actions/workflows/ci.yml/badge.svg
+        :target: https://github.com/ratt-ru/xarray-ms/actions/workflows/ci.yml
+
+.. image:: https://readthedocs.org/projects/xarray-ms/badge/?version=latest
+        :target: https://xarray-ms.readthedocs.io/en/latest/?badge=latest
+        :alt: Documentation Status
 
 xarray-ms presents a Measurement Set v4 view (MSv4) over
 `CASA Measurement Sets <https://casa.nrao.edu/Memos/229.html>`_ (MSv2).
