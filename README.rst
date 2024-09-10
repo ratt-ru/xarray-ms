@@ -84,10 +84,12 @@ Why xarray-ms?
 
 * xarray-ms builds on xarray's
   `backend API <https://docs.xarray.dev/en/stable/internals/how-to-add-new-backend.html>`_:
-  Implementing a formal CASA MSv2 backend has a number of automatically benefits:
+  Implementing a formal CASA MSv2 backend has a number of benefits:
 
-  * Use of xarray's internal I/O routines such as ``open_dataset`` or ``to_zarr``.
-  * Use of xarray's `lazy loading mechanism <xarray_lazy_>`_.
+  * xarray's internal I/O routines such as ``open_dataset`` and ``open_datatree``
+    can dispatch to the backend to load data.
+  * Similarly xarray's `lazy loading mechanism <xarray_lazy_>`_ dispatches
+    through the backend.
   * Automatic access to any `chunked array types <xarray_chunked_arrays_>`_
     supported by xarray including, but not limited to dask_.
   * Arbitrary chunking along any xarray dimension.
@@ -106,8 +108,8 @@ have feature parity with xradio_.
 Most measures information and many secondary sub-tables are currently missing.
 However, the most important parts of the ``MAIN`` tables,
 as well as the ``ANTENNA``, ``POLARIZATON`` and ``SPECTRAL_WINDOW``
-sub-tables are implemented and should be sufficient to start
-developing software that uses xarray-ms.
+sub-tables are implemented and should be sufficient
+for basic algorithm development.
 
 .. _SKAO: https://www.skao.int/
 .. _NRAO: https://public.nrao.edu/
@@ -117,7 +119,7 @@ developing software that uses xarray-ms.
 .. _arcae: https://github.com/ratt-ru/arcae
 .. _dask: https://www.dask.org/
 .. _python-casacore: https://github.com/casacore/python-casacore/
-.. _xarray: https://github.com/pydata/xarray
+.. _xarray: https://xarray.dev/
 .. _xarray_backend: https://docs.xarray.dev/en/stable/internals/how-to-add-new-backend.html
 .. _xarray_lazy: https://docs.xarray.dev/en/latest/internals/internal-design.html#lazy-indexing-classes
 .. _xarray_chunked_arrays: https://docs.xarray.dev/en/latest/internals/chunked-arrays.html
