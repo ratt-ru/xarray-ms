@@ -103,17 +103,10 @@ def is_partition_key(key: PartitionKeyT) -> bool:
   )
 
 
-PARTITION_COLUMNS: List[str] = [
-  "DATA_DESC_ID",
-  "FIELD_ID",
-  "PROCESSOR_ID",
-  "FEED1",
-  "FEED2",
-]
-
 SHORT_TO_LONG_PARTITION_COLUMNS: Dict[str, str] = {
   "D": "DATA_DESC_ID",
   "F": "FIELD_ID",
+  "O": "OBSERVATION_ID",
   "P": "PROCESSOR_ID",
   "F1": "FEED1",
   "F2": "FEED2",
@@ -145,10 +138,14 @@ PartitionKeyT = Tuple[Tuple[str, int], ...]
 class TablePartitioner:
   """Partitions and sorts MSv2 indexing columns"""
 
+  _partitionby: List[str]
   _sortby: List[str]
   _other: List[str]
 
-  def __init__(self, sortby: Sequence[str], other: Sequence[str]):
+  def __init__(
+    self, partitionby: Sequence[str], sortby: Sequence[str], other: Sequence[str]
+  ):
+    self._partitionby = list(partitionby)
     self._sortby = list(sortby)
     self._other = list(other)
 
@@ -170,9 +167,9 @@ class TablePartitioner:
       raise ValueError(f"{read_columns} is not a subset of {index.column_names}")
 
     agg_cmd = [
-      (c, "list") for c in (maybe_row | set(read_columns) - set(PARTITION_COLUMNS))
+      (c, "list") for c in (maybe_row | set(read_columns) - set(self._partitionby))
     ]
-    partitions = index.group_by(PARTITION_COLUMNS).aggregate(agg_cmd)
+    partitions = index.group_by(self._partitionby).aggregate(agg_cmd)
     renames = {f"{c}_list": c for c, _ in agg_cmd}
     partitions = partitions.rename_columns(
       renames.get(c, c) for c in partitions.column_names
@@ -182,7 +179,7 @@ class TablePartitioner:
 
     for p in range(len(partitions)):
       key: PartitionKeyT = tuple(
-        sorted((c, int(partitions[c][p].as_py())) for c in PARTITION_COLUMNS)
+        sorted((c, int(partitions[c][p].as_py())) for c in self._partitionby)
       )
       table_dict = {c: partitions[c][p].values for c in read_columns | maybe_row}
       partition_table = pa.Table.from_pydict(table_dict)
@@ -204,13 +201,17 @@ class MSv2StructureFactory:
   for creating and caching an MSv2Structure"""
 
   _ms_factory: TableFactory
+  _partition_columns: List[str]
   _auto_corrs: bool
   _STRUCTURE_CACHE: ClassVar[Cache] = Cache(
     maxsize=100, ttl=60, on_get=on_get_keep_alive
   )
 
-  def __init__(self, ms: TableFactory, auto_corrs: bool = True):
+  def __init__(
+    self, ms: TableFactory, partition_columns: List[str], auto_corrs: bool = True
+  ):
     self._ms_factory = ms
+    self._partition_columns = partition_columns
     self._auto_corrs = auto_corrs
 
   def __eq__(self, other: Any) -> bool:
@@ -218,19 +219,27 @@ class MSv2StructureFactory:
       return NotImplemented
 
     return (
-      self._ms_factory == other._ms_factory and self._auto_corrs == other._auto_corrs
+      self._ms_factory == other._ms_factory
+      and self._partition_columns == other._partition_columns
+      and self._auto_corrs == other._auto_corrs
     )
 
   def __hash__(self):
-    return hash((self._ms_factory, self._auto_corrs))
+    return hash((self._ms_factory, tuple(self._partition_columns), self._auto_corrs))
 
   def __reduce__(self):
-    return (MSv2StructureFactory, (self._ms_factory, self._auto_corrs))
+    return (
+      MSv2StructureFactory,
+      (self._ms_factory, self._partition_columns, self._auto_corrs),
+    )
 
   def __call__(self, *args, **kw) -> MSv2Structure:
     assert not args and not kw
     return self._STRUCTURE_CACHE.get(
-      self, lambda self: MSv2Structure(self._ms_factory, self._auto_corrs)
+      self,
+      lambda self: MSv2Structure(
+        self._ms_factory, self._partition_columns, self._auto_corrs
+      ),
     )
 
 
@@ -239,6 +248,7 @@ class MSv2Structure(Mapping):
 
   _ms_factory: TableFactory
   _auto_corrs: bool
+  _partition_columns: List[str]
   _partitions: Mapping[PartitionKeyT, PartitionData]
   _column_descs: Dict[str, Dict[str, ColumnDesc]]
   _ant: pa.Table
@@ -305,7 +315,7 @@ class MSv2Structure(Mapping):
     if isinstance(key, str):
       key = self.parse_partition_key(key)
 
-    column_set = set(PARTITION_COLUMNS)
+    column_set = set(self._partition_columns)
 
     # Check that the key columns and values are valid
     new_key: List[Tuple[str, int]] = []
@@ -314,7 +324,8 @@ class MSv2Structure(Mapping):
       column = SHORT_TO_LONG_PARTITION_COLUMNS.get(column, column)
       if column not in column_set:
         raise InvalidPartitionKey(
-          f"{column} is not valid a valid partition column " f"{PARTITION_COLUMNS}"
+          f"{column} is not valid a valid partition column "
+          f"{self._partition_columns}"
         )
       if not isinstance(value, Integral):
         raise InvalidPartitionKey(f"{value} is not a valid partition value")
@@ -331,12 +342,18 @@ class MSv2Structure(Mapping):
 
     return matches
 
-  def __init__(self, ms: TableFactory, auto_corrs: bool = True):
+  def __init__(
+    self, ms: TableFactory, partition_columns: List[str], auto_corrs: bool = True
+  ):
     import time as modtime
 
     start = modtime.time()
 
+    if "DATA_DESC_ID" not in partition_columns:
+      raise ValueError("DATA_DESC_ID must be included as a partitioning column")
+
     self._ms_factory = ms
+    self._partition_columns = partition_columns
     self._auto_corrs = auto_corrs
 
     table = ms()
@@ -385,11 +402,11 @@ class MSv2Structure(Mapping):
     self._column_descs = FrozenDict(col_descs)
 
     other_columns = ["INTERVAL"]
-    read_columns = set(PARTITION_COLUMNS) | set(SORT_COLUMNS) | set(other_columns)
+    read_columns = set(partition_columns) | set(SORT_COLUMNS) | set(other_columns)
     index = table.to_arrow(columns=read_columns)
-    partitions = TablePartitioner(SORT_COLUMNS, other_columns + ["row"]).partition(
-      index
-    )
+    partitions = TablePartitioner(
+      partition_columns, SORT_COLUMNS, other_columns + ["row"]
+    ).partition(index)
 
     self._partitions = {}
 

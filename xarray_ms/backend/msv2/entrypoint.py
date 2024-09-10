@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import warnings
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, Iterable
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Tuple
 from uuid import uuid4
 
 import xarray
@@ -33,19 +33,11 @@ if TYPE_CHECKING:
   from xarray_ms.backend.msv2.structure import PartitionKeyT
 
 
-def table_factory_factory(ms: str, ninstances: int) -> TableFactory:
-  """
-  Ensures consistency when creating a TableFactory.
-  Multiple calls to this method with the same argument will
-  resolve to the same cached instance.
-  """
-  return TableFactory(
-    Table.from_filename,
-    ms,
-    ninstances=ninstances,
-    readonly=True,
-    lockoptions="nolock",
-  )
+DEFAULT_PARTITION_COLUMNS: List[str] = [
+  "DATA_DESC_ID",
+  "FIELD_ID",
+  "OBSERVATION_ID",
+]
 
 
 def promote_chunks(
@@ -78,13 +70,54 @@ def promote_chunks(
   return return_chunks
 
 
+def initialise_default_args(
+  ms: str,
+  ninstances: int,
+  auto_corrs: bool,
+  epoch: str | None,
+  table_factory: TableFactory | None,
+  partition_columns: List[str] | None,
+  partition_key: PartitionKeyT | None,
+  structure_factory: MSv2StructureFactory | None,
+) -> Tuple[str, TableFactory, List[str], PartitionKeyT, MSv2StructureFactory]:
+  """
+  Ensures consistency when initialising default arguments from multiple locations
+  """
+  if not os.path.exists(ms):
+    raise ValueError(f"MS {ms} does not exist")
+
+  table_factory = table_factory or TableFactory(
+    Table.from_filename,
+    ms,
+    ninstances=ninstances,
+    readonly=True,
+    lockoptions="nolock",
+  )
+  epoch = epoch or uuid4().hex[:8]
+  partition_columns = partition_columns or DEFAULT_PARTITION_COLUMNS
+  structure_factory = structure_factory or MSv2StructureFactory(
+    table_factory, partition_columns, auto_corrs=auto_corrs
+  )
+  structure = structure_factory()
+  if partition_key is None:
+    partition_key = next(iter(structure.keys()))
+    warnings.warn(
+      f"No partition_key was supplied. Selected first partition {partition_key}"
+    )
+  elif partition_key not in structure:
+    raise ValueError(f"{partition_key} not in {list(structure.keys())}")
+
+  return epoch, table_factory, partition_columns, partition_key, structure_factory
+
+
 class MSv2Store(AbstractWritableDataStore):
   """Store for reading and writing MSv2 data"""
 
   __slots__ = (
     "_table_factory",
     "_structure_factory",
-    "_partition",
+    "_partition_columns",
+    "_partition_key",
     "_auto_corrs",
     "_ninstances",
     "_epoch",
@@ -92,6 +125,7 @@ class MSv2Store(AbstractWritableDataStore):
 
   _table_factory: TableFactory
   _structure_factory: MSv2StructureFactory
+  _partition_columns: List[str]
   _partition: PartitionKeyT
   _autocorrs: bool
   _ninstances: int
@@ -101,14 +135,16 @@ class MSv2Store(AbstractWritableDataStore):
     self,
     table_factory: TableFactory,
     structure_factory: MSv2StructureFactory,
-    partition: PartitionKeyT,
+    partition_columns: List[str],
+    partition_key: PartitionKeyT,
     auto_corrs: bool,
     ninstances: int,
     epoch: str,
   ):
     self._table_factory = table_factory
     self._structure_factory = structure_factory
-    self._partition = partition
+    self._partition_columns = partition_columns
+    self._partition_key = partition_key
     self._auto_corrs = auto_corrs
     self._ninstances = ninstances
     self._epoch = epoch
@@ -118,7 +154,8 @@ class MSv2Store(AbstractWritableDataStore):
     cls,
     ms: str,
     drop_variables=None,
-    partition: PartitionKeyT | None = None,
+    partition_columns: List[str] | None = None,
+    partition_key: PartitionKeyT | None = None,
     auto_corrs: bool = True,
     ninstances: int = 1,
     epoch: str | None = None,
@@ -127,23 +164,24 @@ class MSv2Store(AbstractWritableDataStore):
     if not isinstance(ms, str):
       raise ValueError("Measurement Sets paths must be strings")
 
-    table_factory = table_factory_factory(ms, ninstances)
-    epoch = epoch or uuid4().hex[:8]
-    structure_factory = structure_factory or MSv2StructureFactory(
-      table_factory, auto_corrs
+    epoch, table_factory, partition_columns, partition_key, structure_factory = (
+      initialise_default_args(
+        ms,
+        ninstances,
+        auto_corrs,
+        epoch,
+        None,
+        partition_columns,
+        partition_key,
+        structure_factory,
+      )
     )
-    structure = structure_factory()
-
-    if partition is None:
-      partition = next(iter(structure.keys()))
-      warnings.warn(f"No partition was supplied. Selected first partition {partition}")
-    elif partition not in structure:
-      raise ValueError(f"{partition} not in {list(structure.keys())}")
 
     return cls(
       table_factory,
       structure_factory,
-      partition=partition,
+      partition_columns=partition_columns,
+      partition_key=partition_key,
       auto_corrs=auto_corrs,
       ninstances=ninstances,
       epoch=epoch,
@@ -154,12 +192,12 @@ class MSv2Store(AbstractWritableDataStore):
 
   def get_variables(self):
     return MainDatasetFactory(
-      self._partition, self._table_factory, self._structure_factory
+      self._partition_key, self._table_factory, self._structure_factory
     ).get_variables()
 
   def get_attrs(self):
     try:
-      ddid = next(iter(v for k, v in self._partition if k == "DATA_DESC_ID"))
+      ddid = next(iter(v for k, v in self._partition_key if k == "DATA_DESC_ID"))
     except StopIteration:
       raise KeyError("DATA_DESC_ID not found in partition")
 
@@ -183,7 +221,7 @@ class MSv2Store(AbstractWritableDataStore):
 class MSv2PartitionEntryPoint(BackendEntrypoint):
   open_dataset_parameters = [
     "filename_or_obj",
-    "partition",
+    "partition_columns" "partition_key",
     "auto_corrs",
     "ninstances",
     "epoch",
@@ -212,14 +250,11 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
 
   def open_dataset(
     self,
-    filename_or_obj: str
-    | os.PathLike[Any]
-    | BufferedIOBase
-    | AbstractDataStore
-    | TableFactory,
+    filename_or_obj: str | os.PathLike[Any] | BufferedIOBase | AbstractDataStore,
     *,
     drop_variables: str | Iterable[str] | None = None,
-    partition=None,
+    partition_columns=None,
+    partition_key=None,
     auto_corrs=True,
     ninstances=8,
     epoch=None,
@@ -229,7 +264,8 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
     store = MSv2Store.open(
       filename_or_obj,
       drop_variables=drop_variables,
-      partition=partition,
+      partition_columns=partition_columns,
+      partition_key=partition_key,
       auto_corrs=auto_corrs,
       ninstances=ninstances,
       epoch=epoch,
@@ -243,6 +279,7 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
     filename_or_obj: str | os.PathLike[Any] | BufferedIOBase | AbstractDataStore,
     *,
     drop_variables: str | Iterable[str] | None = None,
+    partition_columns=None,
     auto_corrs=True,
     ninstances=8,
     epoch=None,
@@ -255,10 +292,11 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
     else:
       raise ValueError("Measurement Set paths must be strings")
 
-    table_factory = table_factory_factory(ms, ninstances)
-    structure_factory = MSv2StructureFactory(table_factory, auto_corrs=auto_corrs)
-    structure = structure_factory()
+    epoch, _, partition_columns, _, structure_factory = initialise_default_args(
+      ms, ninstances, auto_corrs, epoch, None, partition_columns, None, None
+    )
 
+    structure = structure_factory()
     datasets = {}
     chunks = kwargs.pop("chunks", None)
     pchunks = promote_chunks(structure, chunks)
@@ -267,7 +305,8 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
       ds = xarray.open_dataset(
         ms,
         drop_variables=drop_variables,
-        partition=partition_key,
+        partition_columns=partition_columns,
+        partition_key=partition_key,
         auto_corrs=auto_corrs,
         ninstances=ninstances,
         epoch=epoch,
