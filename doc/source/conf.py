@@ -54,8 +54,8 @@ html_theme = "pydata_sphinx_theme"
 html_static_path = ["_static"]
 
 extlinks = {
-  "issue": ("https://github.com/ratt-ru/xarray-ms/issues/%s", "GH#"),
-  "pr": ("https://github.com/ratt-ru/xarray-ms/pull/%s", "GH#"),
+  "issue": ("https://github.com/ratt-ru/xarray-ms/issues/%s", "GH%s"),
+  "pr": ("https://github.com/ratt-ru/xarray-ms/pull/%s", "PR%s"),
 }
 
 # Example configuration for intersphinx: refer to the Python standard library.
