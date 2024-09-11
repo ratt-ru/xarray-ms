@@ -5,6 +5,11 @@ from xarray.backends.api import open_datatree
 from xarray.core.dataset import Dataset
 from xarray.core.datatree import DataTree
 
+try:
+  import zarr
+except ImportError:
+  zarr = None
+
 
 def encode_attributes(ds: Dataset) -> Dataset:
   """Encode the antenna_xds attribute of a Dataset."""
@@ -44,6 +49,9 @@ def xds_from_zarr(*args, **kwargs):
   """Read a Measurement Set-like :class:`~xarray.Dataset` from a Zarr store.
 
   Thin wrapper around :func:`xarray.open_zarr`."""
+  if zarr is None:
+    raise ImportError("pip install zarr")
+
   return decode_attributes(xarray.open_zarr(*args, **kwargs))
 
 
@@ -52,6 +60,9 @@ def xds_to_zarr(ds: Dataset, *args, **kwargs) -> None:
 
   Thin wrapper around :meth:`xarray.Dataset.to_zarr`.
   """
+  if zarr is None:
+    raise ImportError("pip install zarr")
+
   return encode_attributes(ds).to_zarr(*args, **kwargs)
 
 
@@ -60,6 +71,9 @@ def xdt_from_zarr(*args, **kwargs):
   from a Zarr store.
 
   Thin wrapper around :func:`xarray.backends.api.open_datatree`."""
+  if zarr is None:
+    raise ImportError("pip install zarr")
+
   return open_datatree(*args, **kwargs).map_over_subtree(decode_attributes)
 
 
@@ -69,4 +83,7 @@ def xdt_to_zarr(dt: DataTree, *args, **kwargs) -> None:
 
   Thin wrapper around :meth:`xarray.core.datatree.DataTree.to_zarr`.
   """
+  if zarr is None:
+    raise ImportError("pip install zarr")
+
   return dt.map_over_subtree(encode_attributes).to_zarr(*args, **kwargs)
