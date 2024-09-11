@@ -18,6 +18,7 @@ from xarray.core.utils import try_read_magic_number_from_file_or_path
 from xarray_ms.backend.msv2.antenna_dataset_factory import AntennaDatasetFactory
 from xarray_ms.backend.msv2.main_dataset_factory import MainDatasetFactory
 from xarray_ms.backend.msv2.structure import (
+  DEFAULT_PARTITION_COLUMNS,
   MSv2Structure,
   MSv2StructureFactory,
 )
@@ -30,14 +31,7 @@ if TYPE_CHECKING:
 
   from xarray.backends.common import AbstractDataStore
 
-  from xarray_ms.backend.msv2.structure import PartitionKeyT
-
-
-DEFAULT_PARTITION_COLUMNS: List[str] = [
-  "DATA_DESC_ID",
-  "FIELD_ID",
-  "OBSERVATION_ID",
-]
+  from xarray_ms.backend.msv2.structure import DEFAULT_PARTITION_COLUMNS, PartitionKeyT
 
 
 def promote_chunks(

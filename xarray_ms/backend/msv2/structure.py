@@ -103,6 +103,13 @@ def is_partition_key(key: PartitionKeyT) -> bool:
   )
 
 
+DEFAULT_PARTITION_COLUMNS: List[str] = [
+  "DATA_DESC_ID",
+  "FIELD_ID",
+  "OBSERVATION_ID",
+]
+
+
 SHORT_TO_LONG_PARTITION_COLUMNS: Dict[str, str] = {
   "D": "DATA_DESC_ID",
   "F": "FIELD_ID",
