@@ -1,4 +1,6 @@
 import dataclasses
+import os
+import tempfile
 import typing
 from typing import (
   Any,
@@ -17,6 +19,8 @@ from xarray_ms.casa_types import DataDescArgType, DataDescription, Feed
 # First of February 2023
 FIRST_FEB_2023_MJDS = 2459976.50000 * 86400
 
+# Default simulation parameters
+DEFAULT_SIM_PARAMS = {"ntime": 5, "data_description": [(8, ["XX", "XY", "YX", "YY"])]}
 
 # Additional Columns to add
 ADDITIONAL_COLUMNS = {
@@ -383,3 +387,16 @@ class MSStructureSimulator:
       )
 
     return {column: (dims, data) for column, dims, data in np_arrays}
+
+
+def simulate(name=None, **sim_params) -> str:
+  """
+  Create a Measurement Set in a temporary directory,
+  with the given simulation parameters.
+  Return the directory
+  """
+  tmpdir = tempfile.mkdtemp()
+  ms_path = os.path.join(tmpdir, name or "simulated.ms")
+  simulator = MSStructureSimulator(**{**DEFAULT_SIM_PARAMS, **sim_params})
+  simulator.simulate_ms(ms_path)
+  return ms_path

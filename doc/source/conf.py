@@ -24,6 +24,8 @@ extensions = [
   "sphinx.ext.doctest",
   "sphinx.ext.napoleon",
   "sphinx.ext.intersphinx",
+  "IPython.sphinxext.ipython_directive",
+  "IPython.sphinxext.ipython_console_highlighting",
 ]
 
 templates_path = ["_templates"]
@@ -52,8 +54,8 @@ html_theme = "pydata_sphinx_theme"
 html_static_path = ["_static"]
 
 extlinks = {
-  "issue": ("https://github.com/ratt-ru/xarray-ms/issues/%s", "GH#"),
-  "pr": ("https://github.com/ratt-ru/xarray-ms/pull/%s", "GH#"),
+  "issue": ("https://github.com/ratt-ru/xarray-ms/issues/%s", "GH%s"),
+  "pr": ("https://github.com/ratt-ru/xarray-ms/pull/%s", "PR%s"),
 }
 
 # Example configuration for intersphinx: refer to the Python standard library.
@@ -63,3 +65,12 @@ intersphinx_mapping = {
   "python": ("https://docs.python.org/3/", None),
   "xarray": ("https://docs.xarray.dev/en/stable", None),
 }
+
+# Exclude link file
+exclude_patterns = ["_build", "links.rst"]
+
+# make rst_epilog a variable, so you can add other epilog parts to it
+rst_epilog = ""
+# Read link all targets from file
+with open("links.rst") as f:
+  rst_epilog += f.read()

@@ -14,6 +14,11 @@ if TYPE_CHECKING:
 
 
 def slice_length(s, max_len):
+  if isinstance(s, np.ndarray):
+    if s.ndim != 1:
+      raise NotImplementedError("Slicing with non-1D numpy arrays")
+    return len(s)
+
   start, stop, step = s.indices(max_len)
   if step != 1:
     raise NotImplementedError(f"Slicing with steps {s} other than 1 not supported")
