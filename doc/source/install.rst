@@ -69,3 +69,22 @@ build the Sphinx documentation
 .. _cubed: https://cubed-dev.github.io/cubed/
 .. _dask: https://www.dask.org/
 .. _zarr: https://zarr.dev/
+
+Release Process
+---------------
+
+For a new version number, say ``0.2.0``, perform the following operations
+on the ``main`` branch:
+
+1. Edit `doc/source/changelog.rst` to reflect the new version.
+2. Run
+
+   .. code-block:: bash
+
+      $ tbump --dry-run 0.2.0
+
+3. If 2. succeeds, run
+
+   .. code-block:: bash
+
+      $ tbump 0.2.0
