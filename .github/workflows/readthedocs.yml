@@ -15,10 +15,10 @@ permissions:
 
 jobs:
   documentation-links:
+    if: |
+      !contains(format('{0} {1} {2}', github.event.head_commit.message, github.event.pull_request.title, github.event.pull_request.body), '[skip ci]')
     runs-on: ubuntu-latest
     steps:
       - uses: readthedocs/actions/preview@v1
-        if: |
-          !contains(format('{0} {1} {2}', github.event.head_commit.message, github.event.pull_request.title, github.event.pull_request.body), '[skip ci]')
         with:
           project-slug: "xarray-ms"
