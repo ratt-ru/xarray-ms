@@ -51,6 +51,12 @@ napoleon_attr_annotations = True
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = "pydata_sphinx_theme"
+
+# Disable navigation sidebars
+# https://github.com/pydata/pydata-sphinx-theme/issues/1662
+html_sidebars = {
+  "**": [],
+}
 html_static_path = ["_static"]
 
 extlinks = {
