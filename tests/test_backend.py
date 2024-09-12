@@ -4,9 +4,11 @@ import numpy as np
 import pytest
 import xarray
 import xarray.testing as xt
+from numpy.testing import assert_array_equal
 from xarray.backends.api import open_datatree
 
 from xarray_ms.backend.msv2.entrypoint import MSv2PartitionEntryPoint
+from xarray_ms.testing.utils import id_string
 
 
 def test_entrypoint(simmed_ms):
@@ -15,6 +17,7 @@ def test_entrypoint(simmed_ms):
   assert entrypoint.guess_can_open(simmed_ms) is True
 
 
+@pytest.mark.filterwarnings("ignore:.*?matched multiple partitions")
 @pytest.mark.parametrize(
   "simmed_ms",
   [
@@ -54,6 +57,78 @@ def test_open_dataset(simmed_ms):
     del ds.attrs["creation_date"]
     xt.assert_equal(ds, mem_ds)
     xt.assert_identical(ds, mem_ds)
+
+
+@pytest.mark.filterwarnings("ignore:.*?matched multiple partitions")
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [
+    {
+      "name": "backend.ms",
+      "nfield": 2,
+      "data_description": [
+        (8, ["XX", "XY", "YX", "YY"]),
+        (4, ["RR", "LL"]),
+        (16, ["RR", "RL", "LR", "LL"]),
+      ],
+    }
+  ],
+  indirect=True,
+)
+@pytest.mark.parametrize(
+  "partition_key, pols, nfreq",
+  [
+    # Resolve to DATA_DESC_ID 0, FIELD_ID 0
+    (None, ["XX", "XY", "YX", "YY"], 8),
+    # Resolve to FIELD_ID 0
+    ((("DATA_DESC_ID", 0),), ["XX", "XY", "YX", "YY"], 8),
+    ((("DATA_DESC_ID", 1),), ["RR", "LL"], 4),
+    ((("DATA_DESC_ID", 2),), ["RR", "RL", "LR", "LL"], 16),
+    ("D=0", ["XX", "XY", "YX", "YY"], 8),
+    ("D=1", ["RR", "LL"], 4),
+    ("D=2", ["RR", "RL", "LR", "LL"], 16),
+    # Resolves to DATA_DESC_ID 0
+    ((("FIELD_ID", 0),), ["XX", "XY", "YX", "YY"], 8),
+    ((("FIELD_ID", 1),), ["XX", "XY", "YX", "YY"], 8),
+    ("F=0", ["XX", "XY", "YX", "YY"], 8),
+    ("F=1", ["XX", "XY", "YX", "YY"], 8),
+    # Full key resolution
+    ((("DATA_DESC_ID", 0), ("FIELD_ID", 0)), ["XX", "XY", "YX", "YY"], 8),
+    ((("DATA_DESC_ID", 1), ("FIELD_ID", 0)), ["RR", "LL"], 4),
+    ((("DATA_DESC_ID", 2), ("FIELD_ID", 0)), ["RR", "RL", "LR", "LL"], 16),
+    ((("DATA_DESC_ID", 0), ("FIELD_ID", 1)), ["XX", "XY", "YX", "YY"], 8),
+    ((("DATA_DESC_ID", 1), ("FIELD_ID", 1)), ["RR", "LL"], 4),
+    ((("DATA_DESC_ID", 2), ("FIELD_ID", 1)), ["RR", "RL", "LR", "LL"], 16),
+    # Reverse order
+    ((("FIELD_ID", 0), ("DATA_DESC_ID", 0)), ["XX", "XY", "YX", "YY"], 8),
+    ((("FIELD_ID", 0), ("DATA_DESC_ID", 1)), ["RR", "LL"], 4),
+    ((("FIELD_ID", 0), ("DATA_DESC_ID", 2)), ["RR", "RL", "LR", "LL"], 16),
+    ((("FIELD_ID", 1), ("DATA_DESC_ID", 0)), ["XX", "XY", "YX", "YY"], 8),
+    ((("FIELD_ID", 1), ("DATA_DESC_ID", 1)), ["RR", "LL"], 4),
+    ((("FIELD_ID", 1), ("DATA_DESC_ID", 2)), ["RR", "RL", "LR", "LL"], 16),
+    # Short column name
+    ((("F", 0), ("D", 0)), ["XX", "XY", "YX", "YY"], 8),
+    ((("D", 0), ("F", 0)), ["XX", "XY", "YX", "YY"], 8),
+    # String keys
+    ("", ["XX", "XY", "YX", "YY"], 8),
+    ("D=0,F=0", ["XX", "XY", "YX", "YY"], 8),
+    ("D=1,F=0", ["RR", "LL"], 4),
+    ("D=2,F=0", ["RR", "RL", "LR", "LL"], 16),
+    ("D=0,F=1", ["XX", "XY", "YX", "YY"], 8),
+    ("D=1,F=1", ["RR", "LL"], 4),
+    ("D=2,F=1", ["RR", "RL", "LR", "LL"], 16),
+  ],
+  ids=id_string,
+)
+@pytest.mark.parametrize("partition_columns", [["DATA_DESC_ID", "FIELD_ID"]])
+def test_open_dataset_partition_keys(
+  simmed_ms, partition_columns, partition_key, pols, nfreq
+):
+  ds = xarray.open_dataset(
+    simmed_ms, partition_columns=partition_columns, partition_key=partition_key
+  )
+  assert_array_equal(ds.polarization.values, pols)
+  assert {("frequency", nfreq), ("polarization", len(pols))}.issubset(ds.sizes.items())
 
 
 @pytest.mark.parametrize(

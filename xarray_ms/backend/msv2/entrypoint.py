@@ -160,15 +160,19 @@ class MSv2Store(AbstractWritableDataStore):
       )
     )
 
+    # Resolve the user supplied partition key against actual
+    # partition keys
     structure = structure_factory()
-
-    if partition_key is None:
-      partition_key = next(iter(structure.keys()))
-      warnings.warn(
-        f"No partition_key was supplied. Selected first partition {partition_key}"
-      )
-    elif partition_key not in structure:
+    partition_keys = structure.resolve_key(partition_key)
+    if len(partition_keys) == 0:
       raise ValueError(f"{partition_key} not in {list(structure.keys())}")
+    else:
+      first_key = next(iter(partition_keys))
+      if len(partition_keys) > 1:
+        warnings.warn(
+          f"{partition_key} matched multiple partitions. Selected {first_key}"
+        )
+      partition_key = first_key
 
     return cls(
       table_factory,
