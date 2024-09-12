@@ -3,8 +3,9 @@
 Changelog
 =========
 
-0.2.1 (DD-MM-YYYY)
+X.Y.Z (DD-MM-YYYY)
 ------------------
+* Add Github Issue and PR templates (:pr:`17`)
 * Improve key resolution (:pr:`15`)
 * Add a basic tutorial (:pr:`13`)
 
