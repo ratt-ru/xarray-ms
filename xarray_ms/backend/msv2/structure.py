@@ -317,9 +317,14 @@ class MSv2Structure(Mapping):
 
     return tuple(sorted(pairs))
 
-  def resolve_key(self, key: str | PartitionKeyT) -> List[PartitionKeyT]:
+  def resolve_key(self, key: str | PartitionKeyT | None) -> List[PartitionKeyT]:
     """Given a possibly incomplete key, resolves to a list of matching partition keys"""
+    if key is None:
+      return list(self.keys())
+
     if isinstance(key, str):
+      if not key:
+        return list(self.keys())
       key = self.parse_partition_key(key)
 
     column_set = set(self._partition_columns)
