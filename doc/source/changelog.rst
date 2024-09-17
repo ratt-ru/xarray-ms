@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Remove unnecessary coordinate attributes (:pr:`23`)
 * Disable navigation sidebars (:pr:`19`)
 * Add Github Issue and PR templates (:pr:`17`)
 * Improve key resolution (:pr:`15`)

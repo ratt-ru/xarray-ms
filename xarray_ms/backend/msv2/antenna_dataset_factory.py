@@ -26,11 +26,13 @@ class AntennaDatasetFactory:
       },
       coords={
         "antenna_name": Variable("antenna_name", ants["NAME"].to_numpy()),
-        "station": Variable(
-          "antenna_name", ants["STATION"].to_numpy(), {"coordinates": "station"}
-        ),
         "mount": Variable(
-          "antenna_name", ants["MOUNT"].to_numpy(), {"coordinates": "mount"}
+          "antenna_name",
+          ants["MOUNT"].to_numpy(),
+        ),
+        "station": Variable(
+          "antenna_name",
+          ants["STATION"].to_numpy(),
         ),
       },
     )
