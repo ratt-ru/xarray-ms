@@ -33,24 +33,3 @@ Entrypoint class for the MSv2 backend.
 
 .. autoclass:: xarray_ms.backend.msv2.entrypoint.MSv2PartitionEntryPoint
     :members: open_dataset, open_datatree
-
-
-Reading from Zarr
------------------
-
-Thin wrappers around :func:`xarray.Dataset.open_zarr`
-and :func:`xarray.DataTree.open_zarr` that encode
-:class:`~xarray.Dataset` attributes as JSON.
-
-.. autofunction:: xarray_ms.xds_from_zarr
-.. autofunction:: xarray_ms.xdt_from_zarr
-
-Writing to Zarr
----------------
-
-Thin wrappers around :func:`xarray.Dataset.to_zarr`
-and :func:`xarray.DataTree.to_zarr` that encode
-:class:`~xarray.Dataset` attributes as JSON.
-
-.. autofunction:: xarray_ms.xds_to_zarr
-.. autofunction:: xarray_ms.xdt_to_zarr

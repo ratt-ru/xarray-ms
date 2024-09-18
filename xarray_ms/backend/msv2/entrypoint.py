@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import warnings
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Tuple
 from uuid import uuid4
 
 import xarray
@@ -35,13 +35,16 @@ if TYPE_CHECKING:
 
 
 def promote_chunks(
-  structure: MSv2Structure, chunks: Dict | None
-) -> Dict[PartitionKeyT, Dict[str, int]] | None:
+  structure: MSv2Structure, chunks: Dict | str | None
+) -> Dict[PartitionKeyT, Dict[str, int]] | str | None:
   """Promotes a chunks dictionary into a
   :code:`{partition_key: chunks}` dictionary.
   """
   if chunks is None:
     return None
+
+  if isinstance(chunks, str):
+    return chunks
 
   # Base case, no chunking
   return_chunks: Dict[PartitionKeyT, Dict[str, int]] = {k: {} for k in structure.keys()}
@@ -198,11 +201,7 @@ class MSv2Store(AbstractWritableDataStore):
     except StopIteration:
       raise KeyError("DATA_DESC_ID not found in partition")
 
-    antenna_factory = AntennaDatasetFactory(self._structure_factory)
-    ds = antenna_factory.get_dataset()
-
     return {
-      "antenna_xds": ds,
       "version": "0.0.1",
       "creation_date": datetime.now(timezone.utc).isoformat(),
       "data_description_id": ddid,
@@ -299,6 +298,7 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
     self,
     filename_or_obj: str | os.PathLike[Any] | BufferedIOBase | AbstractDataStore,
     *,
+    chunks: Dict[str, Any] | None = None,
     drop_variables: str | Iterable[str] | None = None,
     partition_columns: List[str] | None = None,
     auto_corrs: bool = True,
@@ -311,6 +311,26 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
 
     Args:
       filename_or_obj: The path to the MSv2 CASA Measurement Set file.
+      chunks: Chunk sizes along each dimension,
+        e.g. :code:`{{"time": 10, "frequency": 16}}`.
+        Individual partitions can be chunked differently by
+        partially (or fully) specifying a partition key: e.g.
+
+        .. code-block:: python
+
+          {{  # Applies to all partitions with the relevant DATA_DESC_ID
+            (("DATA_DESC_ID", 0),): {{"time": 10, "frequency": 16}},
+            (("DATA_DESC_ID", 1),): {{"time": 20, "frequency": 32}},
+          }}
+          {{  # Applies to all partitions with the relevant DATA_DESC_ID and FIELD_ID
+            (("DATA_DESC_ID", 0), ('FIELD_ID', 1)): {{"time": 10, "frequency": 16}},
+            (("DATA_DESC_ID", 1), ('FIELD_ID', 0)): {{"time": 20, "frequency": 32}},
+          }}
+          {{  # String variants
+            "DATA_DESC_ID=0,FIELD_ID=0": {{"time": 10, "frequency": 16}},
+            "D=0,F=1": {{"time": 20, "frequency": 32}},
+          }}
+
       drop_variables: Variables to drop from the dataset.
       partition_columns: The columns to use for partitioning the Measurement set.
         Defaults to :code:`{DEFAULT_PARTITION_COLUMNS}`.
@@ -335,24 +355,27 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
 
     structure = structure_factory()
     datasets = {}
-    chunks = kwargs.pop("chunks", None)
     pchunks = promote_chunks(structure, chunks)
 
     for partition_key in structure:
       ds = xarray.open_dataset(
         ms,
         drop_variables=drop_variables,
+        engine="xarray-ms:msv2",
         partition_columns=partition_columns,
         partition_key=partition_key,
         auto_corrs=auto_corrs,
         ninstances=ninstances,
         epoch=epoch,
         structure_factory=structure_factory,
-        chunks=None if pchunks is None else pchunks[partition_key],
+        chunks=pchunks[partition_key] if isinstance(pchunks, Mapping) else pchunks,
         **kwargs,
       )
 
+      antenna_factory = AntennaDatasetFactory(structure_factory)
+
       key = ",".join(f"{k}={v}" for k, v in sorted(partition_key))
       datasets[key] = ds
+      datasets[f"{key}/ANTENNA"] = antenna_factory.get_dataset()
 
     return DataTree.from_dict(datasets)
