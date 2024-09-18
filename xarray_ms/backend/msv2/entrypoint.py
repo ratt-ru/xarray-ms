@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import warnings
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Tuple
 from uuid import uuid4
 
 import xarray
@@ -35,13 +35,16 @@ if TYPE_CHECKING:
 
 
 def promote_chunks(
-  structure: MSv2Structure, chunks: Dict | None
-) -> Dict[PartitionKeyT, Dict[str, int]] | None:
+  structure: MSv2Structure, chunks: Dict | str | None
+) -> Dict[PartitionKeyT, Dict[str, int]] | str | None:
   """Promotes a chunks dictionary into a
   :code:`{partition_key: chunks}` dictionary.
   """
   if chunks is None:
     return None
+
+  if isinstance(chunks, str):
+    return chunks
 
   # Base case, no chunking
   return_chunks: Dict[PartitionKeyT, Dict[str, int]] = {k: {} for k in structure.keys()}
@@ -365,7 +368,7 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
         ninstances=ninstances,
         epoch=epoch,
         structure_factory=structure_factory,
-        chunks=None if pchunks is None else pchunks[partition_key],
+        chunks=pchunks[partition_key] if isinstance(pchunks, Mapping) else pchunks,
         **kwargs,
       )
 
