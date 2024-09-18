@@ -185,6 +185,8 @@ def test_open_datatree(simmed_ms):
   indirect=True,
 )
 def test_open_datatree_chunking(simmed_ms):
+  """Test opening a datatree with both uniform
+  and partition-specific chunking"""
   dt = open_datatree(
     simmed_ms,
     chunks={"time": 3, "frequency": 2},
