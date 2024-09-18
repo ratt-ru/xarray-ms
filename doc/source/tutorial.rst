@@ -123,8 +123,8 @@ for more information.
   dt
 
 
-Exporting a DataTree to Zarr
-----------------------------
+Writing a DataTree to Zarr
+--------------------------
 
 zarr_ is a chunked storage format designed for use with distributed file systems.
 Once a DataTree view of the data has been established, it is trivial to export
@@ -153,22 +153,24 @@ It is then trivial to open this using ``open_datatree``:
   xarray.testing.assert_identical(dt, dt2)
 
 
-Exporting a DataTree to Cloud storage
--------------------------------------
+Writing a DataTree to Cloud Storage
+-----------------------------------
 
 xarray incorporates standard functionality for writing xarray datasets to cloud storage.
 Here we will use the ``s3fs`` package to write to an S3 bucket.
 
 .. code-block:: python
 
+  from aitbotocore.session import AioSession
   import s3fs
-  storage_options = {
-    "profile": "ratt-public-data",  # AWS profile in .aws/credentials
-    "client_kwargs": {"region_name": "af-south-1"}
-  }
-  url = "s3://ratt-public-data/scratch"
-  # See https://github.com/pydata/xarray/issues/9514 for consolidated=False
-  dt.to_zarr(url, mode="w", compute=True, consolidated=False, storage_options=storage_options)
+
+  # custom-profile in .aws/credentials
+  s3 = s3fs.S3FileSystem(session=AioSession(profile="custom-profile"),
+                         client_kwargs={"region_name": "af-south-1"})
+  # A path in a bucket
+  store = s3fs.mapping.S3Map("bucket/scratch/test.zarr", s3=s3,
+                             check=True, create=False)
+  dt.to_zarr(store=store, mode="w", compute=True, consolidated=True)
 
 See the xarray documentation on
 `Cloud Storage Buckets <https://docs.xarray.dev/en/stable/user-guide/io.html#cloud-storage-buckets_>`_
