@@ -198,11 +198,7 @@ class MSv2Store(AbstractWritableDataStore):
     except StopIteration:
       raise KeyError("DATA_DESC_ID not found in partition")
 
-    antenna_factory = AntennaDatasetFactory(self._structure_factory)
-    ds = antenna_factory.get_dataset()
-
     return {
-      "antenna_xds": ds,
       "version": "0.0.1",
       "creation_date": datetime.now(timezone.utc).isoformat(),
       "data_description_id": ddid,
@@ -342,6 +338,7 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
       ds = xarray.open_dataset(
         ms,
         drop_variables=drop_variables,
+        engine="xarray-ms:msv2",
         partition_columns=partition_columns,
         partition_key=partition_key,
         auto_corrs=auto_corrs,
@@ -352,7 +349,10 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
         **kwargs,
       )
 
+      antenna_factory = AntennaDatasetFactory(structure_factory)
+
       key = ",".join(f"{k}={v}" for k, v in sorted(partition_key))
       datasets[key] = ds
+      datasets[f"{key}/ANTENNA"] = antenna_factory.get_dataset()
 
     return DataTree.from_dict(datasets)

@@ -173,8 +173,62 @@ def test_open_datatree(simmed_ms):
     xt.assert_equal(dt, mem_dt)
     xt.assert_identical(dt, mem_dt)
 
-  with ExitStack() as stack:
-    dt = open_datatree(
-      simmed_ms,
-      chunks={"D=0": {"time": 2, "baseline": 2}, "D=1": {"time": 3, "frequency": 2}},
-    )
+
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [
+    {
+      "name": "backend.ms",
+      "data_description": [(8, ["XX", "XY", "YX", "YY"]), (4, ["RR", "LL"])],
+    }
+  ],
+  indirect=True,
+)
+def test_open_datatree_chunking(simmed_ms):
+  dt = open_datatree(
+    simmed_ms,
+    chunks={"time": 3, "frequency": 2},
+  )
+
+  for child in dt.children:
+    ds = dt[child].ds
+    if ds.attrs["data_description_id"] == 0:
+      assert dict(ds.chunks) == {
+        "time": (3, 2),
+        "baseline": (6,),
+        "frequency": (2, 2, 2, 2),
+        "polarization": (4,),
+        "uvw_label": (3,),
+      }
+    elif ds.attrs["data_description_id"] == 1:
+      assert dict(ds.chunks) == {
+        "time": (3, 2),
+        "baseline": (6,),
+        "frequency": (2, 2),
+        "polarization": (2,),
+        "uvw_label": (3,),
+      }
+
+  dt = open_datatree(
+    simmed_ms,
+    chunks={"D=0": {"time": 2, "baseline": 2}, "D=1": {"time": 3, "frequency": 2}},
+  )
+
+  for child in dt.children:
+    ds = dt[child].ds
+    if ds.attrs["data_description_id"] == 0:
+      assert ds.chunks == {
+        "time": (2, 2, 1),
+        "baseline": (2, 2, 2),
+        "frequency": (8,),
+        "polarization": (4,),
+        "uvw_label": (3,),
+      }
+    elif ds.attrs["data_description_id"] == 1:
+      assert ds.chunks == {
+        "time": (3, 2),
+        "baseline": (6,),
+        "frequency": (2, 2),
+        "polarization": (2,),
+        "uvw_label": (3,),
+      }
