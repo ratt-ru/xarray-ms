@@ -159,8 +159,7 @@ Exporting a DataTree to Cloud storage
 xarray incorporates standard functionality for writing xarray datasets to cloud storage.
 Here we will use the ``s3fs`` package to write to an S3 bucket.
 
-.. ipython:: python
-  :okwarning:
+.. code-block:: python
 
   import s3fs
   storage_options = {
