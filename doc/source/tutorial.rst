@@ -22,52 +22,32 @@ Opening a Measurement Set
 -------------------------
 
 As xarray-ms implements an `xarray backend <xarray_backend_>`_,
-it is possible to use the standard :func:`xarray.open_dataset`
-to open up a single partition of a Measurement Set.
+it is possible to use the standard :func:`xarray.open_datatree`
+to open multiple partitions of a Measurement Set.
 
 .. ipython:: python
   :okwarning:
 
   import xarray_ms
   from xarray_ms.testing.simulator import simulate
-  import xarray
+  from xarray.backends.api import open_datatree
 
-  # Simulate a Measurement Set with 3
-  # channel and polarisation configurations
+  # Simulate a Measurement Set with 2 channel and polarisation configurations
   ms = simulate("test.ms", data_description=[
     (8, ("XX", "XY", "YX", "YY")),
-    (4, ("RR", "LL")),
-    (16, ("RR", "RL", "LR", "LL"))])
+    (4, ("RR", "LL"))])
 
-  ds = xarray.open_dataset(ms,
-    partition_columns=["DATA_DESC_ID", "FIELD_ID", "OBSERVATION_ID"])
+  dt = open_datatree(ms, partition_columns=[
+      "DATA_DESC_ID",
+      "FIELD_ID",
+      "OBSERVATION_ID"])
 
-  ds
-
-Opening a specific partition
-++++++++++++++++++++++++++++++
-
-Because we've simulated multiple Data Description values in
-our Measurement Set, xarray-ms has automatically opened the first partition
-containing 8 frequencies and 4 linear polarisations.
-To open the second partition a ``partition_key`` can be also be
-passed to :func:`xarray.open_dataset`.
-
-.. ipython:: python
-
-  ds = xarray.open_dataset(ms,
-    partition_columns=["DATA_DESC_ID", "FIELD_ID", "OBSERVATION_ID"],
-    partition_key=(("DATA_DESC_ID", 1), ("FIELD_ID", 0), ("OBSERVATION_ID", 0)))
-
-  ds
-
-and it can be seen that the dataset refers to the second partition
-containing 4 frequencies and 2 circular polarisations.
+  dt
 
 Selecting a subset of the data
 ++++++++++++++++++++++++++++++
 
-By default, :func:`xarray.open_dataset` will return a dataset
+By default, :func:`~xarray.backends.api.open_datatree` will return a dataset
 with a lazy view over the data.
 xarray has extensive functionality for
 `indexing and selecting data <xarray_indexing_and_selecting_>`_.
@@ -76,22 +56,21 @@ For example, one could select select some specific dimensions out:
 
 .. ipython:: python
 
-  ds = xarray.open_dataset(ms,
-    partition_columns=["DATA_DESC_ID", "FIELD_ID", "OBSERVATION_ID"],
-    partition_key=(("DATA_DESC_ID", 1), ("FIELD_ID", 0), ("OBSERVATION_ID", 0)))
+  dt = open_datatree(ms,
+    partition_columns=["DATA_DESC_ID", "FIELD_ID", "OBSERVATION_ID"])
 
-  subds = ds.isel(time=slice(1, 3), baseline=[1, 3, 5], frequency=slice(2, 4))
-  subds
+  subdt = dt.isel(time=slice(1, 3), baseline=[1, 3, 5], frequency=slice(2, 4))
+  subdt
 
-At this point, the dataset is still lazy -- no Data variables have been loaded
+At this point, the DataTree is still lazy -- no Data variables have been loaded
 into memory.
 
-Loading in a lazy dataset
-+++++++++++++++++++++++++
+Loading a DataTree
+++++++++++++++++++
 
-By calling load on the lazy dataset, all the Data Variables are loaded onto the
+By calling load on the lazy datatree, all the Data Variables are loaded onto the
 dataset as numpy arrays.
 
 .. ipython:: python
 
-  subds.load()
+  subdt.load()
