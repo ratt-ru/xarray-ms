@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Update Cloud Storage write documentation (:pr:`25`)
 * Use datatree as the primary representation (:pr:`24`)
 * Remove unnecessary coordinate attributes (:pr:`23`)
 * Disable navigation sidebars (:pr:`19`)
