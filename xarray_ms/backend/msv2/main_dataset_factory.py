@@ -153,8 +153,14 @@ class MainDatasetFactory:
         "baseline_id",
         (("baseline",), np.arange(len(ant1)), {"coordinates": "baseline_id"}),
       ),
-      ("antenna1_name", (("baseline",), ant1_names, {"coordinates": "antenna1_name"})),
-      ("antenna2_name", (("baseline",), ant2_names, {"coordinates": "antenna2_name"})),
+      (
+        "baseline_antenna1_name",
+        (("baseline",), ant1_names, {"coordinates": "baseline_antenna1_name"}),
+      ),
+      (
+        "baseline_antenna2_name",
+        (("baseline",), ant2_names, {"coordinates": "baseline_antenna2_name"}),
+      ),
       ("polarization", (("polarization",), partition.corr_type, None)),
     ]
 
