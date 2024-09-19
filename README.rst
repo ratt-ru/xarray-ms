@@ -51,21 +51,21 @@ to be developed on well-understood MSv2 data.
       │       creation_date:        2024-09-18T10:49:55.133908+00:00
       │       data_description_id:  0
       └── Group: /DATA_DESC_ID=0,FIELD_ID=0,OBSERVATION_ID=0/ANTENNA
-              Dimensions:           (antenna_name: 74,
-                                    cartesian_pos_label/ellipsoid_pos_label: 3)
+              Dimensions:                 (antenna_name: 74,
+                                           cartesian_pos_label/ellipsoid_pos_label: 3)
               Coordinates:
-                  antenna1_name     (baseline) object 22kB ...
-                  antenna2_name     (baseline) object 22kB ...
-                  baseline_id       (baseline) int64 22kB ...
-                * frequency         (frequency) float64 128B 1.202e+08 1.202e+08 ... 1.204e+08
-                * polarization      (polarization) <U2 32B 'XX' 'XY' 'YX' 'YY'
-                * time              (time) float64 230kB 1.601e+09 1.601e+09 ... 1.601e+09
-                * antenna_name      (antenna_name) object 592B 'CS001HBA0' ... 'IE613HBA'
-                  mount             (antenna_name) object 592B 'X-Y' 'X-Y' ... 'X-Y' 'X-Y'
-                  station           (antenna_name) object 592B 'LOFAR' 'LOFAR' ... 'LOFAR'
+                  baseline_antenna1_name  (baseline) object 22kB ...
+                  baseline_antenna2_name  (baseline) object 22kB ...
+                  baseline_id             (baseline) int64 22kB ...
+                * frequency               (frequency) float64 128B 1.202e+08 1.202e+08 ... 1.204e+08
+                * polarization            (polarization) <U2 32B 'XX' 'XY' 'YX' 'YY'
+                * time                    (time) float64 230kB 1.601e+09 1.601e+09 ... 1.601e+09
+                * antenna_name            (antenna_name) object 592B 'CS001HBA0' ... 'IE613HBA'
+                  mount                   (antenna_name) object 592B 'X-Y' 'X-Y' ... 'X-Y' 'X-Y'
+                  station                 (antenna_name) object 592B 'LOFAR' 'LOFAR' ... 'LOFAR'
               Dimensions without coordinates: cartesian_pos_label/ellipsoid_pos_label
               Data variables:
-                  ANTENNA_POSITION  (antenna_name, cartesian_pos_label/ellipsoid_pos_label) float64 2kB ...
+                  ANTENNA_POSITION        (antenna_name, cartesian_pos_label/ellipsoid_pos_label) float64 2kB ...
 
 Measurement Set v4
 ------------------
