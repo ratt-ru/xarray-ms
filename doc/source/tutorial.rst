@@ -161,11 +161,10 @@ Here we will use the ``s3fs`` package to write to an S3 bucket.
 
 .. code-block:: python
 
-  from aitbotocore.session import AioSession
   import s3fs
 
   # custom-profile in .aws/credentials
-  s3 = s3fs.S3FileSystem(session=AioSession(profile="custom-profile"),
+  s3 = s3fs.S3FileSystem(profile="custom-profile",
                          client_kwargs={"region_name": "af-south-1"})
   # A path in a bucket
   store = s3fs.mapping.S3Map("bucket/scratch/test.zarr", s3=s3,
