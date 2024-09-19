@@ -6,7 +6,7 @@ Changelog
 X.Y.Z (DD-MM-YYYY)
 ------------------
 * Rename antenna{1,2}_name to baseline_antenna{1,2}_name (:pr:`26`)
-* Update Cloud Storage write documentation (:pr:`25`)
+* Update Cloud Storage write documentation (:pr:`25`, :pr:`27`)
 * Use datatree as the primary representation (:pr:`24`)
 * Remove unnecessary coordinate attributes (:pr:`23`)
 * Disable navigation sidebars (:pr:`19`)
