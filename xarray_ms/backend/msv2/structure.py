@@ -442,7 +442,6 @@ class MSv2Structure(Mapping):
         utime = np.unique(np.concatenate(utimes))
         inv_fn = partial(np.searchsorted, utime)
         time_ids = pool.map(lambda t, i: inv_fn(t)[i], utimes, indices)
-        time_id = np.concatenate(list(time_ids))
 
         # Compute unique intervals
         interval_chunks = [
@@ -484,10 +483,25 @@ class MSv2Structure(Mapping):
         spw_meas_freq_ref = self._spw["MEAS_FREQ_REF"][spw_id].as_py()
         spw_frame = FrequencyMeasures(spw_meas_freq_ref).name.lower()
 
-        nbl = self.nbl
-        bl_id = baseline_id(ant1, ant2, self.na, auto_corrs=auto_corrs)
-        row_map = np.full(utime.size * nbl, -1, dtype=np.int64)
-        row_map[time_id * nbl + bl_id] = rows
+        row_map = np.full(utime.size * self.nbl, -1, dtype=np.int64)
+
+        def gen_row_map(time_id, ant1_id, ant2_id, rows):
+          bl_ids = baseline_id(ant1_id, ant2_id, self.na, auto_corrs=auto_corrs)
+          row_map[time_id * self.nbl + bl_ids] = rows
+
+        cf.wait(
+          (
+            pool.submit(
+              gen_row_map,
+              time_id,
+              ant1[i : i + chunk_size],
+              ant2[i : i + chunk_size],
+              rows[i : i + chunk_size],
+            )
+            for i, time_id in zip(range(0, len(ant1), chunk_size), time_ids)
+          ),
+          return_when=cf.ALL_COMPLETED,
+        )
 
         self._partitions[k] = PartitionData(
           time=utime,
@@ -499,7 +513,7 @@ class MSv2Structure(Mapping):
           spw_freq_group_name=spw_freq_group_name,
           spw_ref_freq=spw_ref_freq,
           spw_frame=spw_frame,
-          row_map=row_map.reshape(utime.size, nbl),
+          row_map=row_map.reshape(utime.size, self.nbl),
         )
 
     logger.info("Reading %s structure in took %fs", name, modtime.time() - start)
