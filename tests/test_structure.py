@@ -1,11 +1,17 @@
+import concurrent.futures as cf
 import pickle
 
 import numpy as np
+import pyarrow as pa
 import pytest
 from arcae.lib.arrow_tables import Table
-from numpy.testing import assert_array_equal
+from numpy.testing import assert_array_equal, assert_equal
 
-from xarray_ms.backend.msv2.structure import MSv2StructureFactory, baseline_id
+from xarray_ms.backend.msv2.structure import (
+  MSv2StructureFactory,
+  TablePartitioner,
+  baseline_id,
+)
 from xarray_ms.backend.msv2.table_factory import TableFactory
 
 
@@ -29,3 +35,52 @@ def test_structure_factory(simmed_ms):
 
   keys = tuple(k for kv in structure_factory().keys() for k, _ in kv)
   assert tuple(sorted(partition_columns)) == keys
+
+
+def test_table_partitioner():
+  table = pa.Table.from_pydict(
+    {
+      "DATA_DESC_ID": pa.array([1, 1, 0, 0, 0], pa.int32()),
+      "FIELD_ID": pa.array([1, 0, 0, 1, 0], pa.int32()),
+      "TIME": pa.array([0, 1, 4, 3, 2], pa.float64()),
+      "ANTENNA1": pa.array([0, 0, 0, 0, 0], pa.int32()),
+      "ANTENNA2": pa.array([1, 1, 1, 1, 1], pa.int32()),
+    }
+  )
+
+  partitioner = TablePartitioner(
+    ["DATA_DESC_ID", "FIELD_ID"], ["TIME", "ANTENNA1", "ANTENNA2"], ["row"]
+  )
+
+  with cf.ThreadPoolExecutor(max_workers=4) as pool:
+    groups = partitioner.partition(table, pool)
+
+  assert_equal(
+    groups,
+    {
+      (("DATA_DESC_ID", 0), ("FIELD_ID", 0)): {
+        "TIME": [2.0, 4.0],
+        "ANTENNA1": [0, 0],
+        "ANTENNA2": [1, 1],
+        "row": [4, 2],
+      },
+      (("DATA_DESC_ID", 0), ("FIELD_ID", 1)): {
+        "TIME": [3.0],
+        "ANTENNA1": [0],
+        "ANTENNA2": [1],
+        "row": [3],
+      },
+      (("DATA_DESC_ID", 1), ("FIELD_ID", 0)): {
+        "TIME": [1.0],
+        "ANTENNA1": [0],
+        "ANTENNA2": [1],
+        "row": [1],
+      },
+      (("DATA_DESC_ID", 1), ("FIELD_ID", 1)): {
+        "TIME": [0.0],
+        "ANTENNA1": [0],
+        "ANTENNA2": [1],
+        "row": [0],
+      },
+    },
+  )
