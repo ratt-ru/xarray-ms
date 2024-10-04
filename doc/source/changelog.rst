@@ -5,8 +5,8 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Parallelise row partitioning (:pr:`28`, :pr:`29`)
 * Upgrade to arcae 0.2.5 (:pr:`29`)
-* Parallelise row map generation (:pr:`28`)
 * Rename antenna{1,2}_name to baseline_antenna{1,2}_name (:pr:`26`)
 * Update Cloud Storage write documentation (:pr:`25`, :pr:`27`)
 * Use datatree as the primary representation (:pr:`24`)
