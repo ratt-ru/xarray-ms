@@ -436,11 +436,9 @@ class MSv2Structure(Mapping):
     with cf.ThreadPoolExecutor(max_workers=ncpus) as pool:
       other_columns = ["INTERVAL"]
       read_columns = set(partition_columns) | set(SORT_COLUMNS) | set(other_columns)
-      pstart = modtime.time()
       partitions = TablePartitioner(
         partition_columns, SORT_COLUMNS, other_columns + ["row"]
       ).partition(table.to_arrow(columns=read_columns), pool)
-      print(f"{modtime.time() - pstart}")
       self._partitions = {}
 
       unique_inv_fn = partial(np.unique, return_inverse=True)
