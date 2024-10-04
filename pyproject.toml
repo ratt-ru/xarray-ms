@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "xarray-ms"
-version = "0.2.0"
+version = "0.2.1"
 description = "xarray MSv4 views over MSv2 Measurement Sets"
 authors = ["Simon Perkins <simon.perkins@gmail.com>"]
 readme = "README.rst"
@@ -58,7 +58,7 @@ build-backend = "poetry.core.masonry.api"
 # github_url = "https://github.com/<user or organization>/<project>/"
 
 [tool.tbump.version]
-current = "0.2.0"
+current = "0.2.1"
 
 # Example of a semver regexp.
 # Make sure this matches current_version before
