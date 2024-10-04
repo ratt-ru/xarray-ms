@@ -3,7 +3,7 @@
 Changelog
 =========
 
-X.Y.Z (DD-MM-YYYY)
+0.2.1 (04-10-2024)
 ------------------
 * Parallelise row partitioning (:pr:`28`, :pr:`30`)
 * Upgrade to arcae 0.2.5 (:pr:`29`)
