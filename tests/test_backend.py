@@ -46,8 +46,7 @@ def test_open_dataset(simmed_ms):
   with ExitStack() as stack:
     ds = stack.enter_context(xarray.open_dataset(simmed_ms, chunks=chunks))
     del ds.attrs["creation_date"]
-    xt.assert_equal(ds, mem_ds)
-    # assert ds.identical(mem_ds)
+    assert ds.identical(mem_ds)
 
   # Works with a LocalCluster
   with ExitStack() as stack:
@@ -55,7 +54,6 @@ def test_open_dataset(simmed_ms):
     stack.enter_context(Client(cluster))
     ds = stack.enter_context(xarray.open_dataset(simmed_ms, chunks=chunks))
     del ds.attrs["creation_date"]
-    xt.assert_equal(ds, mem_ds)
     xt.assert_identical(ds, mem_ds)
 
 
@@ -161,7 +159,7 @@ def test_open_datatree(simmed_ms):
     dt = open_datatree(simmed_ms, chunks=chunks)
     for ds in dt.values():
       del ds.attrs["creation_date"]
-    xt.assert_equal(dt, mem_dt)
+    xt.assert_identical(dt, mem_dt)
 
   # Works with a LocalCluster
   with ExitStack() as stack:
@@ -170,7 +168,6 @@ def test_open_datatree(simmed_ms):
     dt = open_datatree(simmed_ms, chunks=chunks)
     for ds in dt.values():
       del ds.attrs["creation_date"]
-    xt.assert_equal(dt, mem_dt)
     xt.assert_identical(dt, mem_dt)
 
 
