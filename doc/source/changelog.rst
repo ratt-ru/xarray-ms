@@ -3,6 +3,10 @@
 Changelog
 =========
 
+X.Y.Z (DD-MM-YYYY)
+------------------
+* Fix Dataset and DataTree equivalence checks in test cases (:pr:`31`)
+
 0.2.1 (04-10-2024)
 ------------------
 * Parallelise row partitioning (:pr:`28`, :pr:`30`)
