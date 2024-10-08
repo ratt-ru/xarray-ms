@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Add basic read tests (:pr:`32`)
 * Fix Dataset and DataTree equivalence checks in test cases (:pr:`31`)
 
 0.2.1 (04-10-2024)
