@@ -15,9 +15,12 @@ cacheout = "^0.16.0"
 arcae = "^0.2.5"
 typing-extensions = { version = "^4.12.2", python = "<3.11" }
 zarr = {version = "^2.18.3", optional = true, extras = ["testing"]}
+requests = {version = "^2.32.3", optional = true, extras = ["testing"]}
+diskcache = {version = "^5.6.3", optional = true, extras = ["testing"]}
+appdirs = {version = "^1.4.4", optional = true, extras = ["testing"]}
 
 [tool.poetry.extras]
-testing = ["dask", "distributed", "pytest", "zarr"]
+testing = ["appdirs", "dask", "diskcache", "distributed", "pytest", "requests", "zarr"]
 
 [tool.poetry.plugins."xarray.backends"]
 "xarray-ms:msv2" = "xarray_ms.backend.msv2.entrypoint:MSv2PartitionEntryPoint"
