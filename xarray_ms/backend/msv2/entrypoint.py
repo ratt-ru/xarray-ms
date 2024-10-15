@@ -202,7 +202,7 @@ class MSv2Store(AbstractWritableDataStore):
       raise KeyError("DATA_DESC_ID not found in partition")
 
     return {
-      "version": "0.0.1",
+      "version": "4.0.0",
       "creation_date": datetime.now(timezone.utc).isoformat(),
       "data_description_id": ddid,
     }
