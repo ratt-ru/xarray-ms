@@ -375,6 +375,7 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
       antenna_factory = AntennaDatasetFactory(structure_factory)
 
       key = ",".join(f"{k}={v}" for k, v in sorted(partition_key))
+      ds.attrs["antenna_xds_link"] = f"{key}/ANTENNA"
       datasets[key] = ds
       datasets[f"{key}/ANTENNA"] = antenna_factory.get_dataset()
 
