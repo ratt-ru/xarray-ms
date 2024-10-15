@@ -31,5 +31,5 @@ Entrypoint Class
 
 Entrypoint class for the MSv2 backend.
 
-.. autoclass:: xarray_ms.backend.msv2.entrypoint.MSv2PartitionEntryPoint
+.. autoclass:: xarray_ms.backend.msv2.entrypoint.MSv2EntryPoint
     :members: open_dataset, open_datatree

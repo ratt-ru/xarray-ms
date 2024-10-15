@@ -7,13 +7,13 @@ import xarray.testing as xt
 from numpy.testing import assert_array_equal
 from xarray.backends.api import open_datatree
 
-from xarray_ms.backend.msv2.entrypoint import MSv2PartitionEntryPoint
+from xarray_ms.backend.msv2.entrypoint import MSv2EntryPoint
 from xarray_ms.testing.utils import id_string
 
 
 def test_entrypoint(simmed_ms):
   # The entrypoint thinks it can open the MS
-  entrypoint = MSv2PartitionEntryPoint()
+  entrypoint = MSv2EntryPoint()
   assert entrypoint.guess_can_open(simmed_ms) is True
 
 
