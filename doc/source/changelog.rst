@@ -5,8 +5,9 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
-* Move ``chunks`` kwarg functionality in MSv2EntryPoint.open_datatree
-  to ``partition_chunks`` (:pr:`35`)
+* Rename MSv2PartitionEntryPoint to MSv2EntryPoint (:pr:`38`)
+* Move ``chunks`` kwarg functionality in MSv2PartitionEntryPoint.open_datatree
+  to ``partition_chunks`` (:pr:`37`)
 * Set MSv4 version to 4.0.0 (:pr:`34`)
 * Fix changelog highlighting in install instructions (:pr:`33`)
 * Add basic read tests (:pr:`32`)
