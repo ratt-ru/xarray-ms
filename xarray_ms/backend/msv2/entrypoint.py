@@ -364,6 +364,7 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
     if not partition_chunks:
       partition_chunks = kwargs.pop("chunks", None)
     elif "chunks" in kwargs:
+      kwargs.pop("chunks", None)
       warnings.warn("`partition_chunks` overriding `chunks`")
 
     pchunks = promote_chunks(structure, partition_chunks)
