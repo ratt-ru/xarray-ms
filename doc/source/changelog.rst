@@ -6,7 +6,7 @@ Changelog
 X.Y.Z (DD-MM-YYYY)
 ------------------
 * Set MSv4 version to 4.0.0 (:pr:`34`)
-* Fix changelog hightlighting in install instructions (:pr:`33`)
+* Fix changelog highlighting in install instructions (:pr:`33`)
 * Add basic read tests (:pr:`32`)
 * Fix Dataset and DataTree equivalence checks in test cases (:pr:`31`)
 
