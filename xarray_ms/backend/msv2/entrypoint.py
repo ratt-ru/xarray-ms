@@ -214,7 +214,7 @@ class MSv2Store(AbstractWritableDataStore):
     return {}
 
 
-class MSv2PartitionEntryPoint(BackendEntrypoint):
+class MSv2EntryPoint(BackendEntrypoint):
   open_dataset_parameters = [
     "filename_or_obj",
     "partition_columns" "partition_key",

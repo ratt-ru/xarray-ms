@@ -20,7 +20,7 @@ zarr = {version = "^2.18.3", optional = true, extras = ["testing"]}
 testing = ["dask", "distributed", "pytest", "zarr"]
 
 [tool.poetry.plugins."xarray.backends"]
-"xarray-ms:msv2" = "xarray_ms.backend.msv2.entrypoint:MSv2PartitionEntryPoint"
+"xarray-ms:msv2" = "xarray_ms.backend.msv2.entrypoint:MSv2EntryPoint"
 
 [tool.poetry.group.dev]
 optional = true
