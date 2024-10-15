@@ -24,7 +24,7 @@ to be developed on well-understood MSv2 data.
   >>> import xarray_ms
   >>> from xarray.backends.api import datatree
   >>> dt = open_datatree("/data/L795830_SB001_uv.MS/",
-                         chunks={"time": 2000, "baseline": 1000})
+                         partition_chunks={"time": 2000, "baseline": 1000})
   >>> dt
   <xarray.DataTree>
   Group: /
@@ -47,7 +47,7 @@ to be developed on well-understood MSv2 data.
       │       VISIBILITY                  (time, baseline, frequency, polarization) complex64 41GB ...
       │       WEIGHT                      (time, baseline, frequency, polarization) float32 20GB ...
       │   Attributes:
-      │       version:              0.0.1
+      │       version:              4.0.0
       │       creation_date:        2024-09-18T10:49:55.133908+00:00
       │       data_description_id:  0
       └── Group: /DATA_DESC_ID=0,FIELD_ID=0,OBSERVATION_ID=0/ANTENNA

@@ -298,7 +298,7 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
     self,
     filename_or_obj: str | os.PathLike[Any] | BufferedIOBase | AbstractDataStore,
     *,
-    chunks: Dict[str, Any] | None = None,
+    partition_chunks: Dict[str, Any] | None = None,
     drop_variables: str | Iterable[str] | None = None,
     partition_columns: List[str] | None = None,
     auto_corrs: bool = True,
@@ -311,7 +311,7 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
 
     Args:
       filename_or_obj: The path to the MSv2 CASA Measurement Set file.
-      chunks: Chunk sizes along each dimension,
+      partition_chunks: Chunk sizes along each dimension,
         e.g. :code:`{{"time": 10, "frequency": 16}}`.
         Individual partitions can be chunked differently by
         partially (or fully) specifying a partition key: e.g.
@@ -330,6 +330,11 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
             "DATA_DESC_ID=0,FIELD_ID=0": {{"time": 10, "frequency": 16}},
             "D=0,F=1": {{"time": 20, "frequency": 32}},
           }}
+
+        .. note:: This argument overrides the reserved ``chunks`` argument
+          used by xarray to control chunking in Datasets and DataTrees.
+          It should be used instead of ``chunks`` when different
+          chunking is desired for different partitions.
 
       drop_variables: Variables to drop from the dataset.
       partition_columns: The columns to use for partitioning the Measurement set.
@@ -355,7 +360,14 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
 
     structure = structure_factory()
     datasets = {}
-    pchunks = promote_chunks(structure, chunks)
+
+    if not partition_chunks:
+      partition_chunks = kwargs.pop("chunks", None)
+    elif "chunks" in kwargs:
+      kwargs.pop("chunks", None)
+      warnings.warn("`partition_chunks` overriding `chunks`")
+
+    pchunks = promote_chunks(structure, partition_chunks)
 
     for partition_key in structure:
       ds = xarray.open_dataset(
