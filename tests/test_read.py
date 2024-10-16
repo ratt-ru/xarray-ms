@@ -53,6 +53,9 @@ def _excise_rows(data_dict):
   return {k: (d, v[index]) for k, (d, v) in data_dict.items()}
 
 
+@pytest.mark.filterwarnings(
+  r"ignore:.*?rows missing from the full \(time, baseline\) grid"
+)
 @pytest.mark.parametrize(
   "simmed_ms",
   [
