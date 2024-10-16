@@ -2,6 +2,7 @@ import dataclasses
 import os
 import tempfile
 import typing
+from collections.abc import Callable
 from typing import (
   Any,
   Dict,
@@ -88,6 +89,7 @@ class PartitionDescriptor:
 
 
 DDIDArgType = List[Tuple[npt.NDArray[np.float64], List[str]]]
+PartitionDataType = Dict[str, Tuple[Tuple[str, ...], npt.NDArray]]
 
 
 class MSStructureSimulator:
@@ -124,6 +126,7 @@ class MSStructureSimulator:
     partition: Tuple[str, ...] = ("PROCESSOR_ID", "FIELD_ID", "DATA_DESC_ID"),
     auto_corrs: bool = True,
     simulate_data: bool = True,
+    transform_data: Callable[[PartitionDataType], PartitionDataType] | None = None,
   ):
     assert ntime >= 1
     assert time_chunks > 0
@@ -178,6 +181,7 @@ class MSStructureSimulator:
     self.simulate_data = simulate_data
     self.partition_names = cbp_names
     self.partition_indices = bcbp_indices
+    self.transform_data = transform_data
     self.model = {
       "data_description": self.data_description,
       "feed_map": self.feeds,
@@ -199,6 +203,8 @@ class MSStructureSimulator:
 
       for chunk_desc in self.generate_descriptors():
         data_dict = self.data_factory(chunk_desc)
+        if self.transform_data is not None:
+          data_dict = self.transform_data(data_dict)
         (nrow,) = data_dict["TIME"][1].shape
         T.addrows(nrow)
 
@@ -311,9 +317,7 @@ class MSStructureSimulator:
     return np.stack([a.ravel() for a in np.broadcast_arrays(*bparts)], axis=1)
 
   @staticmethod
-  def data_factory(
-    desc: PartitionDescriptor,
-  ) -> Dict[str, Tuple[Tuple[str, ...], npt.NDArray]]:
+  def data_factory(desc: PartitionDescriptor) -> PartitionDataType:
     """Creates simulated MS data from a partition descriptor"""
     try:
       ddid = desc.DATA_DESC_ID.item()
