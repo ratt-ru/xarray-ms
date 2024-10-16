@@ -66,6 +66,7 @@ def _excise_rows(data_dict):
   indirect=True,
 )
 def test_irregular_read(simmed_ms):
+  """Test that excluding baselines works"""
   xdt = open_datatree(simmed_ms)
 
   for node in xdt.subtree:
