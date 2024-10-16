@@ -112,6 +112,7 @@ class MSStructureSimulator:
   simulate_data: bool
   model: Dict[str, Any]
   data_description: DataDescription
+  transform_data: Callable[[PartitionDataType], PartitionDataType] | None
 
   def __init__(
     self,
