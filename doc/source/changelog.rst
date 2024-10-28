@@ -5,6 +5,8 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Allow arcae to vary in the 0.2.x range (:pr:`42`)
+* Pin xarray to 2024.9.0 (:pr:`42`)
 * Add test case for irregular grids (:pr:`39`, :pr:`40`, :pr:`41`)
 * Rename MSv2PartitionEntryPoint to MSv2EntryPoint (:pr:`38`)
 * Move ``chunks`` kwarg functionality in MSv2PartitionEntryPoint.open_datatree
