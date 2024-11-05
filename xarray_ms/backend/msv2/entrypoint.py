@@ -351,9 +351,12 @@ class MSv2EntryPoint(BackendEntrypoint):
             "D=0,F=1": {{"time": 20, "frequency": 32}},
           }}
 
-        .. note:: This argument should be used in conjunction with
-          the reserved ``chunks`` argument used by xarray to control chunking
-          in Datasets and DataTrees. See preferred_chunk_sizes_ for more information.
+        .. note:: xarray's reserved ``chunks`` argument must be specified in order
+          to enable this functionality and enable fine-grained chunking
+          in Datasets and DataTrees.
+          See xarray's backend documentation on
+          `Preferred chunk sizes <preferred_chunk_sizes_>`_
+          for more information.
 
       drop_variables: Variables to drop from the dataset.
       partition_columns: The columns to use for partitioning the Measurement set.

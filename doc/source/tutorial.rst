@@ -116,7 +116,7 @@ to specify different chunking setups for each partition.
       (("DATA_DESC_ID", 1),): {"time": 3, "frequency": 2}})
 
 See the ``preferred_chunks`` argument of
-:meth:`xarray_ms.backend.msv2.entrypoint.MSv2EntryPoint.open_datatree`
+:meth:`~xarray_ms.backend.msv2.entrypoint.MSv2EntryPoint.open_datatree`
 for more information.
 
 .. ipython:: python

@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Change ``partition_chunks`` to ``preferred_chunks`` (:pr:`44`)
 * Allow arcae to vary in the 0.2.x range (:pr:`42`)
 * Pin xarray to 2024.9.0 (:pr:`42`)
 * Add test case for irregular grids (:pr:`39`, :pr:`40`, :pr:`41`)
