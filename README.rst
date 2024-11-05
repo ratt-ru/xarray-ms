@@ -24,7 +24,7 @@ to be developed on well-understood MSv2 data.
   >>> import xarray_ms
   >>> from xarray.backends.api import datatree
   >>> dt = open_datatree("/data/L795830_SB001_uv.MS/",
-                         partition_chunks={"time": 2000, "baseline": 1000})
+                         preferred_chunks={"time": 2000, "baseline": 1000})
   >>> dt
   <xarray.DataTree>
   Group: /

@@ -103,21 +103,21 @@ Per-partition chunking
 
 Different chunking may be desired, especially when applied to
 different channelisation and polarisation configurations.
-In these cases, the ``partition_chunks`` argument can be used
+In these cases, the ``preferred_chunks`` argument can be used
 to specify different chunking setups for each partition.
 
 .. ipython:: python
 
   dt = open_datatree(ms, partition_columns=[
     "DATA_DESC_ID", "FIELD_ID", "OBSERVATION_ID"],
-    partition_chunks={
+    chunks={},
+    preferred_chunks={
       (("DATA_DESC_ID", 0),): {"time": 2, "frequency": 4},
       (("DATA_DESC_ID", 1),): {"time": 3, "frequency": 2}})
 
-See the ``partition_chunks`` argument of
+See the ``preferred_chunks`` argument of
 :meth:`xarray_ms.backend.msv2.entrypoint.MSv2EntryPoint.open_datatree`
 for more information.
-
 
 .. ipython:: python
 
@@ -139,7 +139,8 @@ this to a zarr_ store.
 
   dt = open_datatree(ms, partition_columns=[
     "DATA_DESC_ID", "FIELD_ID", "OBSERVATION_ID"],
-    partition_chunks={
+    chunks={},
+    preferred_chunks={
       (("DATA_DESC_ID", 0),): {"time": 2, "frequency": 4},
       (("DATA_DESC_ID", 1),): {"time": 3, "frequency": 2}})
 
