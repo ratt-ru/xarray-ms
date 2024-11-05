@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Loosen xarray version requirement to \>= 2024.9.0 (:pr:`44`)
 * Change ``partition_chunks`` to ``preferred_chunks`` (:pr:`44`)
 * Allow arcae to vary in the 0.2.x range (:pr:`42`)
 * Pin xarray to 2024.9.0 (:pr:`42`)
