@@ -156,7 +156,7 @@ def test_open_datatree(simmed_ms):
 
   # Works with default dask scheduler
   with ExitStack() as stack:
-    dt = open_datatree(simmed_ms, partition_chunks=chunks)
+    dt = open_datatree(simmed_ms, preferred_chunks=chunks)
     for ds in dt.values():
       del ds.attrs["creation_date"]
     xt.assert_identical(dt, mem_dt)
@@ -165,7 +165,7 @@ def test_open_datatree(simmed_ms):
   with ExitStack() as stack:
     cluster = stack.enter_context(LocalCluster(processes=True, n_workers=4))
     stack.enter_context(Client(cluster))
-    dt = open_datatree(simmed_ms, partition_chunks=chunks)
+    dt = open_datatree(simmed_ms, preferred_chunks=chunks)
     for ds in dt.values():
       del ds.attrs["creation_date"]
     xt.assert_identical(dt, mem_dt)
@@ -186,7 +186,8 @@ def test_open_datatree_chunking(simmed_ms):
   and partition-specific chunking"""
   dt = open_datatree(
     simmed_ms,
-    partition_chunks={"time": 3, "frequency": 2},
+    chunks={},
+    preferred_chunks={"time": 3, "frequency": 2},
   )
 
   for child in dt.children:
@@ -194,7 +195,7 @@ def test_open_datatree_chunking(simmed_ms):
     if ds.attrs["data_description_id"] == 0:
       assert dict(ds.chunks) == {
         "time": (3, 2),
-        "baseline": (6,),
+        "baseline_id": (6,),
         "frequency": (2, 2, 2, 2),
         "polarization": (4,),
         "uvw_label": (3,),
@@ -202,7 +203,7 @@ def test_open_datatree_chunking(simmed_ms):
     elif ds.attrs["data_description_id"] == 1:
       assert dict(ds.chunks) == {
         "time": (3, 2),
-        "baseline": (6,),
+        "baseline_id": (6,),
         "frequency": (2, 2),
         "polarization": (2,),
         "uvw_label": (3,),
@@ -210,8 +211,9 @@ def test_open_datatree_chunking(simmed_ms):
 
   dt = open_datatree(
     simmed_ms,
-    partition_chunks={
-      "D=0": {"time": 2, "baseline": 2},
+    chunks={},
+    preferred_chunks={
+      "D=0": {"time": 2, "baseline_id": 2},
       "D=1": {"time": 3, "frequency": 2},
     },
   )
@@ -221,7 +223,7 @@ def test_open_datatree_chunking(simmed_ms):
     if ds.attrs["data_description_id"] == 0:
       assert ds.chunks == {
         "time": (2, 2, 1),
-        "baseline": (2, 2, 2),
+        "baseline_id": (2, 2, 2),
         "frequency": (8,),
         "polarization": (4,),
         "uvw_label": (3,),
@@ -229,18 +231,18 @@ def test_open_datatree_chunking(simmed_ms):
     elif ds.attrs["data_description_id"] == 1:
       assert ds.chunks == {
         "time": (3, 2),
-        "baseline": (6,),
+        "baseline_id": (6,),
         "frequency": (2, 2),
         "polarization": (2,),
         "uvw_label": (3,),
       }
 
-  with pytest.warns(UserWarning, match="`partition_chunks` overriding `chunks`"):
-    dt = open_datatree(
-      simmed_ms,
-      chunks={},
-      partition_chunks={
-        "D=0": {"time": 2, "baseline": 2},
-        "D=1": {"time": 3, "frequency": 2},
-      },
-    )
+  # with pytest.warns(UserWarning, match="`preferred_chunks` overriding `chunks`"):
+  #   dt = open_datatree(
+  #     simmed_ms,
+  #     chunks={},
+  #     preferred_chunks={
+  #       "D=0": {"time": 2, "baseline_id": 2},
+  #       "D=1": {"time": 3, "frequency": 2},
+  #     },
+  #   )

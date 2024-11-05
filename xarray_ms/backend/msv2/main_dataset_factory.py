@@ -1,6 +1,6 @@
 import dataclasses
 import warnings
-from typing import Any, Mapping, Tuple, Type
+from typing import Any, Dict, Mapping, Tuple, Type
 
 import numpy as np
 from xarray import Variable
@@ -47,16 +47,19 @@ FIXED_DIMENSION_SIZES = {"uvw_label": 3}
 
 class MainDatasetFactory:
   _partition_key: PartitionKeyT
+  _preferred_chunks: Dict[str, int]
   _table_factory: TableFactory
   _structure_factory: MSv2StructureFactory
 
   def __init__(
     self,
     partition_key: PartitionKeyT,
+    preferred_chunks: Dict[str, int],
     table_factory: TableFactory,
     structure_factory: MSv2StructureFactory,
   ):
     self._partition_key = partition_key
+    self._preferred_chunks = preferred_chunks
     self._table_factory = table_factory
     self._structure_factory = structure_factory
 
@@ -78,13 +81,13 @@ class MainDatasetFactory:
 
     dim_sizes = {
       "time": len(partition.time),
-      "baseline": structure.nbl,
+      "baseline_id": structure.nbl,
       "frequency": len(partition.chan_freq),
       "polarization": len(partition.corr_type),
       **FIXED_DIMENSION_SIZES,
     }
 
-    dims = ("time", "baseline") + schema.dims
+    dims = ("time", "baseline_id") + schema.dims
 
     try:
       shape = tuple(dim_sizes[d] for d in dims)
@@ -103,7 +106,7 @@ class MainDatasetFactory:
       default,
     )
 
-    var = Variable(dims, data)
+    var = Variable(dims, data, fastpath=True)
 
     # Apply any measures encoding
     if schema.coder:
@@ -111,6 +114,10 @@ class MainDatasetFactory:
       var = coder.decode(var)
 
     dims, data, attrs, encoding = unpack_for_decoding(var)
+
+    if self._preferred_chunks:
+      encoding["preferred_chunks"] = self._preferred_chunks
+
     return Variable(dims, LazilyIndexedArray(data), attrs, encoding, fastpath=True)
 
   def get_variables(self) -> Mapping[str, Variable]:
@@ -129,7 +136,7 @@ class MainDatasetFactory:
     if missing > 0:
       warnings.warn(
         f"{missing} / {row_map.size} ({100. * missing / row_map.size:.1f}%) "
-        f"rows missing from the full (time, baseline) grid "
+        f"rows missing from the full (time, baseline_id) grid "
         f"in partition {self._partition_key}. "
         f"Dataset variables will be padded",
         IrregularGridWarning,
@@ -151,20 +158,21 @@ class MainDatasetFactory:
     coordinates = [
       (
         "baseline_id",
-        (("baseline",), np.arange(len(ant1)), {"coordinates": "baseline_id"}),
+        (("baseline_id",), np.arange(len(ant1)), {"coordinates": "baseline_id"}),
       ),
       (
         "baseline_antenna1_name",
-        (("baseline",), ant1_names, {"coordinates": "baseline_antenna1_name"}),
+        (("baseline_id",), ant1_names, {"coordinates": "baseline_antenna1_name"}),
       ),
       (
         "baseline_antenna2_name",
-        (("baseline",), ant2_names, {"coordinates": "baseline_antenna2_name"}),
+        (("baseline_id",), ant2_names, {"coordinates": "baseline_antenna2_name"}),
       ),
       ("polarization", (("polarization",), partition.corr_type, None)),
     ]
 
-    coordinates = [(n, Variable(d, v, a)) for n, (d, v, a) in coordinates]
+    e = {"preferred_chunks": self._preferred_chunks} if self._preferred_chunks else None
+    coordinates = [(n, Variable(d, v, a, e)) for n, (d, v, a) in coordinates]
 
     # Add time coordinate
     time_coder = TimeCoder("TIME", structure.column_descs["MAIN"])
