@@ -81,13 +81,13 @@ class MainDatasetFactory:
 
     dim_sizes = {
       "time": len(partition.time),
-      "baseline": structure.nbl,
+      "baseline_id": structure.nbl,
       "frequency": len(partition.chan_freq),
       "polarization": len(partition.corr_type),
       **FIXED_DIMENSION_SIZES,
     }
 
-    dims = ("time", "baseline") + schema.dims
+    dims = ("time", "baseline_id") + schema.dims
 
     try:
       shape = tuple(dim_sizes[d] for d in dims)
@@ -135,7 +135,7 @@ class MainDatasetFactory:
     if missing > 0:
       warnings.warn(
         f"{missing} / {row_map.size} ({100. * missing / row_map.size:.1f}%) "
-        f"rows missing from the full (time, baseline) grid "
+        f"rows missing from the full (time, baseline_id) grid "
         f"in partition {self._partition_key}. "
         f"Dataset variables will be padded",
         IrregularGridWarning,
@@ -157,15 +157,15 @@ class MainDatasetFactory:
     coordinates = [
       (
         "baseline_id",
-        (("baseline",), np.arange(len(ant1)), {"coordinates": "baseline_id"}),
+        (("baseline_id",), np.arange(len(ant1)), {"coordinates": "baseline_id"}),
       ),
       (
         "baseline_antenna1_name",
-        (("baseline",), ant1_names, {"coordinates": "baseline_antenna1_name"}),
+        (("baseline_id",), ant1_names, {"coordinates": "baseline_antenna1_name"}),
       ),
       (
         "baseline_antenna2_name",
-        (("baseline",), ant2_names, {"coordinates": "baseline_antenna2_name"}),
+        (("baseline_id",), ant2_names, {"coordinates": "baseline_antenna2_name"}),
       ),
       ("polarization", (("polarization",), partition.corr_type, None)),
     ]

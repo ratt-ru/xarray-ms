@@ -195,7 +195,7 @@ def test_open_datatree_chunking(simmed_ms):
     if ds.attrs["data_description_id"] == 0:
       assert dict(ds.chunks) == {
         "time": (3, 2),
-        "baseline": (6,),
+        "baseline_id": (6,),
         "frequency": (2, 2, 2, 2),
         "polarization": (4,),
         "uvw_label": (3,),
@@ -203,7 +203,7 @@ def test_open_datatree_chunking(simmed_ms):
     elif ds.attrs["data_description_id"] == 1:
       assert dict(ds.chunks) == {
         "time": (3, 2),
-        "baseline": (6,),
+        "baseline_id": (6,),
         "frequency": (2, 2),
         "polarization": (2,),
         "uvw_label": (3,),
@@ -213,7 +213,7 @@ def test_open_datatree_chunking(simmed_ms):
     simmed_ms,
     chunks={},
     preferred_chunks={
-      "D=0": {"time": 2, "baseline": 2},
+      "D=0": {"time": 2, "baseline_id": 2},
       "D=1": {"time": 3, "frequency": 2},
     },
   )
@@ -223,7 +223,7 @@ def test_open_datatree_chunking(simmed_ms):
     if ds.attrs["data_description_id"] == 0:
       assert ds.chunks == {
         "time": (2, 2, 1),
-        "baseline": (2, 2, 2),
+        "baseline_id": (2, 2, 2),
         "frequency": (8,),
         "polarization": (4,),
         "uvw_label": (3,),
@@ -231,7 +231,7 @@ def test_open_datatree_chunking(simmed_ms):
     elif ds.attrs["data_description_id"] == 1:
       assert ds.chunks == {
         "time": (3, 2),
-        "baseline": (6,),
+        "baseline_id": (6,),
         "frequency": (2, 2),
         "polarization": (2,),
         "uvw_label": (3,),
@@ -242,7 +242,7 @@ def test_open_datatree_chunking(simmed_ms):
   #     simmed_ms,
   #     chunks={},
   #     preferred_chunks={
-  #       "D=0": {"time": 2, "baseline": 2},
+  #       "D=0": {"time": 2, "baseline_id": 2},
   #       "D=1": {"time": 3, "frequency": 2},
   #     },
   #   )

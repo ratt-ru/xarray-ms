@@ -64,7 +64,7 @@ For example, one could select select some specific dimensions out:
   dt = open_datatree(ms,
     partition_columns=["DATA_DESC_ID", "FIELD_ID", "OBSERVATION_ID"])
 
-  subdt = dt.isel(time=slice(1, 3), baseline=[1, 3, 5], frequency=slice(2, 4))
+  subdt = dt.isel(time=slice(1, 3), baseline_id=[1, 3, 5], frequency=slice(2, 4))
   subdt
 
 At this point, the ``subdt`` DataTree is still lazy -- no Data variables have been loaded

@@ -54,7 +54,7 @@ def _excise_rows(data_dict):
 
 
 @pytest.mark.filterwarnings(
-  r"ignore:.*?rows missing from the full \(time, baseline\) grid"
+  r"ignore:.*?rows missing from the full \(time, baseline_id\) grid"
 )
 @pytest.mark.parametrize(
   "simmed_ms",
