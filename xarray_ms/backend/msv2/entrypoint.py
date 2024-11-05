@@ -183,7 +183,7 @@ class MSv2Store(AbstractWritableDataStore):
       partition_key = first_key
 
     if preferred_chunks is None:
-      preferred_chunks = preferred_chunks or {}
+      preferred_chunks = {}
 
     return cls(
       table_factory,
@@ -368,6 +368,36 @@ class MSv2EntryPoint(BackendEntrypoint):
 
     .. _preferred_chunk_sizes: https://docs.xarray.dev/en/stable/internals/how-to-add-new-backend.html#preferred-chunk-sizes
     """
+    groups_dict = self.open_groups_as_dict(
+      filename_or_obj,
+      drop_variables=drop_variables,
+      partition_columns=partition_columns,
+      preferred_chunks=preferred_chunks,
+      auto_corrs=auto_corrs,
+      ninstances=ninstances,
+      epoch=epoch,
+      **kwargs,
+    )
+
+    return DataTree.from_dict(groups_dict)
+
+  @format_docstring(DEFAULT_PARTITION_COLUMNS=DEFAULT_PARTITION_COLUMNS)
+  def open_groups_as_dict(
+    self,
+    filename_or_obj: str | os.PathLike[Any] | BufferedIOBase | AbstractDataStore,
+    *,
+    drop_variables: str | Iterable[str] | None = None,
+    partition_columns: List[str] | None = None,
+    preferred_chunks: Dict[str, int] | None = None,
+    auto_corrs: bool = True,
+    ninstances: int = 8,
+    epoch: str | None = None,
+    structure_factory: MSv2StructureFactory | None = None,
+    **kwargs,
+  ) -> Dict[str, Dataset]:
+    """Create a dictionary of :class:`~xarray.Dataset` presenting an MSv4 view
+    over a partition of a MSv2 CASA Measurement Set"""
+
     if isinstance(filename_or_obj, os.PathLike):
       ms = str(filename_or_obj)
     elif isinstance(filename_or_obj, str):
@@ -402,8 +432,8 @@ class MSv2EntryPoint(BackendEntrypoint):
 
       antenna_factory = AntennaDatasetFactory(structure_factory)
 
-      key = ",".join(f"{k}={v}" for k, v in sorted(partition_key))
-      datasets[key] = ds
-      datasets[f"{key}/ANTENNA"] = antenna_factory.get_dataset()
+      path = ",".join(f"{k}={v}" for k, v in sorted(partition_key))
+      datasets[path] = ds
+      datasets[f"{path}/ANTENNA"] = antenna_factory.get_dataset()
 
-    return DataTree.from_dict(datasets)
+    return datasets

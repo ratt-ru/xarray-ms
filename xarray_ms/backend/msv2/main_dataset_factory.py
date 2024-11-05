@@ -115,7 +115,8 @@ class MainDatasetFactory:
 
     dims, data, attrs, encoding = unpack_for_decoding(var)
 
-    encoding["preferred_chunks"] = self._preferred_chunks
+    if self._preferred_chunks:
+      encoding["preferred_chunks"] = self._preferred_chunks
 
     return Variable(dims, LazilyIndexedArray(data), attrs, encoding, fastpath=True)
 
@@ -170,7 +171,7 @@ class MainDatasetFactory:
       ("polarization", (("polarization",), partition.corr_type, None)),
     ]
 
-    e = {"preferred_chunks": self._preferred_chunks}
+    e = {"preferred_chunks": self._preferred_chunks} if self._preferred_chunks else None
     coordinates = [(n, Variable(d, v, a, e)) for n, (d, v, a) in coordinates]
 
     # Add time coordinate
