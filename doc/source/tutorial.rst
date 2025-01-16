@@ -64,7 +64,7 @@ For example, one could select select some specific dimensions out:
   dt = open_datatree(ms,
     partition_columns=["DATA_DESC_ID", "FIELD_ID", "OBSERVATION_ID"])
 
-  subdt = dt.isel(time=slice(1, 3), baseline=[1, 3, 5], frequency=slice(2, 4))
+  subdt = dt.isel(time=slice(1, 3), baseline_id=[1, 3, 5], frequency=slice(2, 4))
   subdt
 
 At this point, the ``subdt`` DataTree is still lazy -- no Data variables have been loaded
@@ -102,21 +102,22 @@ Per-partition chunking
 ++++++++++++++++++++++
 
 Different chunking may be desired, especially when applied to
-different channelisation and polarisation configurations
-
+different channelisation and polarisation configurations.
+In these cases, the ``preferred_chunks`` argument can be used
+to specify different chunking setups for each partition.
 
 .. ipython:: python
 
   dt = open_datatree(ms, partition_columns=[
     "DATA_DESC_ID", "FIELD_ID", "OBSERVATION_ID"],
-    chunks={
+    chunks={},
+    preferred_chunks={
       (("DATA_DESC_ID", 0),): {"time": 2, "frequency": 4},
       (("DATA_DESC_ID", 1),): {"time": 3, "frequency": 2}})
 
-See the ``chunks`` argument of
-:meth:`xarray_ms.backend.msv2.entrypoint.MSv2PartitionEntryPoint.open_datatree`
+See the ``preferred_chunks`` argument of
+:meth:`~xarray_ms.backend.msv2.entrypoint.MSv2EntryPoint.open_datatree`
 for more information.
-
 
 .. ipython:: python
 
@@ -138,7 +139,8 @@ this to a zarr_ store.
 
   dt = open_datatree(ms, partition_columns=[
     "DATA_DESC_ID", "FIELD_ID", "OBSERVATION_ID"],
-    chunks={
+    chunks={},
+    preferred_chunks={
       (("DATA_DESC_ID", 0),): {"time": 2, "frequency": 4},
       (("DATA_DESC_ID", 1),): {"time": 3, "frequency": 2}})
 

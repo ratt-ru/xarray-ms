@@ -105,6 +105,7 @@ class MSv2Store(AbstractWritableDataStore):
     "_structure_factory",
     "_partition_columns",
     "_partition_key",
+    "_preferred_chunks",
     "_auto_corrs",
     "_ninstances",
     "_epoch",
@@ -113,6 +114,7 @@ class MSv2Store(AbstractWritableDataStore):
   _table_factory: TableFactory
   _structure_factory: MSv2StructureFactory
   _partition_columns: List[str]
+  _preferred_chunks: Dict[str, int]
   _partition: PartitionKeyT
   _autocorrs: bool
   _ninstances: int
@@ -124,6 +126,7 @@ class MSv2Store(AbstractWritableDataStore):
     structure_factory: MSv2StructureFactory,
     partition_columns: List[str],
     partition_key: PartitionKeyT,
+    preferred_chunks: Dict[str, int],
     auto_corrs: bool,
     ninstances: int,
     epoch: str,
@@ -132,6 +135,7 @@ class MSv2Store(AbstractWritableDataStore):
     self._structure_factory = structure_factory
     self._partition_columns = partition_columns
     self._partition_key = partition_key
+    self._preferred_chunks = preferred_chunks
     self._auto_corrs = auto_corrs
     self._ninstances = ninstances
     self._epoch = epoch
@@ -143,6 +147,7 @@ class MSv2Store(AbstractWritableDataStore):
     drop_variables=None,
     partition_columns: List[str] | None = None,
     partition_key: PartitionKeyT | None = None,
+    preferred_chunks: Dict[str, int] | None = None,
     auto_corrs: bool = True,
     ninstances: int = 1,
     epoch: str | None = None,
@@ -177,11 +182,15 @@ class MSv2Store(AbstractWritableDataStore):
         )
       partition_key = first_key
 
+    if preferred_chunks is None:
+      preferred_chunks = {}
+
     return cls(
       table_factory,
       structure_factory,
       partition_columns=partition_columns,
       partition_key=partition_key,
+      preferred_chunks=preferred_chunks,
       auto_corrs=auto_corrs,
       ninstances=ninstances,
       epoch=epoch,
@@ -191,9 +200,14 @@ class MSv2Store(AbstractWritableDataStore):
     pass
 
   def get_variables(self):
-    return MainDatasetFactory(
-      self._partition_key, self._table_factory, self._structure_factory
-    ).get_variables()
+    factory = MainDatasetFactory(
+      self._partition_key,
+      self._preferred_chunks,
+      self._table_factory,
+      self._structure_factory,
+    )
+
+    return factory.get_variables()
 
   def get_attrs(self):
     try:
@@ -214,10 +228,12 @@ class MSv2Store(AbstractWritableDataStore):
     return {}
 
 
-class MSv2PartitionEntryPoint(BackendEntrypoint):
+class MSv2EntryPoint(BackendEntrypoint):
   open_dataset_parameters = [
     "filename_or_obj",
-    "partition_columns" "partition_key",
+    "partition_columns",
+    "partition_key",
+    "preferred_chunks",
     "auto_corrs",
     "ninstances",
     "epoch",
@@ -252,6 +268,7 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
     drop_variables: str | Iterable[str] | None = None,
     partition_columns: List[str] | None = None,
     partition_key: PartitionKeyT | None = None,
+    preferred_chunks: Dict[str, int] | None = None,
     auto_corrs: bool = True,
     ninstances: int = 8,
     epoch: str | None = None,
@@ -268,6 +285,7 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
       partition_key: A key corresponding to an individual partition.
         For example :code:`(('DATA_DESC_ID', 0), ('FIELD_ID', 0))`.
         If :code:`None`, the first partition will be opened.
+      preferred_chunks: The preferred chunks for each partition.
       auto_corrs: Include/Exclude auto-correlations.
       ninstances: The number of Measurement Set instances to open for parallel I/O.
       epoch: A unique string identifying the creation of this Dataset.
@@ -280,11 +298,13 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
       partition specified by :code:`partition_columns` and :code:`partition_key`.
     """
     filename_or_obj = _normalize_path(filename_or_obj)
+
     store = MSv2Store.open(
       filename_or_obj,
       drop_variables=drop_variables,
       partition_columns=partition_columns,
       partition_key=partition_key,
+      preferred_chunks=preferred_chunks,
       auto_corrs=auto_corrs,
       ninstances=ninstances,
       epoch=epoch,
@@ -298,7 +318,7 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
     self,
     filename_or_obj: str | os.PathLike[Any] | BufferedIOBase | AbstractDataStore,
     *,
-    chunks: Dict[str, Any] | None = None,
+    preferred_chunks: Dict[str, Any] | None = None,
     drop_variables: str | Iterable[str] | None = None,
     partition_columns: List[str] | None = None,
     auto_corrs: bool = True,
@@ -311,7 +331,7 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
 
     Args:
       filename_or_obj: The path to the MSv2 CASA Measurement Set file.
-      chunks: Chunk sizes along each dimension,
+      preferred_chunks: Chunk sizes along each dimension,
         e.g. :code:`{{"time": 10, "frequency": 16}}`.
         Individual partitions can be chunked differently by
         partially (or fully) specifying a partition key: e.g.
@@ -331,6 +351,13 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
             "D=0,F=1": {{"time": 20, "frequency": 32}},
           }}
 
+        .. note:: xarray's reserved ``chunks`` argument must be specified in order
+          to enable this functionality and enable fine-grained chunking
+          in Datasets and DataTrees.
+          See xarray's backend documentation on
+          `Preferred chunk sizes <preferred_chunk_sizes_>`_
+          for more information.
+
       drop_variables: Variables to drop from the dataset.
       partition_columns: The columns to use for partitioning the Measurement set.
         Defaults to :code:`{DEFAULT_PARTITION_COLUMNS}`.
@@ -341,7 +368,39 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
 
     Returns:
       An xarray :class:`~xarray.core.datatree.DataTree`
+
+    .. _preferred_chunk_sizes: https://docs.xarray.dev/en/stable/internals/how-to-add-new-backend.html#preferred-chunk-sizes
     """
+    groups_dict = self.open_groups_as_dict(
+      filename_or_obj,
+      drop_variables=drop_variables,
+      partition_columns=partition_columns,
+      preferred_chunks=preferred_chunks,
+      auto_corrs=auto_corrs,
+      ninstances=ninstances,
+      epoch=epoch,
+      **kwargs,
+    )
+
+    return DataTree.from_dict(groups_dict)
+
+  @format_docstring(DEFAULT_PARTITION_COLUMNS=DEFAULT_PARTITION_COLUMNS)
+  def open_groups_as_dict(
+    self,
+    filename_or_obj: str | os.PathLike[Any] | BufferedIOBase | AbstractDataStore,
+    *,
+    drop_variables: str | Iterable[str] | None = None,
+    partition_columns: List[str] | None = None,
+    preferred_chunks: Dict[str, int] | None = None,
+    auto_corrs: bool = True,
+    ninstances: int = 8,
+    epoch: str | None = None,
+    structure_factory: MSv2StructureFactory | None = None,
+    **kwargs,
+  ) -> Dict[str, Dataset]:
+    """Create a dictionary of :class:`~xarray.Dataset` presenting an MSv4 view
+    over a partition of a MSv2 CASA Measurement Set"""
+
     if isinstance(filename_or_obj, os.PathLike):
       ms = str(filename_or_obj)
     elif isinstance(filename_or_obj, str):
@@ -355,7 +414,7 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
 
     structure = structure_factory()
     datasets = {}
-    pchunks = promote_chunks(structure, chunks)
+    pchunks = promote_chunks(structure, preferred_chunks)
 
     for partition_key in structure:
       ds = xarray.open_dataset(
@@ -364,11 +423,13 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
         engine="xarray-ms:msv2",
         partition_columns=partition_columns,
         partition_key=partition_key,
+        preferred_chunks=pchunks[partition_key]
+        if isinstance(pchunks, Mapping)
+        else pchunks,
         auto_corrs=auto_corrs,
         ninstances=ninstances,
         epoch=epoch,
         structure_factory=structure_factory,
-        chunks=pchunks[partition_key] if isinstance(pchunks, Mapping) else pchunks,
         **kwargs,
       )
 
@@ -379,4 +440,4 @@ class MSv2PartitionEntryPoint(BackendEntrypoint):
       datasets[key] = ds
       datasets[f"{key}/ANTENNA"] = antenna_factory.get_dataset()
 
-    return DataTree.from_dict(datasets)
+    return datasets

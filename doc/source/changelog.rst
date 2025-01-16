@@ -5,6 +5,15 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Rename ``baseline`` dimension to ``baseline_id`` (:pr:`44`)
+* Loosen xarray version requirement to \>= 2024.9.0 (:pr:`44`)
+* Change ``partition_chunks`` to ``preferred_chunks`` (:pr:`44`)
+* Allow arcae to vary in the 0.2.x range (:pr:`42`)
+* Pin xarray to 2024.9.0 (:pr:`42`)
+* Add test case for irregular grids (:pr:`39`, :pr:`40`, :pr:`41`)
+* Rename MSv2PartitionEntryPoint to MSv2EntryPoint (:pr:`38`)
+* Move ``chunks`` kwarg functionality in MSv2PartitionEntryPoint.open_datatree
+  to ``partition_chunks`` (:pr:`37`)
 * Set MSv4 version to 4.0.0 (:pr:`34`)
 * Fix changelog highlighting in install instructions (:pr:`33`)
 * Add basic read tests (:pr:`32`)

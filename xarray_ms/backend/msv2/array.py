@@ -57,7 +57,7 @@ class MSv2Array(BackendArray):
     self.shape = shape
     self.dtype = np.dtype(dtype)
 
-    assert len(shape) >= 2, "(time, baseline) required"
+    assert len(shape) >= 2, "(time, baseline_ids) required"
 
   def __getitem__(self, key) -> npt.NDArray:
     return explicit_indexing_adapter(
@@ -67,7 +67,7 @@ class MSv2Array(BackendArray):
   def _getitem(self, key) -> npt.NDArray:
     assert len(key) == len(self.shape)
     expected_shape = tuple(slice_length(k, s) for k, s in zip(key, self.shape))
-    # Map the (time, baseline) coordinates onto row indices
+    # Map the (time, baseline_id) coordinates onto row indices
     rows = self._structure_factory()[self._partition].row_map[key[:2]]
     xkey = (rows.ravel(),) + key[2:]
     row_shape = (rows.size,) + expected_shape[2:]
