@@ -1,3 +1,5 @@
+from typing import Any
+
 from xarray.core.datatree import DataTree
 from xarray.core.extensions import (
   register_datatree_accessor,
@@ -17,5 +19,13 @@ class SubTableAccessor:
       link = self.node.attrs["antenna_xds_link"]
     except KeyError:
       raise ValueError("antenna_xds_link not found")
+    else:
+      return self.node.root[link]
+
+  def __getitem__(self, key: Any) -> Any:
+    try:
+      link = self.node.attrs[key]
+    except KeyError:
+      raise ValueError(f"{key} link attribute not found")
     else:
       return self.node.root[link]
