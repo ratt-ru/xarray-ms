@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Change visibility partition structure to ``msname/partition-001`` (:pr:`46`)
 * Rename ``baseline`` dimension to ``baseline_id`` (:pr:`44`)
 * Loosen xarray version requirement to \>= 2024.9.0 (:pr:`44`)
 * Change ``partition_chunks`` to ``preferred_chunks`` (:pr:`44`)
