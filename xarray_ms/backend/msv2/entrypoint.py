@@ -240,7 +240,7 @@ class MSv2EntryPoint(BackendEntrypoint):
     "structure_factory",
   ]
   description = "Opens v2 CASA Measurement Sets in Xarray"
-  url = "https://link_to/your_backend/documentation"
+  url = "https://xarray-ms.readthedocs.io/"
 
   def guess_can_open(
     self, filename_or_obj: str | os.PathLike[Any] | BufferedIOBase | AbstractDataStore
