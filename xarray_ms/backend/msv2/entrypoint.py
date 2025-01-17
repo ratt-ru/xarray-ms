@@ -439,6 +439,7 @@ class MSv2EntryPoint(BackendEntrypoint):
       antenna_factory = AntennaDatasetFactory(structure_factory)
 
       path = f"{ms_name}/partition_{p:03}"
+      ds.attrs["antenna_xds_link"] = f"{path}/ANTENNA"
       datasets[path] = ds
       datasets[f"{path}/ANTENNA"] = antenna_factory.get_dataset()
 
