@@ -412,11 +412,14 @@ class MSv2EntryPoint(BackendEntrypoint):
       ms, ninstances, auto_corrs, epoch, None, partition_columns, None
     )
 
+    # /path/to/some_name.ext -> some_name
+    ms_name, _ = os.path.splitext(os.path.basename(ms.rstrip(os.path.sep)))
+
     structure = structure_factory()
     datasets = {}
     pchunks = promote_chunks(structure, preferred_chunks)
 
-    for partition_key in structure:
+    for p, partition_key in enumerate(structure):
       ds = xarray.open_dataset(
         ms,
         drop_variables=drop_variables,
@@ -435,7 +438,7 @@ class MSv2EntryPoint(BackendEntrypoint):
 
       antenna_factory = AntennaDatasetFactory(structure_factory)
 
-      path = ",".join(f"{k}={v}" for k, v in sorted(partition_key))
+      path = f"{ms_name}/partition_{p:03}"
       datasets[path] = ds
       datasets[f"{path}/ANTENNA"] = antenna_factory.get_dataset()
 
