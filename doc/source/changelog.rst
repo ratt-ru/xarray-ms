@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Upgrade to xarray 2025.1.1 (:pr:`49`)
 * Add documentation link to MSv2EntryPoint class (:pr:`47`)
 * Change visibility partition structure to ``msname/partition-001`` (:pr:`46`)
 * Rename ``baseline`` dimension to ``baseline_id`` (:pr:`44`)
