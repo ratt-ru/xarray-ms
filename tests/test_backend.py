@@ -148,17 +148,19 @@ def test_open_datatree(simmed_ms):
   with ExitStack() as stack:
     mem_dt = open_datatree(simmed_ms)
     mem_dt.load()
-    for ds in mem_dt.values():
-      del ds.attrs["creation_date"]
-      assert isinstance(ds.VISIBILITY.data, np.ndarray)
+    for ds in mem_dt.subtree:
+      if "version" in ds.attrs:
+        ds.attrs.pop("creation_date", None)
+        assert isinstance(ds.VISIBILITY.data, np.ndarray)
 
   chunks = {"time": 2, "frequency": 2}
 
   # Works with default dask scheduler
   with ExitStack() as stack:
     dt = open_datatree(simmed_ms, preferred_chunks=chunks)
-    for ds in dt.values():
-      del ds.attrs["creation_date"]
+    for node in dt.subtree:
+      if "version" in node.attrs:
+        del node.attrs["creation_date"]
     xt.assert_identical(dt, mem_dt)
 
   # Works with a LocalCluster
@@ -166,8 +168,9 @@ def test_open_datatree(simmed_ms):
     cluster = stack.enter_context(LocalCluster(processes=True, n_workers=4))
     stack.enter_context(Client(cluster))
     dt = open_datatree(simmed_ms, preferred_chunks=chunks)
-    for ds in dt.values():
-      del ds.attrs["creation_date"]
+    for node in dt.subtree:
+      if "version" in node.attrs:
+        del node.attrs["creation_date"]
     xt.assert_identical(dt, mem_dt)
 
 
@@ -190,18 +193,20 @@ def test_open_datatree_chunking(simmed_ms):
     preferred_chunks={"time": 3, "frequency": 2},
   )
 
-  for child in dt.children:
-    ds = dt[child].ds
-    if ds.attrs["data_description_id"] == 0:
-      assert dict(ds.chunks) == {
+  for node in dt.subtree:
+    if "version" not in node.attrs:
+      continue
+
+    if node.attrs["data_description_id"] == 0:
+      assert dict(node.ds.chunks) == {
         "time": (3, 2),
         "baseline_id": (6,),
         "frequency": (2, 2, 2, 2),
         "polarization": (4,),
         "uvw_label": (3,),
       }
-    elif ds.attrs["data_description_id"] == 1:
-      assert dict(ds.chunks) == {
+    elif node.attrs["data_description_id"] == 1:
+      assert dict(node.ds.chunks) == {
         "time": (3, 2),
         "baseline_id": (6,),
         "frequency": (2, 2),
@@ -218,18 +223,19 @@ def test_open_datatree_chunking(simmed_ms):
     },
   )
 
-  for child in dt.children:
-    ds = dt[child].ds
-    if ds.attrs["data_description_id"] == 0:
-      assert ds.chunks == {
+  for node in dt.subtree:
+    if "version" not in node.attrs:
+      continue
+    if node.attrs["data_description_id"] == 0:
+      assert node.ds.chunks == {
         "time": (2, 2, 1),
         "baseline_id": (2, 2, 2),
         "frequency": (8,),
         "polarization": (4,),
         "uvw_label": (3,),
       }
-    elif ds.attrs["data_description_id"] == 1:
-      assert ds.chunks == {
+    elif node.attrs["data_description_id"] == 1:
+      assert node.ds.chunks == {
         "time": (3, 2),
         "baseline_id": (6,),
         "frequency": (2, 2),
