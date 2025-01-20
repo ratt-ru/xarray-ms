@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Skip test case that segfaults on numpy 2.2.2 (:pr:`50`)
 * Upgrade to xarray 2025.1.1 (:pr:`49`)
 * Add documentation link to MSv2EntryPoint class (:pr:`47`)
 * Change visibility partition structure to ``msname/partition-001`` (:pr:`46`)
