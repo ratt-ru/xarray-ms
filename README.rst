@@ -22,9 +22,9 @@ to be developed on well-understood MSv2 data.
 .. code-block:: python
 
   >>> import xarray_ms
-  >>> from xarray.backends.api import datatree
-  >>> dt = open_datatree("/data/L795830_SB001_uv.MS/",
-                         preferred_chunks={"time": 2000, "baseline_id": 1000})
+  >>> import xarray
+  >>> dt = xarray.open_datatree("/data/L795830_SB001_uv.MS/",
+                                preferred_chunks={"time": 2000, "baseline_id": 1000})
   >>> dt
   <xarray.DataTree>
   Group: /
