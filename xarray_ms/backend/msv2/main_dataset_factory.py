@@ -72,7 +72,7 @@ class MainDatasetFactory:
     try:
       schema = MSV4_to_MSV2_COLUMN_SCHEMAS[column]
     except KeyError:
-      raise KeyError(f"No Column Schema exist for {column}")
+      raise KeyError(f"Column {column} was not present")
 
     try:
       column_desc = main_column_descs[schema.name]
