@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Improve Missing Column error (:pr:`52`)
 * Fix `open_datatree` instructions in the README (:pr:`51`)
 * Skip test case that segfaults on numpy 2.2.2 (:pr:`50`)
 * Upgrade to xarray 2025.1.1 (:pr:`49`)
