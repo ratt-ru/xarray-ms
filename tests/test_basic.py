@@ -3,6 +3,7 @@ import pytest
 from numpy.testing import assert_array_equal
 
 
+@pytest.mark.skip(reason="https://github.com/numpy/numpy/issues/28190")
 @pytest.mark.parametrize("na", [7])
 def test_lexical_binary_search(na):
   rng = np.random.default_rng(seed=42)
