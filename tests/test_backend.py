@@ -118,7 +118,9 @@ def test_open_dataset(simmed_ms):
   ],
   ids=id_string,
 )
-@pytest.mark.parametrize("partition_columns", [["DATA_DESC_ID", "FIELD_ID"]])
+@pytest.mark.parametrize(
+  "partition_columns", [["DATA_DESC_ID", "OBSERVATION_ID", "FIELD_ID"]]
+)
 def test_open_dataset_partition_keys(
   simmed_ms, partition_columns, partition_key, pols, nfreq
 ):

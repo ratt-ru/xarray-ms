@@ -195,7 +195,7 @@ class TablePartitioner:
     # Find the group start and end points in parallel
     def find_edges(p, s):
       diffs = [np.diff(p[v]) > 0 for v in self._partitionby]
-      return np.where(np.logical_or(*diffs))[0] + s + 1
+      return np.where(np.logical_or.reduce(diffs))[0] + s + 1
 
     group_diffs = [
       {k: v[s : s + chunk + 1] for k, v in merged.items() if k in self._partitionby}
