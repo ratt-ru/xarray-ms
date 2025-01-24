@@ -32,6 +32,7 @@ CASA_TO_NUMPY_MAP = {
   "FCOMPLEX": np.complex64,
   "COMPLEX": np.complex64,
   "DCOMPLEX": np.complex128,
+  "RECORD": object,
   "STRING": object,
 }
 

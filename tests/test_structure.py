@@ -24,13 +24,14 @@ def test_baseline_id(na, auto_corrs):
 
 
 @pytest.mark.parametrize("simmed_ms", [{"name": "proxy.ms"}], indirect=True)
-def test_structure_factory(simmed_ms):
+@pytest.mark.parametrize("epoch", ["abcdcefg"])
+def test_structure_factory(simmed_ms, epoch):
   partition_columns = ["FIELD_ID", "DATA_DESC_ID", "OBSERVATION_ID"]
   table_factory = TableFactory(Table.from_filename, simmed_ms)
-  structure_factory = MSv2StructureFactory(table_factory, partition_columns)
+  structure_factory = MSv2StructureFactory(table_factory, partition_columns, epoch)
   assert pickle.loads(pickle.dumps(structure_factory)) == structure_factory
 
-  structure_factory2 = MSv2StructureFactory(table_factory, partition_columns)
+  structure_factory2 = MSv2StructureFactory(table_factory, partition_columns, epoch)
   assert structure_factory() is structure_factory2()
 
   keys = tuple(k for kv in structure_factory().keys() for k, _ in kv)
