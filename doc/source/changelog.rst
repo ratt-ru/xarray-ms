@@ -5,7 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
-* Use np.logical_or.reduce for generating diffs over more than 2 partitioning arrays
+* Use np.logical_or.reduce for generating diffs over more than 2 partitioning arrays (:pr:`53`)
 * Improve Missing Column error (:pr:`52`)
 * Fix `open_datatree` instructions in the README (:pr:`51`)
 * Skip test case that segfaults on numpy 2.2.2 (:pr:`50`)
