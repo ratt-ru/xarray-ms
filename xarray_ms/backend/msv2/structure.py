@@ -229,16 +229,22 @@ class MSv2StructureFactory:
 
   _ms_factory: TableFactory
   _partition_columns: List[str]
+  _epoch: str
   _auto_corrs: bool
   _STRUCTURE_CACHE: ClassVar[Cache] = Cache(
     maxsize=100, ttl=60, on_get=on_get_keep_alive
   )
 
   def __init__(
-    self, ms: TableFactory, partition_columns: List[str], auto_corrs: bool = True
+    self,
+    ms: TableFactory,
+    partition_columns: List[str],
+    epoch: str,
+    auto_corrs: bool = True,
   ):
     self._ms_factory = ms
     self._partition_columns = partition_columns
+    self._epoch = epoch
     self._auto_corrs = auto_corrs
 
   def __eq__(self, other: Any) -> bool:
@@ -248,16 +254,19 @@ class MSv2StructureFactory:
     return (
       self._ms_factory == other._ms_factory
       and self._partition_columns == other._partition_columns
+      and self._epoch == other._epoch
       and self._auto_corrs == other._auto_corrs
     )
 
   def __hash__(self):
-    return hash((self._ms_factory, tuple(self._partition_columns), self._auto_corrs))
+    return hash(
+      (self._ms_factory, tuple(self._partition_columns), self._epoch, self._auto_corrs)
+    )
 
   def __reduce__(self):
     return (
       MSv2StructureFactory,
-      (self._ms_factory, self._partition_columns, self._auto_corrs),
+      (self._ms_factory, self._partition_columns, self._epoch, self._auto_corrs),
     )
 
   def __call__(self, *args, **kw) -> MSv2Structure:
