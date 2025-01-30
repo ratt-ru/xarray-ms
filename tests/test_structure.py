@@ -24,7 +24,7 @@ def test_baseline_id(na, auto_corrs):
 
 
 @pytest.mark.parametrize("simmed_ms", [{"name": "proxy.ms"}], indirect=True)
-@pytest.mark.parametrize("epoch", ["abcdcefg"])
+@pytest.mark.parametrize("epoch", ["abcdef"])
 def test_structure_factory(simmed_ms, epoch):
   partition_columns = ["FIELD_ID", "DATA_DESC_ID", "OBSERVATION_ID"]
   table_factory = TableFactory(Table.from_filename, simmed_ms)
@@ -85,3 +85,16 @@ def test_table_partitioner():
       },
     },
   )
+
+
+def test_epoch(simmed_ms):
+  partition_columns = ["FIELD_ID", "DATA_DESC_ID", "OBSERVATION_ID"]
+  table_factory = TableFactory(Table.from_filename, simmed_ms)
+  structure_factory = MSv2StructureFactory(table_factory, partition_columns, "abc")
+  structure_factory2 = MSv2StructureFactory(table_factory, partition_columns, "abc")
+
+  assert structure_factory() is structure_factory2()
+
+  structure_factory3 = MSv2StructureFactory(table_factory, partition_columns, "def")
+
+  assert structure_factory() is not structure_factory3()

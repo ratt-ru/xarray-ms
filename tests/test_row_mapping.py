@@ -81,7 +81,9 @@ def irregular_ms(tmp_path, request):
 @pytest.mark.parametrize("auto_corrs", [True, False])
 def test_row_mapping(irregular_ms, na, auto_corrs):
   table_factory = TableFactory(Table.from_filename, irregular_ms)
-  structure_factory = MSv2StructureFactory(table_factory, auto_corrs=auto_corrs)
+  structure_factory = MSv2StructureFactory(
+    table_factory, [], "abcdef", auto_corrs=auto_corrs
+  )
   structure = structure_factory()
 
   ddid = table_factory().getcol("DATA_DESC_ID")
