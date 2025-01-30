@@ -163,13 +163,13 @@ class PartitionData:
   chan_freq: npt.NDArray[np.float64]
   chan_width: npt.NDArray[np.float64]
   corr_type: npt.NDArray[np.int32]
-  field_names: List[str] | None
+  field_names: List[str]
   spw_name: str
   spw_freq_group_name: str
   spw_ref_freq: float
   spw_frame: str
-  scan_numbers: List[int] | None
-  sub_scan_numbers: List[int] | None
+  scan_numbers: List[int]
+  sub_scan_numbers: List[int]
 
   row_map: npt.NDArray[np.int64]
 
@@ -208,8 +208,16 @@ class TablePartitioner:
     nworkers = pool._max_workers
     chunk = (nrow + nworkers - 1) // nworkers
 
-    all_columns = index.column_names
+    # Order columns by
+    #
+    # 1. Partitioning columns
+    # 2. Sorting columns
+    # 3. Others (such as row and INTERVAL)
+    # 4. Remaining columns
+    #
+    # 4 is needed for the merge_np_partitions to work
     ordered_columns = self._partitionby + self._sortby + self._other
+    ordered_columns += list(set(index.column_names) - set(ordered_columns))
 
     # Create a dictionary out of the pyarrow table
     table_dict = {k: index[k].to_numpy() for k in ordered_columns}
@@ -252,8 +260,7 @@ class TablePartitioner:
 
     for start, end in zip(group_offsets[:-1], group_offsets[1:]):
       key = tuple(sorted((k, merged[k][start].item()) for k in self._partitionby))
-      data = {k: merged[k][start:end] for k in self._sortby + self._other}
-      groups[key] = data
+      groups[key] = {k: v[start:end] for k, v in merged.items()}
 
     return groups
 
@@ -602,17 +609,17 @@ class MSv2Structure(Mapping):
     source_id = value.get("SOURCE_ID")
     state_id = value.get("STATE_ID")
 
-    field_names: List[str] | None = None
+    field_names: List[str] = []
 
     if field_id is not None and len(self._field) > 0:
       ufield_ids = self.par_unique(pool, ncpus, field_id)
       fields = self._field.take(ufield_ids)
-      field_names = fields["NAME"].to_numpy()
+      field_names = fields["NAME"].unique().to_numpy(zero_copy_only=False).tolist()
 
-    scan_numbers: List[int] | None = None
+    scan_numbers: List[int] = []
 
     if scan_number is not None:
-      scan_numbers = list(self.par_unique(pool, ncpus, scan_number))
+      scan_numbers = self.par_unique(pool, ncpus, scan_number).tolist()
 
     corr_type = Polarisations.from_values(self._pol["CORR_TYPE"][pol_id].as_py())
     chan_freq = self._spw["CHAN_FREQ"][spw_id].as_py()
@@ -705,5 +712,6 @@ class MSv2Structure(Mapping):
         self._partitions[k] = self.partition_data_factory(
           name, auto_corrs, k, v, pool, ncpus
         )
+        print(dataclasses.asdict(self._partitions[k]))
 
     logger.info("Reading %s structure in took %fs", name, modtime.time() - start)
