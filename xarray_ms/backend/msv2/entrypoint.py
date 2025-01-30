@@ -92,7 +92,7 @@ def initialise_default_args(
   epoch = epoch or uuid4().hex[:8]
   partition_columns = partition_columns or DEFAULT_PARTITION_COLUMNS
   structure_factory = structure_factory or MSv2StructureFactory(
-    table_factory, partition_columns, auto_corrs=auto_corrs
+    table_factory, partition_columns, epoch, auto_corrs=auto_corrs
   )
   return epoch, table_factory, partition_columns, structure_factory
 

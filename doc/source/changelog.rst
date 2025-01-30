@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Use epoch to dintinguish multiple instances of the same dataset (:pr:`54`)
 * Use np.logical_or.reduce for generating diffs over more than 2 partitioning arrays (:pr:`53`)
 * Improve Missing Column error (:pr:`52`)
 * Fix `open_datatree` instructions in the README (:pr:`51`)
