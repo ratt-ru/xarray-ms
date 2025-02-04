@@ -13,7 +13,7 @@ from typing import (
 
 import numpy as np
 import numpy.typing as npt
-from arcae.lib.arrow_tables import Table
+from arcae.lib.arrow_tables import Table, ms_descriptor
 
 from xarray_ms.casa_types import DataDescArgType, DataDescription, Feed
 
@@ -104,6 +104,7 @@ class MSStructureSimulator:
   ntime: int
   nantenna: int
   nfield: int
+  nstate: int
   auto_corrs: bool
   dump_rate: float
   time_chunks: int
@@ -123,6 +124,7 @@ class MSStructureSimulator:
     time_start: float = FIRST_FEB_2023_MJDS,
     nproc: int = 1,
     nfield: int = 1,
+    nstate: int = 1,
     nantenna: int = 3,
     data_description: DataDescArgType | None = None,
     partition: Tuple[str, ...] = ("PROCESSOR_ID", "FIELD_ID", "DATA_DESC_ID"),
@@ -177,6 +179,7 @@ class MSStructureSimulator:
     self.ntime = ntime
     self.nantenna = nantenna
     self.nfield = nfield
+    self.nstate = nstate
     self.auto_corrs = auto_corrs
     self.dump_rate = dump_rate
     self.time_chunks = time_chunks
@@ -287,8 +290,23 @@ class MSStructureSimulator:
       T.putcol("NAME", np.asarray([f"FIELD-{i}" for i in range(self.nfield)]))
       T.putcol("SOURCE_ID", np.arange(self.nfield))
 
-    with Table.ms_from_descriptor(output_ms, "SOURCE") as T:
+    with Table.from_filename(f"{output_ms}::STATE", **kw) as T:
+      T.addrows(self.nstate)
+      T.putcol("SUB_SCAN", np.arange(self.nstate))
+      T.putcol("OBS_MODE", np.asarray(["CALIBRATE_AMPL#OFF_SOURCE"] * self.nstate))
+
+    source_table_desc = ms_descriptor("SOURCE", complete=True)
+    with Table.ms_from_descriptor(
+      output_ms, "SOURCE", table_desc=source_table_desc
+    ) as T:
       T.addrows(self.nfield)
+      T.putcol("TIME", np.asarray([1.0] * self.nfield))
+      T.putcol("INTERVAL", np.asarray([1.0] * self.nfield))
+      T.putcol("SPECTRAL_WINDOW_ID", np.asarray([-1.0] * self.nfield))
+      T.putcol("NUM_LINES", np.asarray([1] * self.nfield))
+      T.putcol(
+        "TRANSITION", np.asarray([[f"TRANSITION-{i}"] for i in range(self.nfield)])
+      )
       T.putcol("NAME", np.asarray([f"SOURCE-{i}" for i in range(self.nfield)]))
 
   def generate_descriptors(self) -> Generator[PartitionDescriptor, None, None]:

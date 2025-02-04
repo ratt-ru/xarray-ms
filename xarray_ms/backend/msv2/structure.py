@@ -111,7 +111,7 @@ def partition_args(data: npt.NDArray, chunk: int) -> List[npt.NDArray]:
 
 DEFAULT_PARTITION_COLUMNS: List[str] = [
   "DATA_DESC_ID",
-  "FIELD_ID",
+  "OBS_MODE",
   "OBSERVATION_ID",
 ]
 
@@ -164,6 +164,9 @@ class PartitionData:
   chan_width: npt.NDArray[np.float64]
   corr_type: npt.NDArray[np.int32]
   field_names: List[str]
+  line_names: List[str]
+  source_names: List[str]
+  intents: List[str]
   spw_name: str
   spw_freq_group_name: str
   spw_ref_freq: float
@@ -174,7 +177,7 @@ class PartitionData:
   row_map: npt.NDArray[np.int64]
 
 
-PartitionKeyT = Tuple[Tuple[str, int], ...]
+PartitionKeyT = Tuple[Tuple[str, int | str], ...]
 
 
 class TablePartitioner:
@@ -276,7 +279,7 @@ class MSv2StructureFactory:
   for creating and caching an MSv2Structure"""
 
   _ms_factory: TableFactory
-  _partition_columns: List[str]
+  _partition_schema: List[str]
   _epoch: str
   _auto_corrs: bool
   _STRUCTURE_CACHE: ClassVar[Cache] = Cache(
@@ -286,12 +289,12 @@ class MSv2StructureFactory:
   def __init__(
     self,
     ms: TableFactory,
-    partition_columns: List[str],
+    partition_schema: List[str],
     epoch: str,
     auto_corrs: bool = True,
   ):
     self._ms_factory = ms
-    self._partition_columns = partition_columns
+    self._partition_schema = partition_schema
     self._epoch = epoch
     self._auto_corrs = auto_corrs
 
@@ -301,20 +304,20 @@ class MSv2StructureFactory:
 
     return (
       self._ms_factory == other._ms_factory
-      and self._partition_columns == other._partition_columns
+      and self._partition_schema == other._partition_schema
       and self._epoch == other._epoch
       and self._auto_corrs == other._auto_corrs
     )
 
   def __hash__(self):
     return hash(
-      (self._ms_factory, tuple(self._partition_columns), self._epoch, self._auto_corrs)
+      (self._ms_factory, tuple(self._partition_schema), self._epoch, self._auto_corrs)
     )
 
   def __reduce__(self):
     return (
       MSv2StructureFactory,
-      (self._ms_factory, self._partition_columns, self._epoch, self._auto_corrs),
+      (self._ms_factory, self._partition_schema, self._epoch, self._auto_corrs),
     )
 
   def __call__(self, *args, **kw) -> MSv2Structure:
@@ -322,7 +325,7 @@ class MSv2StructureFactory:
     return self._STRUCTURE_CACHE.get(
       self,
       lambda self: MSv2Structure(
-        self._ms_factory, self._partition_columns, self._auto_corrs
+        self._ms_factory, self._partition_schema, self._auto_corrs
       ),
     )
 
@@ -332,7 +335,7 @@ class MSv2Structure(Mapping):
 
   _ms_factory: TableFactory
   _auto_corrs: bool
-  _partition_columns: List[str]
+  _partition_schema: List[str]
   _partitions: Mapping[PartitionKeyT, PartitionData]
   _column_descs: Dict[str, Dict[str, ColumnDesc]]
   _ant: pa.Table
@@ -404,7 +407,7 @@ class MSv2Structure(Mapping):
     if isinstance(key, str):
       key = self.parse_partition_key(key)
 
-    column_set = set(self._partition_columns)
+    column_set = set(self._partition_schema)
 
     # Check that the key columns and values are valid
     new_key: List[Tuple[str, int]] = []
@@ -413,8 +416,7 @@ class MSv2Structure(Mapping):
       column = SHORT_TO_LONG_PARTITION_COLUMNS.get(column, column)
       if column not in column_set:
         raise InvalidPartitionKey(
-          f"{column} is not valid a valid partition column "
-          f"{self._partition_columns}"
+          f"{column} is not valid a valid partition column " f"{self._partition_schema}"
         )
       if not isinstance(value, Integral):
         raise InvalidPartitionKey(f"{value} is not a valid partition value")
@@ -459,11 +461,7 @@ class MSv2Structure(Mapping):
     schema: Set[str] = set(partition_schema)
 
     # Always partition by these columns
-    columns: Dict[str, None] = {
-      "DATA_DESC_ID": None,
-      "OBS_MODE": None,
-      "OBSERVATION_ID": None,
-    }
+    columns: Dict[str, None] = {c: None for c in DEFAULT_PARTITION_COLUMNS}
 
     for column in VALID_MAIN_PARTITION_COLUMNS:
       if column in schema and column not in columns:
@@ -582,7 +580,7 @@ class MSv2Structure(Mapping):
     uinterval = self.par_unique(pool, ncpus, interval)
 
     try:
-      ddid = next(i for (c, i) in key if c == "DATA_DESC_ID")
+      ddid = next(int(i) for (c, i) in key if c == "DATA_DESC_ID")
     except StopIteration:
       raise KeyError(f"DATA_DESC_ID must be present in partition key {key}")
 
@@ -591,46 +589,71 @@ class MSv2Structure(Mapping):
         f"DATA_DESC_ID {ddid} does not exist in {name}::DATA_DESCRIPTION"
       )
 
-    spw_id = self._ddid["SPECTRAL_WINDOW_ID"][ddid].as_py()
-    pol_id = self._ddid["POLARIZATION_ID"][ddid].as_py()
+    # Extract field and source names
+    field_id = value.get("FIELD_ID")
+    field_names: List[str] = []
+    source_names: List[str] = []
+    line_names: List[str] = []
 
-    if spw_id >= len(self._spw):
-      raise InvalidMeasurementSet(
-        f"SPECTRAL_WINDOW_ID {spw_id} does not exist in {name}::SPECTRAL_WINDOW"
-      )
+    if field_id is not None and len(self._field) > 0:
+      ufield_ids = self.par_unique(pool, ncpus, field_id)
+      fields = self._field.take(ufield_ids)
+      field_names = fields["NAME"].to_pylist()
+      source_ids = fields["SOURCE_ID"].to_pylist()
+      # Select out SOURCES if we have the table
+      if hasattr(self, "_source") and len(self._source) > 0:
+        sources = self._source.take(source_ids)
+        source_names = sources["NAME"].to_pylist()
+        if "TRANSITION" in self._source.column_names:
+          line_names = sources["TRANSITION"].to_pylist()
+          # import pyarrow.compute as pac
+          # line_names = pac.list_flatten(sources["TRANSITION"]).to_pylist()
+
+    # Extract scan numbers
+    scan_number = value.get("SCAN_NUMBER")
+    scan_numbers: List[int] = []
+
+    if scan_number is not None:
+      scan_numbers = self.par_unique(pool, ncpus, scan_number).tolist()
+
+    # Extract intents and sub scan numbers
+    state_id = value.get("STATE_ID")
+    intents: List[str] = []
+    sub_scan_numbers: List[int] = []
+
+    if state_id is not None and len(self._state) > 0:
+      ustate_ids = self.par_unique(pool, ncpus, state_id)
+      states = self._state.take(ustate_ids)
+      intents = states["OBS_MODE"].to_numpy(zero_copy_only=False).tolist()
+      sub_scan_numbers = states["SUB_SCAN"].to_numpy(zero_copy_only=False).tolist()
+
+    # Extract polarization information
+    pol_id = self._ddid["POLARIZATION_ID"][ddid].as_py()
 
     if pol_id >= len(self._pol):
       raise InvalidMeasurementSet(
         f"POLARIZATION_ID {pol_id} does not exist in {name}::POLARIZATION"
       )
 
-    scan_number = value.get("SCAN_NUMBER")
-    field_id = value.get("FIELD_ID")
-    source_id = value.get("SOURCE_ID")
-    state_id = value.get("STATE_ID")
-
-    field_names: List[str] = []
-
-    if field_id is not None and len(self._field) > 0:
-      ufield_ids = self.par_unique(pool, ncpus, field_id)
-      fields = self._field.take(ufield_ids)
-      field_names = fields["NAME"].unique().to_numpy(zero_copy_only=False).tolist()
-
-    scan_numbers: List[int] = []
-
-    if scan_number is not None:
-      scan_numbers = self.par_unique(pool, ncpus, scan_number).tolist()
-
     corr_type = Polarisations.from_values(self._pol["CORR_TYPE"][pol_id].as_py())
+
+    # Extract spectral window information
+    spw_id = self._ddid["SPECTRAL_WINDOW_ID"][ddid].as_py()
+
+    if spw_id >= len(self._spw):
+      raise InvalidMeasurementSet(
+        f"SPECTRAL_WINDOW_ID {spw_id} does not exist in {name}::SPECTRAL_WINDOW"
+      )
+
     chan_freq = self._spw["CHAN_FREQ"][spw_id].as_py()
     uchan_width = np.unique(self._spw["CHAN_WIDTH"][spw_id].as_py())
-
     spw_name = self._spw["NAME"][spw_id].as_py()
     spw_freq_group_name = self._spw["FREQ_GROUP_NAME"][spw_id].as_py()
     spw_ref_freq = self._spw["REF_FREQUENCY"][spw_id].as_py()
     spw_meas_freq_ref = self._spw["MEAS_FREQ_REF"][spw_id].as_py()
     spw_frame = FrequencyMeasures(spw_meas_freq_ref).name.lower()
 
+    # Generate the row map in parallel
     row_map = np.full(utime.size * self.nbl, -1, dtype=np.int64)
     chunk_size = (len(rows) + ncpus - 1) // ncpus
 
@@ -640,7 +663,6 @@ class MSv2Structure(Mapping):
 
     assert len(ant1) == len(rows)
 
-    # Generate the row map in parallel
     s = partial(partition_args, chunk=chunk_size)
     pool.map(gen_row_map, s(time_ids), s(ant1), s(ant2), s(rows))
 
@@ -650,14 +672,17 @@ class MSv2Structure(Mapping):
       chan_freq=chan_freq,
       chan_width=uchan_width,
       corr_type=corr_type.to_str(),
+      intents=intents,
       field_names=field_names,
+      line_names=line_names,
+      source_names=source_names,
       spw_name=spw_name,
       spw_freq_group_name=spw_freq_group_name,
       spw_ref_freq=spw_ref_freq,
       spw_frame=spw_frame,
       row_map=row_map.reshape(utime.size, self.nbl),
       scan_numbers=scan_numbers,
-      sub_scan_numbers=None,
+      sub_scan_numbers=sub_scan_numbers,
     )
 
   def __init__(
@@ -712,6 +737,5 @@ class MSv2Structure(Mapping):
         self._partitions[k] = self.partition_data_factory(
           name, auto_corrs, k, v, pool, ncpus
         )
-        print(dataclasses.asdict(self._partitions[k]))
 
     logger.info("Reading %s structure in took %fs", name, modtime.time() - start)

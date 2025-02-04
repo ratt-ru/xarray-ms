@@ -60,24 +60,32 @@ def test_table_partitioner():
     groups,
     {
       (("DATA_DESC_ID", 0), ("FIELD_ID", 0)): {
+        "DATA_DESC_ID": [0, 0],
+        "FIELD_ID": [0, 0],
         "TIME": [2.0, 4.0],
         "ANTENNA1": [0, 0],
         "ANTENNA2": [1, 1],
         "row": [4, 2],
       },
       (("DATA_DESC_ID", 0), ("FIELD_ID", 1)): {
+        "DATA_DESC_ID": [0],
+        "FIELD_ID": [1],
         "TIME": [3.0],
         "ANTENNA1": [0],
         "ANTENNA2": [1],
         "row": [3],
       },
       (("DATA_DESC_ID", 1), ("FIELD_ID", 0)): {
+        "DATA_DESC_ID": [1],
+        "FIELD_ID": [0],
         "TIME": [1.0],
         "ANTENNA1": [0],
         "ANTENNA2": [1],
         "row": [1],
       },
       (("DATA_DESC_ID", 1), ("FIELD_ID", 1)): {
+        "DATA_DESC_ID": [1],
+        "FIELD_ID": [1],
         "TIME": [0.0],
         "ANTENNA1": [0],
         "ANTENNA2": [1],

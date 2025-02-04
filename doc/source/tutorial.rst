@@ -13,10 +13,10 @@ collection of Datasets of ndarrays on a regular grid.
 To move data between the two formats, it is necessary to partition
 or group MSv2 rows by the same shape and configuration.
 
-In xarray-ms, this is accomplished by specifying ``partition_columns``
+In xarray-ms, this is accomplished by specifying ``partition_schema``
 when opening a Measurement Set.
-Different columns may be used to define the partition, but
-:code:`[DATA_DESC_ID, FIELD_ID, OBSERVATION_ID]` is a reasonable choice.
+Different columns may be used to define the partition.
+:code:`[DATA_DESC_ID, OBS_MODE, OBSERVATION_ID]` is the default.
 
 Opening a Measurement Set
 -------------------------
@@ -39,7 +39,7 @@ to open multiple partitions of a Measurement Set.
     (8, ("XX", "XY", "YX", "YY")),
     (4, ("RR", "LL"))])
 
-  dt = open_datatree(ms, partition_columns=[
+  dt = open_datatree(ms, partition_schema=[
       "DATA_DESC_ID", "FIELD_ID", "OBSERVATION_ID"])
 
   dt
@@ -62,7 +62,7 @@ For example, one could select select some specific dimensions out:
 .. ipython:: python
 
   dt = open_datatree(ms,
-    partition_columns=["DATA_DESC_ID", "FIELD_ID", "OBSERVATION_ID"])
+    partition_schema=["DATA_DESC_ID", "FIELD_ID", "OBSERVATION_ID"])
 
   subdt = dt.isel(time=slice(1, 3), baseline_id=[1, 3, 5], frequency=slice(2, 4))
   subdt
@@ -92,7 +92,7 @@ can be enabled by specifying the ``chunks`` parameter:
 
 .. ipython:: python
 
-  dt = open_datatree(ms, partition_columns=[
+  dt = open_datatree(ms, partition_schema=[
     "DATA_DESC_ID", "FIELD_ID", "OBSERVATION_ID"],
     chunks={"time": 2, "frequency": 2})
 
@@ -108,7 +108,7 @@ to specify different chunking setups for each partition.
 
 .. ipython:: python
 
-  dt = open_datatree(ms, partition_columns=[
+  dt = open_datatree(ms, partition_schema=[
     "DATA_DESC_ID", "FIELD_ID", "OBSERVATION_ID"],
     chunks={},
     preferred_chunks={
@@ -137,7 +137,7 @@ this to a zarr_ store.
   import os.path
   import tempfile
 
-  dt = open_datatree(ms, partition_columns=[
+  dt = open_datatree(ms, partition_schema=[
     "DATA_DESC_ID", "FIELD_ID", "OBSERVATION_ID"],
     chunks={},
     preferred_chunks={

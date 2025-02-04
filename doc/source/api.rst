@@ -13,10 +13,10 @@ be used to open either a :class:`~xarray.Dataset` or a
 
     >>> dataset = xarray.open_dataset(
                     "/data/data.ms",
-                    partition_columns=["DATA_DESC_ID", "FIELD_ID"])
+                    partition_schema=["DATA_DESC_ID", "FIELD_ID"])
     >>> datatree = xarray.backends.api.open_datatree(
                     "/data/data.ms",
-                    partition_columns=["DATA_DESC_ID", "FIELD_ID"])
+                    partition_schema=["DATA_DESC_ID", "FIELD_ID"])
 
 These methods defer to the relevant methods on the
 `Entrypoint Class <entrypoint-class_>`_.

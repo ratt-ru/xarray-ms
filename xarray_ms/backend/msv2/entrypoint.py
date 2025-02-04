@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import warnings
 from datetime import datetime, timezone
+from importlib.metadata import version as importlib_version
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Tuple
 from uuid import uuid4
 
@@ -73,7 +74,7 @@ def initialise_default_args(
   auto_corrs: bool,
   epoch: str | None,
   table_factory: TableFactory | None,
-  partition_columns: List[str] | None,
+  partition_schema: List[str] | None,
   structure_factory: MSv2StructureFactory | None,
 ) -> Tuple[str, TableFactory, List[str], MSv2StructureFactory]:
   """
@@ -90,11 +91,11 @@ def initialise_default_args(
     lockoptions="nolock",
   )
   epoch = epoch or uuid4().hex[:8]
-  partition_columns = partition_columns or DEFAULT_PARTITION_COLUMNS
+  partition_schema = partition_schema or DEFAULT_PARTITION_COLUMNS
   structure_factory = structure_factory or MSv2StructureFactory(
-    table_factory, partition_columns, epoch, auto_corrs=auto_corrs
+    table_factory, partition_schema, epoch, auto_corrs=auto_corrs
   )
-  return epoch, table_factory, partition_columns, structure_factory
+  return epoch, table_factory, partition_schema, structure_factory
 
 
 class MSv2Store(AbstractWritableDataStore):
@@ -103,7 +104,7 @@ class MSv2Store(AbstractWritableDataStore):
   __slots__ = (
     "_table_factory",
     "_structure_factory",
-    "_partition_columns",
+    "_partition_schema",
     "_partition_key",
     "_preferred_chunks",
     "_auto_corrs",
@@ -113,7 +114,7 @@ class MSv2Store(AbstractWritableDataStore):
 
   _table_factory: TableFactory
   _structure_factory: MSv2StructureFactory
-  _partition_columns: List[str]
+  _partition_schema: List[str]
   _preferred_chunks: Dict[str, int]
   _partition: PartitionKeyT
   _autocorrs: bool
@@ -124,7 +125,7 @@ class MSv2Store(AbstractWritableDataStore):
     self,
     table_factory: TableFactory,
     structure_factory: MSv2StructureFactory,
-    partition_columns: List[str],
+    partition_schema: List[str],
     partition_key: PartitionKeyT,
     preferred_chunks: Dict[str, int],
     auto_corrs: bool,
@@ -133,7 +134,7 @@ class MSv2Store(AbstractWritableDataStore):
   ):
     self._table_factory = table_factory
     self._structure_factory = structure_factory
-    self._partition_columns = partition_columns
+    self._partition_schema = partition_schema
     self._partition_key = partition_key
     self._preferred_chunks = preferred_chunks
     self._auto_corrs = auto_corrs
@@ -145,7 +146,7 @@ class MSv2Store(AbstractWritableDataStore):
     cls,
     ms: str,
     drop_variables=None,
-    partition_columns: List[str] | None = None,
+    partition_schema: List[str] | None = None,
     partition_key: PartitionKeyT | None = None,
     preferred_chunks: Dict[str, int] | None = None,
     auto_corrs: bool = True,
@@ -156,16 +157,14 @@ class MSv2Store(AbstractWritableDataStore):
     if not isinstance(ms, str):
       raise ValueError("Measurement Sets paths must be strings")
 
-    epoch, table_factory, partition_columns, structure_factory = (
-      initialise_default_args(
-        ms,
-        ninstances,
-        auto_corrs,
-        epoch,
-        None,
-        partition_columns,
-        structure_factory,
-      )
+    epoch, table_factory, partition_schema, structure_factory = initialise_default_args(
+      ms,
+      ninstances,
+      auto_corrs,
+      epoch,
+      None,
+      partition_schema,
+      structure_factory,
     )
 
     # Resolve the user supplied partition key against actual
@@ -188,7 +187,7 @@ class MSv2Store(AbstractWritableDataStore):
     return cls(
       table_factory,
       structure_factory,
-      partition_columns=partition_columns,
+      partition_schema=partition_schema,
       partition_key=partition_key,
       preferred_chunks=preferred_chunks,
       auto_corrs=auto_corrs,
@@ -210,16 +209,21 @@ class MSv2Store(AbstractWritableDataStore):
     return factory.get_variables()
 
   def get_attrs(self):
-    try:
-      ddid = next(iter(v for k, v in self._partition_key if k == "DATA_DESC_ID"))
-    except StopIteration:
-      raise KeyError("DATA_DESC_ID not found in partition")
+    factory = MainDatasetFactory(
+      self._partition_key,
+      self._preferred_chunks,
+      self._table_factory,
+      self._structure_factory,
+    )
 
-    return {
-      "version": "4.0.0",
+    attrs = {
+      "schema_version": "4.0.0",
       "creation_date": datetime.now(timezone.utc).isoformat(),
-      "data_description_id": ddid,
+      "type": "visibility",
+      "xarray_ms_version": importlib_version("xarray-ms"),
     }
+
+    return {**attrs, **factory.get_attrs()}
 
   def get_dimensions(self):
     return None
@@ -231,7 +235,7 @@ class MSv2Store(AbstractWritableDataStore):
 class MSv2EntryPoint(BackendEntrypoint):
   open_dataset_parameters = [
     "filename_or_obj",
-    "partition_columns",
+    "partition_schema",
     "partition_key",
     "preferred_chunks",
     "auto_corrs",
@@ -266,7 +270,7 @@ class MSv2EntryPoint(BackendEntrypoint):
     filename_or_obj: str | os.PathLike[Any] | BufferedIOBase | AbstractDataStore,
     *,
     drop_variables: str | Iterable[str] | None = None,
-    partition_columns: List[str] | None = None,
+    partition_schema: List[str] | None = None,
     partition_key: PartitionKeyT | None = None,
     preferred_chunks: Dict[str, int] | None = None,
     auto_corrs: bool = True,
@@ -280,7 +284,7 @@ class MSv2EntryPoint(BackendEntrypoint):
     Args:
       filename_or_obj: The path to the MSv2 CASA Measurement Set file.
       drop_variables: Variables to drop from the dataset.
-      partition_columns: The columns to use for partitioning the Measurement set.
+      partition_schema: The columns to use for partitioning the Measurement set.
         Defaults to :code:`{DEFAULT_PARTITION_COLUMNS}`.
       partition_key: A key corresponding to an individual partition.
         For example :code:`(('DATA_DESC_ID', 0), ('FIELD_ID', 0))`.
@@ -295,14 +299,14 @@ class MSv2EntryPoint(BackendEntrypoint):
 
     Returns:
       A :class:`~xarray.Dataset` referring to the unique
-      partition specified by :code:`partition_columns` and :code:`partition_key`.
+      partition specified by :code:`partition_schema` and :code:`partition_key`.
     """
     filename_or_obj = _normalize_path(filename_or_obj)
 
     store = MSv2Store.open(
       filename_or_obj,
       drop_variables=drop_variables,
-      partition_columns=partition_columns,
+      partition_schema=partition_schema,
       partition_key=partition_key,
       preferred_chunks=preferred_chunks,
       auto_corrs=auto_corrs,
@@ -320,7 +324,7 @@ class MSv2EntryPoint(BackendEntrypoint):
     *,
     preferred_chunks: Dict[str, Any] | None = None,
     drop_variables: str | Iterable[str] | None = None,
-    partition_columns: List[str] | None = None,
+    partition_schema: List[str] | None = None,
     auto_corrs: bool = True,
     ninstances: int = 8,
     epoch: str | None = None,
@@ -359,7 +363,7 @@ class MSv2EntryPoint(BackendEntrypoint):
           for more information.
 
       drop_variables: Variables to drop from the dataset.
-      partition_columns: The columns to use for partitioning the Measurement set.
+      partition_schema: The columns to use for partitioning the Measurement set.
         Defaults to :code:`{DEFAULT_PARTITION_COLUMNS}`.
       auto_corrs: Include/Exclude auto-correlations.
       ninstances: The number of Measurement Set instances to open for parallel I/O.
@@ -374,7 +378,7 @@ class MSv2EntryPoint(BackendEntrypoint):
     groups_dict = self.open_groups_as_dict(
       filename_or_obj,
       drop_variables=drop_variables,
-      partition_columns=partition_columns,
+      partition_schema=partition_schema,
       preferred_chunks=preferred_chunks,
       auto_corrs=auto_corrs,
       ninstances=ninstances,
@@ -390,7 +394,7 @@ class MSv2EntryPoint(BackendEntrypoint):
     filename_or_obj: str | os.PathLike[Any] | BufferedIOBase | AbstractDataStore,
     *,
     drop_variables: str | Iterable[str] | None = None,
-    partition_columns: List[str] | None = None,
+    partition_schema: List[str] | None = None,
     preferred_chunks: Dict[str, int] | None = None,
     auto_corrs: bool = True,
     ninstances: int = 8,
@@ -408,8 +412,8 @@ class MSv2EntryPoint(BackendEntrypoint):
     else:
       raise ValueError("Measurement Set paths must be strings")
 
-    epoch, _, partition_columns, structure_factory = initialise_default_args(
-      ms, ninstances, auto_corrs, epoch, None, partition_columns, None
+    epoch, _, partition_schema, structure_factory = initialise_default_args(
+      ms, ninstances, auto_corrs, epoch, None, partition_schema, None
     )
 
     # /path/to/some_name.ext -> some_name
@@ -424,7 +428,7 @@ class MSv2EntryPoint(BackendEntrypoint):
         ms,
         drop_variables=drop_variables,
         engine="xarray-ms:msv2",
-        partition_columns=partition_columns,
+        partition_schema=partition_schema,
         partition_key=partition_key,
         preferred_chunks=pchunks[partition_key]
         if isinstance(pchunks, Mapping)
