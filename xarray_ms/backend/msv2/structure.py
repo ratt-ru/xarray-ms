@@ -335,7 +335,7 @@ class MSv2Structure(Mapping):
 
   _ms_factory: TableFactory
   _auto_corrs: bool
-  _partition_schema: List[str]
+  _partition_columns: List[str]
   _partitions: Mapping[PartitionKeyT, PartitionData]
   _column_descs: Dict[str, Dict[str, ColumnDesc]]
   _ant: pa.Table
@@ -407,7 +407,7 @@ class MSv2Structure(Mapping):
     if isinstance(key, str):
       key = self.parse_partition_key(key)
 
-    column_set = set(self._partition_schema)
+    column_set = set(self._partition_columns)
 
     # Check that the key columns and values are valid
     new_key: List[Tuple[str, int]] = []
@@ -416,7 +416,8 @@ class MSv2Structure(Mapping):
       column = SHORT_TO_LONG_PARTITION_COLUMNS.get(column, column)
       if column not in column_set:
         raise InvalidPartitionKey(
-          f"{column} is not valid a valid partition column " f"{self._partition_schema}"
+          f"{column} is not valid a valid partition column "
+          f"{self._partition_columns}"
         )
       if not isinstance(value, Integral):
         raise InvalidPartitionKey(f"{value} is not a valid partition value")
