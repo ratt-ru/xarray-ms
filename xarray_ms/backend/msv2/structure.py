@@ -607,8 +607,6 @@ class MSv2Structure(Mapping):
         source_names = sources["NAME"].to_pylist()
         if "TRANSITION" in self._source.column_names:
           line_names = sources["TRANSITION"].to_pylist()
-          # import pyarrow.compute as pac
-          # line_names = pac.list_flatten(sources["TRANSITION"]).to_pylist()
 
     # Extract scan numbers
     scan_number = value.get("SCAN_NUMBER")
