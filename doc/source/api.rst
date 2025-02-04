@@ -33,3 +33,22 @@ Entrypoint class for the MSv2 backend.
 
 .. autoclass:: xarray_ms.backend.msv2.entrypoint.MSv2EntryPoint
     :members: open_dataset, open_datatree
+
+.. _partitioning-schema:
+
+Partioning Schema
+-----------------
+
+The default partitioning schema contains the following columns:
+
+.. autodata:: xarray_ms.backend.msv2.structure.DEFAULT_PARTITION_COLUMNS
+
+Partitioning always uses these columns, but additional columns can be
+selected if finer grained partitioning is required:
+
+.. autodata:: xarray_ms.backend.msv2.structure.VALID_PARTITION_COLUMNS
+
+Note that ``OBS_MODE`` and ``SUB_SCAN_NUMBER`` are columns in the ``STATE``
+subtable, while ``SOURCE_ID`` is a column of the ``FIELD`` subtable.
+Partitioning on these columns is achieved by joining on the ``STATE_ID``
+and ``FIELD_ID`` columns, respectively.

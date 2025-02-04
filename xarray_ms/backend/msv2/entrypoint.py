@@ -223,7 +223,7 @@ class MSv2Store(AbstractWritableDataStore):
       "xarray_ms_version": importlib_version("xarray-ms"),
     }
 
-    return {**attrs, **factory.get_attrs()}
+    return dict(sorted({**attrs, **factory.get_attrs()}.items()))
 
   def get_dimensions(self):
     return None
@@ -367,8 +367,8 @@ class MSv2EntryPoint(BackendEntrypoint):
         Defaults to :code:`{DEFAULT_PARTITION_COLUMNS}`.
       auto_corrs: Include/Exclude auto-correlations.
       ninstances: The number of Measurement Set instances to open for parallel I/O.
-      epoch: A unique string identifying the creation of this Dataset.
-        This should not normally need to be set by the user
+      epoch: A string uniquely identifying this Dataset.
+        This should not normally be set by the user
 
     Returns:
       An xarray :class:`~xarray.core.datatree.DataTree`

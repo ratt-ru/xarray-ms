@@ -113,7 +113,7 @@ DEFAULT_PARTITION_COLUMNS: List[str] = [
   "DATA_DESC_ID",
   "OBS_MODE",
   "OBSERVATION_ID",
-]
+]  #: Default Partitioning Column Schema
 
 
 SHORT_TO_LONG_PARTITION_COLUMNS: Dict[str, str] = {
@@ -145,6 +145,7 @@ VALID_STATE_PARTITION_COLUMNS: List[str] = [
   "SUB_SCAN_NUMBER",
 ]
 
+#: Valid partitioning columns
 VALID_PARTITION_COLUMNS: List[str] = (
   VALID_MAIN_PARTITION_COLUMNS
   + VALID_FIELD_PARTITION_COLUMNS

@@ -16,7 +16,7 @@ or group MSv2 rows by the same shape and configuration.
 In xarray-ms, this is accomplished by specifying ``partition_schema``
 when opening a Measurement Set.
 Different columns may be used to define the partition.
-:code:`[DATA_DESC_ID, OBS_MODE, OBSERVATION_ID]` is the default.
+See :ref:`partitioning-schema` for more information.
 
 Opening a Measurement Set
 -------------------------
@@ -32,15 +32,13 @@ to open multiple partitions of a Measurement Set.
   import xarray
   import xarray.testing
   from xarray_ms.testing.simulator import simulate
-  from xarray.backends.api import open_datatree
 
   # Simulate a Measurement Set with 2 channel and polarisation configurations
   ms = simulate("test.ms", data_description=[
     (8, ("XX", "XY", "YX", "YY")),
     (4, ("RR", "LL"))])
 
-  dt = open_datatree(ms, partition_schema=[
-      "DATA_DESC_ID", "FIELD_ID", "OBSERVATION_ID"])
+  dt = xarray.open_datatree(ms, partition_schema=["FIELD_ID"])
 
   dt
 
@@ -61,8 +59,7 @@ For example, one could select select some specific dimensions out:
 
 .. ipython:: python
 
-  dt = open_datatree(ms,
-    partition_schema=["DATA_DESC_ID", "FIELD_ID", "OBSERVATION_ID"])
+  dt = xarray.open_datatree(ms, partition_schema=["FIELD_ID"])
 
   subdt = dt.isel(time=slice(1, 3), baseline_id=[1, 3, 5], frequency=slice(2, 4))
   subdt
@@ -92,8 +89,7 @@ can be enabled by specifying the ``chunks`` parameter:
 
 .. ipython:: python
 
-  dt = open_datatree(ms, partition_schema=[
-    "DATA_DESC_ID", "FIELD_ID", "OBSERVATION_ID"],
+  dt = xarray.open_datatree(ms, partition_schema=["FIELD_ID"],
     chunks={"time": 2, "frequency": 2})
 
   dt
@@ -108,8 +104,7 @@ to specify different chunking setups for each partition.
 
 .. ipython:: python
 
-  dt = open_datatree(ms, partition_schema=[
-    "DATA_DESC_ID", "FIELD_ID", "OBSERVATION_ID"],
+  dt = xarray.open_datatree(ms, partition_schema=["FIELD_ID"],
     chunks={},
     preferred_chunks={
       (("DATA_DESC_ID", 0),): {"time": 2, "frequency": 4},
@@ -137,8 +132,7 @@ this to a zarr_ store.
   import os.path
   import tempfile
 
-  dt = open_datatree(ms, partition_schema=[
-    "DATA_DESC_ID", "FIELD_ID", "OBSERVATION_ID"],
+  dt = xarray.open_datatree(ms, partition_schema=["FIELD_ID"],
     chunks={},
     preferred_chunks={
       (("DATA_DESC_ID", 0),): {"time": 2, "frequency": 4},
@@ -151,7 +145,7 @@ It is then trivial to open this using ``open_datatree``:
 
 .. ipython:: python
 
-  dt2 = open_datatree(zarr_path)
+  dt2 = xarray.open_datatree(zarr_path)
   xarray.testing.assert_identical(dt, dt2)
 
 
