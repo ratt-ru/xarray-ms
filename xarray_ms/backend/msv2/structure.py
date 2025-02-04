@@ -4,8 +4,9 @@ import concurrent.futures as cf
 import dataclasses
 import logging
 import multiprocessing as mp
+import os.path
 from collections import defaultdict
-from functools import partial, reduce
+from functools import partial
 from numbers import Integral
 from typing import (
   Any,
@@ -15,6 +16,7 @@ from typing import (
   List,
   Mapping,
   Sequence,
+  Set,
   Tuple,
 )
 
@@ -103,11 +105,15 @@ def is_partition_key(key: PartitionKeyT) -> bool:
   )
 
 
+def partition_args(data: npt.NDArray, chunk: int) -> List[npt.NDArray]:
+  return [data[i : i + chunk] for i in range(0, len(data), chunk)]
+
+
 DEFAULT_PARTITION_COLUMNS: List[str] = [
   "DATA_DESC_ID",
-  "FIELD_ID",
+  "OBS_MODE",
   "OBSERVATION_ID",
-]
+]  #: Default Partitioning Column Schema
 
 
 SHORT_TO_LONG_PARTITION_COLUMNS: Dict[str, str] = {
@@ -115,10 +121,36 @@ SHORT_TO_LONG_PARTITION_COLUMNS: Dict[str, str] = {
   "F": "FIELD_ID",
   "O": "OBSERVATION_ID",
   "P": "PROCESSOR_ID",
-  "F1": "FEED1",
-  "F2": "FEED2",
+  "S": "SOURCE_ID",
+  "SI": "STATE_ID",
+  "SN": "SCAN_NUMBER",
+  "OM": "OBS_MODE",
+  "SSN": "SUB_SCAN_NUMBER",
 }
 
+# MAIN table columns
+VALID_MAIN_PARTITION_COLUMNS: List[str] = [
+  "DATA_DESC_ID",
+  "OBSERVATION_ID",
+  "FIELD_ID",
+  "SCAN_NUMBER",
+  "STATE_ID",
+]
+
+VALID_FIELD_PARTITION_COLUMNS: List[str] = ["SOURCE_ID"]
+
+# STATE table columns
+VALID_STATE_PARTITION_COLUMNS: List[str] = [
+  "OBS_MODE",
+  "SUB_SCAN_NUMBER",
+]
+
+#: Valid partitioning columns
+VALID_PARTITION_COLUMNS: List[str] = (
+  VALID_MAIN_PARTITION_COLUMNS
+  + VALID_FIELD_PARTITION_COLUMNS
+  + VALID_STATE_PARTITION_COLUMNS
+)
 
 SORT_COLUMNS: List[str] = ["TIME", "ANTENNA1", "ANTENNA2"]
 
@@ -132,14 +164,21 @@ class PartitionData:
   chan_freq: npt.NDArray[np.float64]
   chan_width: npt.NDArray[np.float64]
   corr_type: npt.NDArray[np.int32]
+  field_names: List[str]
+  line_names: List[str]
+  source_names: List[str]
+  intents: List[str]
   spw_name: str
   spw_freq_group_name: str
   spw_ref_freq: float
   spw_frame: str
+  scan_numbers: List[int]
+  sub_scan_numbers: List[int]
+
   row_map: npt.NDArray[np.int64]
 
 
-PartitionKeyT = Tuple[Tuple[str, int], ...]
+PartitionKeyT = Tuple[Tuple[str, int | str], ...]
 
 
 class TablePartitioner:
@@ -173,46 +212,59 @@ class TablePartitioner:
     nworkers = pool._max_workers
     chunk = (nrow + nworkers - 1) // nworkers
 
+    # Order columns by
+    #
+    # 1. Partitioning columns
+    # 2. Sorting columns
+    # 3. Others (such as row and INTERVAL)
+    # 4. Remaining columns
+    #
+    # 4 is needed for the merge_np_partitions to work
     ordered_columns = self._partitionby + self._sortby + self._other
+    ordered_columns += list(set(index.column_names) - set(ordered_columns))
 
     # Create a dictionary out of the pyarrow table
     table_dict = {k: index[k].to_numpy() for k in ordered_columns}
-    # Partition the range over the workers in the pool
+    # Partition the data over the workers in the pool
     partitions = [
       {k: v[s : s + chunk] for k, v in table_dict.items()}
       for s in range(0, nrow, chunk)
     ]
 
+    # Sort each partition in parallel
     def sort_partition(p):
-      indices = np.lexsort(tuple(reversed(p.values())))
+      sort_arrays = tuple(p[k] for k in reversed(ordered_columns))
+      indices = np.lexsort(sort_arrays)
       return {k: v[indices] for k, v in p.items()}
 
-    # Sort each partition in parallel
     partitions = list(pool.map(sort_partition, partitions))
     # Merge partitions
     merged = merge_np_partitions(partitions)
 
-    # Find the group start and end points in parallel
+    # Find the edges of the group partitions in parallel by
+    # partitioning the sorted merged values into chunks, including
+    # the starting value of the next chunk.
+    starts = list(range(0, nrow, chunk))
+    group_values = [
+      {k: v[s : s + chunk + 1] for k, v in merged.items() if k in self._partitionby}
+      for s in starts
+    ]
+    assert len(starts) == len(group_values)
+
+    # Find the group start and end points in parallel by finding edges
     def find_edges(p, s):
       diffs = [np.diff(p[v]) > 0 for v in self._partitionby]
       return np.where(np.logical_or.reduce(diffs))[0] + s + 1
 
-    group_diffs = [
-      {k: v[s : s + chunk + 1] for k, v in merged.items() if k in self._partitionby}
-      for s in range(0, nrow, chunk)
-    ]
-    starts = reduce(lambda x, y: x + [x[-1] + y], [chunk] * (len(group_diffs) - 1), [0])
-    assert len(starts) == len(group_diffs)
-    edges = list(pool.map(find_edges, group_diffs, starts))
+    edges = list(pool.map(find_edges, group_values, starts))
     group_offsets = np.concatenate([[0]] + edges + [[nrow]])
 
     # Create the grouped partitions
-    groups = {}
+    groups: Dict[PartitionKeyT, Dict[str, npt.NDArray]] = {}
 
     for start, end in zip(group_offsets[:-1], group_offsets[1:]):
       key = tuple(sorted((k, merged[k][start].item()) for k in self._partitionby))
-      data = {k: merged[k][start:end] for k in self._sortby + self._other}
-      groups[key] = data
+      groups[key] = {k: v[start:end] for k, v in merged.items()}
 
     return groups
 
@@ -228,7 +280,7 @@ class MSv2StructureFactory:
   for creating and caching an MSv2Structure"""
 
   _ms_factory: TableFactory
-  _partition_columns: List[str]
+  _partition_schema: List[str]
   _epoch: str
   _auto_corrs: bool
   _STRUCTURE_CACHE: ClassVar[Cache] = Cache(
@@ -238,12 +290,12 @@ class MSv2StructureFactory:
   def __init__(
     self,
     ms: TableFactory,
-    partition_columns: List[str],
+    partition_schema: List[str],
     epoch: str,
     auto_corrs: bool = True,
   ):
     self._ms_factory = ms
-    self._partition_columns = partition_columns
+    self._partition_schema = partition_schema
     self._epoch = epoch
     self._auto_corrs = auto_corrs
 
@@ -253,20 +305,20 @@ class MSv2StructureFactory:
 
     return (
       self._ms_factory == other._ms_factory
-      and self._partition_columns == other._partition_columns
+      and self._partition_schema == other._partition_schema
       and self._epoch == other._epoch
       and self._auto_corrs == other._auto_corrs
     )
 
   def __hash__(self):
     return hash(
-      (self._ms_factory, tuple(self._partition_columns), self._epoch, self._auto_corrs)
+      (self._ms_factory, tuple(self._partition_schema), self._epoch, self._auto_corrs)
     )
 
   def __reduce__(self):
     return (
       MSv2StructureFactory,
-      (self._ms_factory, self._partition_columns, self._epoch, self._auto_corrs),
+      (self._ms_factory, self._partition_schema, self._epoch, self._auto_corrs),
     )
 
   def __call__(self, *args, **kw) -> MSv2Structure:
@@ -274,7 +326,7 @@ class MSv2StructureFactory:
     return self._STRUCTURE_CACHE.get(
       self,
       lambda self: MSv2Structure(
-        self._ms_factory, self._partition_columns, self._auto_corrs
+        self._ms_factory, self._partition_schema, self._auto_corrs
       ),
     )
 
@@ -292,6 +344,8 @@ class MSv2Structure(Mapping):
   _feed: pa.Table
   _spw: pa.Table
   _pol: pa.Table
+  _field: pa.Table
+  _state: pa.Table
 
   def __getitem__(self, key: PartitionKeyT) -> PartitionData:
     return self._partitions[key]
@@ -348,18 +402,16 @@ class MSv2Structure(Mapping):
 
   def resolve_key(self, key: str | PartitionKeyT | None) -> List[PartitionKeyT]:
     """Given a possibly incomplete key, resolves to a list of matching partition keys"""
-    if key is None:
+    if not key:
       return list(self.keys())
 
     if isinstance(key, str):
-      if not key:
-        return list(self.keys())
       key = self.parse_partition_key(key)
 
-    column_set = set(self._partition_columns)
+    column_set = set(self._partition_columns) | set(self._subtable_partition_columns)
 
     # Check that the key columns and values are valid
-    new_key: List[Tuple[str, int]] = []
+    new_key: List[Tuple[str, int | str]] = []
     for column, value in key:
       column = column.upper()
       column = SHORT_TO_LONG_PARTITION_COLUMNS.get(column, column)
@@ -368,8 +420,11 @@ class MSv2Structure(Mapping):
           f"{column} is not valid a valid partition column "
           f"{self._partition_columns}"
         )
-      if not isinstance(value, Integral):
-        raise InvalidPartitionKey(f"{value} is not a valid partition value")
+      if not isinstance(value, (str, Integral)):
+        raise InvalidPartitionKey(
+          f"{value} is an invalid partition key value. "
+          f"Should be an integer or (rarely) a string"
+        )
       new_key.append((column, value))
 
     key_set = set(new_key)
@@ -383,163 +438,333 @@ class MSv2Structure(Mapping):
 
     return matches
 
+  def maybe_get_source_id(
+    self, pool: cf.Executor, ncpus: int, field_id: npt.NDArray[np.int32]
+  ) -> npt.NDArray[np.int32] | None:
+    """Constructs a SOURCE_ID array from MAIN.FIELD_ID
+    broadcast against FIELD.SOURCE_ID"""
+    if hasattr(self, "_field") and hasattr(self, "_source") and len(self._source) != 0:
+      field_source_id = self._field["SOURCE_ID"].to_numpy()
+      source_id = np.empty_like(field_id)
+      chunk = (len(source_id) + ncpus - 1) // ncpus
+
+      def par_copy(source, field):
+        source[:] = field_source_id[field]
+
+      pool.map(
+        par_copy, partition_args(source_id, chunk), partition_args(field_id, chunk)
+      )
+
+      return source_id
+
+    return None
+
+  def partition_columns_from_schema(
+    self, partition_schema: List[str]
+  ) -> Tuple[List[str], List[str]]:
+    """Given a partitioning schema, produce
+
+    1. a list of partitioning columns of the MAIN table
+    2. a list of subtable partitioning columns.
+       i.e. `FIELD.SOURCE_ID` and `STATE.OBS_MODE`
+    """
+    schema: Set[str] = set(partition_schema)
+
+    # Always partition by these columns
+    columns: Dict[str, None] = {c: None for c in DEFAULT_PARTITION_COLUMNS}
+
+    for column in VALID_MAIN_PARTITION_COLUMNS:
+      if column in schema and column not in columns:
+        columns[column] = None
+
+    # Add FIELD_ID if partitioning by FIELD columns
+    if (
+      len(set(VALID_FIELD_PARTITION_COLUMNS).intersection(schema)) > 0
+      and "FIELD_ID" not in columns
+    ):
+      columns["FIELD_ID"] = None
+
+    # Add STATE_ID if partitioning by STATE columns
+    # and the STATE table is present and populated
+    if (
+      hasattr(self, "_state")
+      and len(self._state) != 0
+      and len(set(VALID_STATE_PARTITION_COLUMNS).intersection(schema)) > 0
+      and "STATE_ID" not in columns
+    ):
+      columns["STATE_ID"] = None
+
+    subtable_columns: List[str] = []
+    MAIN_COLUMN_SET: Set[str] = set(VALID_MAIN_PARTITION_COLUMNS)
+
+    for column in list(columns.keys()):
+      if column not in MAIN_COLUMN_SET:
+        subtable_columns.append(column)
+        del columns[column]
+
+    return list(columns.keys()), subtable_columns
+
+  @staticmethod
+  def par_unique(pool, ncpus, data, return_inverse=False):
+    """Parallel unique function using the associated threadpool"""
+    chunk_size = (len(data) + ncpus - 1) // ncpus
+    data_chunks = partition_args(data, chunk_size)
+    if return_inverse:
+      unique_fn = partial(np.unique, return_inverse=True)
+      udatas, indices = zip(*pool.map(unique_fn, data_chunks))
+      udata = np.unique(np.concatenate(udatas))
+
+      def inv_fn(data, idx):
+        return np.searchsorted(udata, data)[idx]
+
+      def par_assign(target, data):
+        target[:] = data
+
+      data_ids = pool.map(inv_fn, udatas, indices)
+      inverse = np.empty(len(data), dtype=indices[0].dtype)
+      pool.map(par_assign, partition_args(inverse, chunk_size), data_ids)
+
+      return udata, inverse
+    else:
+      udata = list(pool.map(np.unique, data_chunks))
+      return np.unique(np.concatenate(udata))
+
+  @staticmethod
+  def read_subtables(
+    table_name: str,
+  ) -> Tuple[Dict[str, pa.Table], Dict[str, Dict[str, ColumnDesc]]]:
+    subtables: Dict[str, pa.Table] = {}
+    coldescs: Dict[str, Dict[str, ColumnDesc]] = defaultdict(dict)
+    SUBTABLES: List[Tuple[str, str, bool]] = [
+      ("ANTENNA", "_ant", True),
+      ("DATA_DESCRIPTION", "_ddid", True),
+      ("SPECTRAL_WINDOW", "_spw", True),
+      ("POLARIZATION", "_pol", True),
+      ("FEED", "_feed", True),
+      ("FIELD", "_field", False),
+      ("SOURCE", "_source", False),
+      ("STATE", "_state", False),
+    ]
+
+    for subtable_name, attribute, required in SUBTABLES:
+      subtable_path = os.path.join(table_name, subtable_name)
+      if not os.path.exists(subtable_path):
+        if required:
+          raise FileNotFoundError(f"Required subtable {subtable_name} does not exist")
+        else:
+          continue
+
+      with Table.from_filename(
+        f"{table_name}::{subtable_name}", lockoptions="nolock"
+      ) as subtable:
+        subtables[attribute] = subtable.to_arrow()
+        coldescs[subtable_path] = FrozenDict(
+          {
+            c: ColumnDesc.from_descriptor(c, subtable.tabledesc())
+            for c in subtable.columns()
+          }
+        )
+
+    return subtables, coldescs
+
+  def partition_data_factory(
+    self,
+    name: str,
+    auto_corrs: bool,
+    key: PartitionKeyT,
+    value: Dict[str, npt.NDArray],
+    pool: cf.Executor,
+    ncpus: int,
+  ) -> Tuple[PartitionKeyT, PartitionData]:
+    """Generate an updated partition key and
+    `PartitionData` object.
+
+    The partition key is updated with subtable partitioning keys
+    (primarily `FIELD.SOURCE_ID` and `STATE.OBSMODE`).
+
+    The `PartitionData` object represents a summary of the
+    partition data passed in via arguments.
+    """
+    time = value["TIME"]
+    interval = value["INTERVAL"]
+    ant1 = value["ANTENNA1"]
+    ant2 = value["ANTENNA2"]
+    rows = value["row"]
+
+    # Compute the unique times and their inverse index
+    utime, time_ids = self.par_unique(pool, ncpus, time, return_inverse=True)
+
+    # Compute unique intervals
+    uinterval = self.par_unique(pool, ncpus, interval)
+
+    try:
+      ddid = next(int(i) for (c, i) in key if c == "DATA_DESC_ID")
+    except StopIteration:
+      raise KeyError(f"DATA_DESC_ID must be present in partition key {key}")
+
+    if ddid >= len(self._ddid):
+      raise InvalidMeasurementSet(
+        f"DATA_DESC_ID {ddid} does not exist in {name}::DATA_DESCRIPTION"
+      )
+
+    # Extract field and source names
+    field_id = value.get("FIELD_ID")
+    field_names: List[str] = []
+    source_names: List[str] = []
+    line_names: List[str] = []
+
+    if field_id is not None and len(self._field) > 0:
+      ufield_ids = self.par_unique(pool, ncpus, field_id)
+      fields = self._field.take(ufield_ids)
+      field_names = fields["NAME"].to_pylist()
+      source_ids = fields["SOURCE_ID"].to_pylist()
+
+      if "SOURCE_ID" in self._subtable_partition_columns:
+        assert len(source_ids) == 1
+        key += (("SOURCE_ID", source_ids[0]),)
+
+      # Select out SOURCES if we have the table
+      if hasattr(self, "_source") and len(self._source) > 0:
+        sources = self._source.take(source_ids)
+        source_names = sources["NAME"].to_pylist()
+        if "TRANSITION" in self._source.column_names:
+          line_names = sources["TRANSITION"].to_pylist()
+
+    # Extract scan numbers
+    scan_number = value.get("SCAN_NUMBER")
+    scan_numbers: List[int] = []
+
+    if scan_number is not None:
+      scan_numbers = self.par_unique(pool, ncpus, scan_number).tolist()
+
+    # Extract intents and sub scan numbers
+    state_id = value.get("STATE_ID")
+    intents: List[str] = []
+    sub_scan_numbers: List[int] = []
+
+    if state_id is not None and len(self._state) > 0:
+      ustate_ids = self.par_unique(pool, ncpus, state_id)
+      states = self._state.take(ustate_ids)
+      intents = states["OBS_MODE"].to_numpy(zero_copy_only=False).tolist()
+      sub_scan_numbers = states["SUB_SCAN"].to_numpy(zero_copy_only=False).tolist()
+
+      if "OBS_MODE" in self._subtable_partition_columns:
+        assert len(intents) == 1
+        key += (("OBS_MODE", intents[0]),)
+
+    # Extract polarization information
+    pol_id = self._ddid["POLARIZATION_ID"][ddid].as_py()
+
+    if pol_id >= len(self._pol):
+      raise InvalidMeasurementSet(
+        f"POLARIZATION_ID {pol_id} does not exist in {name}::POLARIZATION"
+      )
+
+    corr_type = Polarisations.from_values(self._pol["CORR_TYPE"][pol_id].as_py())
+
+    # Extract spectral window information
+    spw_id = self._ddid["SPECTRAL_WINDOW_ID"][ddid].as_py()
+
+    if spw_id >= len(self._spw):
+      raise InvalidMeasurementSet(
+        f"SPECTRAL_WINDOW_ID {spw_id} does not exist in {name}::SPECTRAL_WINDOW"
+      )
+
+    chan_freq = self._spw["CHAN_FREQ"][spw_id].as_py()
+    uchan_width = np.unique(self._spw["CHAN_WIDTH"][spw_id].as_py())
+    spw_name = self._spw["NAME"][spw_id].as_py()
+    spw_freq_group_name = self._spw["FREQ_GROUP_NAME"][spw_id].as_py()
+    spw_ref_freq = self._spw["REF_FREQUENCY"][spw_id].as_py()
+    spw_meas_freq_ref = self._spw["MEAS_FREQ_REF"][spw_id].as_py()
+    spw_frame = FrequencyMeasures(spw_meas_freq_ref).name.lower()
+
+    # Generate the row map in parallel
+    row_map = np.full(utime.size * self.nbl, -1, dtype=np.int64)
+    chunk_size = (len(rows) + ncpus - 1) // ncpus
+
+    def gen_row_map(time_ids, ant1, ant2, rows):
+      bl_ids = baseline_id(ant1, ant2, self.na, auto_corrs=auto_corrs)
+      row_map[time_ids * self.nbl + bl_ids] = rows
+
+    assert len(ant1) == len(rows)
+
+    s = partial(partition_args, chunk=chunk_size)
+    pool.map(gen_row_map, s(time_ids), s(ant1), s(ant2), s(rows))
+
+    partition_data = PartitionData(
+      time=utime,
+      interval=uinterval,
+      chan_freq=chan_freq,
+      chan_width=uchan_width,
+      corr_type=corr_type.to_str(),
+      intents=intents,
+      field_names=field_names,
+      line_names=line_names,
+      source_names=source_names,
+      spw_name=spw_name,
+      spw_freq_group_name=spw_freq_group_name,
+      spw_ref_freq=spw_ref_freq,
+      spw_frame=spw_frame,
+      row_map=row_map.reshape(utime.size, self.nbl),
+      scan_numbers=scan_numbers,
+      sub_scan_numbers=sub_scan_numbers,
+    )
+
+    return tuple(sorted(key)), partition_data
+
   def __init__(
-    self, ms: TableFactory, partition_columns: List[str], auto_corrs: bool = True
+    self, ms: TableFactory, partition_schema: List[str], auto_corrs: bool = True
   ):
     import time as modtime
 
     start = modtime.time()
 
-    if "DATA_DESC_ID" not in partition_columns:
-      raise ValueError("DATA_DESC_ID must be included as a partitioning column")
+    partition_columns, subtable_columns = self.partition_columns_from_schema(
+      partition_schema
+    )
 
     self._ms_factory = ms
     self._partition_columns = partition_columns
+    self._subtable_partition_columns = subtable_columns
     self._auto_corrs = auto_corrs
 
-    table = ms()
-    name = table.name()
-    table_desc = table.tabledesc()
-    col_descs: Dict[str, Dict[str, ColumnDesc]] = defaultdict(dict)
-    col_descs["MAIN"] = FrozenDict(
-      {c: ColumnDesc.from_descriptor(c, table_desc) for c in table.columns()}
+    ms_table = ms()
+    name = ms_table.name()
+    table_desc = ms_table.tabledesc()
+    subtables, coldescs = self.read_subtables(name)
+
+    for a, subtable in subtables.items():
+      setattr(self, a, subtable)
+
+    coldescs["MAIN"] = FrozenDict(
+      {c: ColumnDesc.from_descriptor(c, table_desc) for c in ms_table.columns()}
     )
 
-    with Table.from_filename(f"{name}::ANTENNA", lockoptions="nolock") as A:
-      self._ant = A.to_arrow()
-      table_desc = A.tabledesc()
-      col_descs["ANTENNA"] = FrozenDict(
-        {c: ColumnDesc.from_descriptor(c, table_desc) for c in A.columns()}
-      )
+    self._column_descs = FrozenDict(coldescs)
 
-    with Table.from_filename(f"{name}::FEED", lockoptions="nolock") as F:
-      self._feed = F.to_arrow()
-      table_desc = F.tabledesc()
-      col_descs["FEED"] = FrozenDict(
-        {c: ColumnDesc.from_descriptor(c, table_desc) for c in F.columns()}
-      )
+    other_columns = ["INTERVAL"]
+    read_columns = (
+      set(VALID_MAIN_PARTITION_COLUMNS) | set(SORT_COLUMNS) | set(other_columns)
+    )
+    arrow_table = ms_table.to_arrow(columns=read_columns)
 
-    with Table.from_filename(f"{name}::DATA_DESCRIPTION", lockoptions="nolock") as D:
-      self._ddid = D.to_arrow()
-      table_desc = D.tabledesc()
-      col_descs["DATA_DESCRIPTION"] = FrozenDict(
-        {c: ColumnDesc.from_descriptor(c, table_desc) for c in D.columns()}
-      )
-
-    with Table.from_filename(f"{name}::SPECTRAL_WINDOW", lockoptions="nolock") as S:
-      self._spw = S.to_arrow()
-      table_desc = S.tabledesc()
-      col_descs["SPECTRAL_WINDOW"] = FrozenDict(
-        {c: ColumnDesc.from_descriptor(c, table_desc) for c in S.columns()}
-      )
-
-    with Table.from_filename(f"{name}::POLARIZATION", lockoptions="nolock") as P:
-      self._pol = P.to_arrow()
-      table_desc = P.tabledesc()
-      col_descs["POLARIZATION"] = FrozenDict(
-        {c: ColumnDesc.from_descriptor(c, table_desc) for c in P.columns()}
-      )
-
-    self._column_descs = FrozenDict(col_descs)
     ncpus = mp.cpu_count()
     with cf.ThreadPoolExecutor(max_workers=ncpus) as pool:
-      other_columns = ["INTERVAL"]
-      read_columns = set(partition_columns) | set(SORT_COLUMNS) | set(other_columns)
+      source_id = self.maybe_get_source_id(
+        pool, ncpus, arrow_table["FIELD_ID"].to_numpy()
+      )
+      if source_id is not None:
+        arrow_table = arrow_table.append_column("SOURCE_ID", source_id[None, :])
+
       partitions = TablePartitioner(
         partition_columns, SORT_COLUMNS, other_columns + ["row"]
-      ).partition(table.to_arrow(columns=read_columns), pool)
+      ).partition(arrow_table, pool)
       self._partitions = {}
 
-      unique_inv_fn = partial(np.unique, return_inverse=True)
-
       for k, v in partitions.items():
-        time = v["TIME"]
-        interval = v["INTERVAL"]
-        ant1 = v["ANTENNA1"]
-        ant2 = v["ANTENNA2"]
-        rows = v["row"]
-
-        # Compute the unique times and their inverse index
-        chunk_size = (len(time) + ncpus - 1) // ncpus
-        time_chunks = [
-          time[i : i + chunk_size] for i in range(0, len(time), chunk_size)
-        ]
-        utimes, indices = zip(*pool.map(unique_inv_fn, time_chunks))
-        utime = np.unique(np.concatenate(utimes))
-        inv_fn = partial(np.searchsorted, utime)
-        time_ids = pool.map(lambda t, i: inv_fn(t)[i], utimes, indices)
-
-        # Compute unique intervals
-        interval_chunks = [
-          interval[i : i + chunk_size] for i in range(0, len(interval), chunk_size)
-        ]
-        uintervals = list(pool.map(np.unique, interval_chunks))
-        uinterval = np.unique(np.concatenate(uintervals))
-
-        try:
-          ddid = next(i for (c, i) in k if c == "DATA_DESC_ID")
-        except StopIteration:
-          raise KeyError(f"DATA_DESC_ID must be present in partition key {k}")
-
-        if ddid >= len(self._ddid):
-          raise InvalidMeasurementSet(
-            f"DATA_DESC_ID {ddid} does not exist in {name}::DATA_DESCRIPTION"
-          )
-
-        spw_id = self._ddid["SPECTRAL_WINDOW_ID"][ddid].as_py()
-        pol_id = self._ddid["POLARIZATION_ID"][ddid].as_py()
-
-        if spw_id >= len(self._spw):
-          raise InvalidMeasurementSet(
-            f"SPECTRAL_WINDOW_ID {spw_id} does not exist in {name}::SPECTRAL_WINDOW"
-          )
-
-        if pol_id >= len(self._pol):
-          raise InvalidMeasurementSet(
-            f"POLARIZATION_ID {pol_id} does not exist in {name}::POLARIZATION"
-          )
-
-        corr_type = Polarisations.from_values(self._pol["CORR_TYPE"][pol_id].as_py())
-        chan_freq = self._spw["CHAN_FREQ"][spw_id].as_py()
-        uchan_width = np.unique(self._spw["CHAN_WIDTH"][spw_id].as_py())
-
-        spw_name = self._spw["NAME"][spw_id].as_py()
-        spw_freq_group_name = self._spw["FREQ_GROUP_NAME"][spw_id].as_py()
-        spw_ref_freq = self._spw["REF_FREQUENCY"][spw_id].as_py()
-        spw_meas_freq_ref = self._spw["MEAS_FREQ_REF"][spw_id].as_py()
-        spw_frame = FrequencyMeasures(spw_meas_freq_ref).name.lower()
-
-        row_map = np.full(utime.size * self.nbl, -1, dtype=np.int64)
-
-        def gen_row_map(time_id, ant1_id, ant2_id, rows):
-          bl_ids = baseline_id(ant1_id, ant2_id, self.na, auto_corrs=auto_corrs)
-          row_map[time_id * self.nbl + bl_ids] = rows
-
-        cf.wait(
-          (
-            pool.submit(
-              gen_row_map,
-              time_id,
-              ant1[i : i + chunk_size],
-              ant2[i : i + chunk_size],
-              rows[i : i + chunk_size],
-            )
-            for i, time_id in zip(range(0, len(ant1), chunk_size), time_ids)
-          ),
-          return_when=cf.ALL_COMPLETED,
+        key, partition = self.partition_data_factory(
+          name, auto_corrs, k, v, pool, ncpus
         )
-
-        self._partitions[k] = PartitionData(
-          time=utime,
-          interval=uinterval,
-          chan_freq=chan_freq,
-          chan_width=uchan_width,
-          corr_type=corr_type.to_str(),
-          spw_name=spw_name,
-          spw_freq_group_name=spw_freq_group_name,
-          spw_ref_freq=spw_ref_freq,
-          spw_frame=spw_frame,
-          row_map=row_map.reshape(utime.size, self.nbl),
-        )
+        self._partitions[key] = partition
 
     logger.info("Reading %s structure in took %fs", name, modtime.time() - start)

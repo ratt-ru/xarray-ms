@@ -231,3 +231,25 @@ class MainDatasetFactory:
     )
 
     return FrozenDict(sorted(data_vars + coordinates))
+
+  def _partition_info(self) -> Dict[Any, Any]:
+    structure = self._structure_factory()
+    partition = structure[self._partition_key]
+
+    return dict(
+      sorted(
+        {
+          "spectal_window_name": partition.spw_name,
+          "field_name": list(set(partition.field_names)),
+          "polarization_setup": partition.corr_type,
+          "scan_number": list(set(partition.scan_numbers)),
+          "sub_scan_number": list(set(partition.sub_scan_numbers)),
+          "source_name": list(set(partition.source_names)),
+          "line_name": list(map(list, set(map(tuple, partition.line_names)))),
+          "intent": list(set(partition.intents)),
+        }.items()
+      )
+    )
+
+  def get_attrs(self) -> Dict[Any, Any]:
+    return {"partition_info": self._partition_info()}

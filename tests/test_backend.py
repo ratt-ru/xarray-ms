@@ -119,13 +119,13 @@ def test_open_dataset(simmed_ms):
   ids=id_string,
 )
 @pytest.mark.parametrize(
-  "partition_columns", [["DATA_DESC_ID", "OBSERVATION_ID", "FIELD_ID"]]
+  "partition_schema", [["DATA_DESC_ID", "OBSERVATION_ID", "FIELD_ID"]]
 )
 def test_open_dataset_partition_keys(
-  simmed_ms, partition_columns, partition_key, pols, nfreq
+  simmed_ms, partition_schema, partition_key, pols, nfreq
 ):
   ds = xarray.open_dataset(
-    simmed_ms, partition_columns=partition_columns, partition_key=partition_key
+    simmed_ms, partition_schema=partition_schema, partition_key=partition_key
   )
   assert_array_equal(ds.polarization.values, pols)
   assert {("frequency", nfreq), ("polarization", len(pols))}.issubset(ds.sizes.items())
@@ -150,10 +150,10 @@ def test_open_datatree(simmed_ms):
   with ExitStack() as stack:
     mem_dt = open_datatree(simmed_ms)
     mem_dt.load()
-    for ds in mem_dt.subtree:
-      if "version" in ds.attrs:
-        ds.attrs.pop("creation_date", None)
-        assert isinstance(ds.VISIBILITY.data, np.ndarray)
+    for node in mem_dt.subtree:
+      if node.attrs.get("type") == "visibility":
+        node.attrs.pop("creation_date", None)
+        assert isinstance(node.VISIBILITY.data, np.ndarray)
 
   chunks = {"time": 2, "frequency": 2}
 
@@ -161,7 +161,7 @@ def test_open_datatree(simmed_ms):
   with ExitStack() as stack:
     dt = open_datatree(simmed_ms, preferred_chunks=chunks)
     for node in dt.subtree:
-      if "version" in node.attrs:
+      if node.attrs.get("type") == "visibility":
         del node.attrs["creation_date"]
     xt.assert_identical(dt, mem_dt)
 
@@ -171,7 +171,7 @@ def test_open_datatree(simmed_ms):
     stack.enter_context(Client(cluster))
     dt = open_datatree(simmed_ms, preferred_chunks=chunks)
     for node in dt.subtree:
-      if "version" in node.attrs:
+      if node.attrs.get("type") == "visibility":
         del node.attrs["creation_date"]
     xt.assert_identical(dt, mem_dt)
 
