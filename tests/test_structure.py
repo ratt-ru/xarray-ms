@@ -26,16 +26,16 @@ def test_baseline_id(na, auto_corrs):
 @pytest.mark.parametrize("simmed_ms", [{"name": "proxy.ms"}], indirect=True)
 @pytest.mark.parametrize("epoch", ["abcdef"])
 def test_structure_factory(simmed_ms, epoch):
-  partition_columns = ["FIELD_ID", "DATA_DESC_ID", "OBSERVATION_ID"]
+  partition_schema = ["FIELD_ID", "DATA_DESC_ID", "OBSERVATION_ID", "OBS_MODE"]
   table_factory = TableFactory(Table.from_filename, simmed_ms)
-  structure_factory = MSv2StructureFactory(table_factory, partition_columns, epoch)
+  structure_factory = MSv2StructureFactory(table_factory, partition_schema, epoch)
   assert pickle.loads(pickle.dumps(structure_factory)) == structure_factory
 
-  structure_factory2 = MSv2StructureFactory(table_factory, partition_columns, epoch)
+  structure_factory2 = MSv2StructureFactory(table_factory, partition_schema, epoch)
   assert structure_factory() is structure_factory2()
 
   keys = tuple(k for kv in structure_factory().keys() for k, _ in kv)
-  assert tuple(sorted(partition_columns)) == keys
+  assert tuple(sorted(partition_schema)) == keys
 
 
 def test_table_partitioner():
@@ -96,13 +96,13 @@ def test_table_partitioner():
 
 
 def test_epoch(simmed_ms):
-  partition_columns = ["FIELD_ID", "DATA_DESC_ID", "OBSERVATION_ID"]
+  partition_schema = ["FIELD_ID", "DATA_DESC_ID", "OBSERVATION_ID"]
   table_factory = TableFactory(Table.from_filename, simmed_ms)
-  structure_factory = MSv2StructureFactory(table_factory, partition_columns, "abc")
-  structure_factory2 = MSv2StructureFactory(table_factory, partition_columns, "abc")
+  structure_factory = MSv2StructureFactory(table_factory, partition_schema, "abc")
+  structure_factory2 = MSv2StructureFactory(table_factory, partition_schema, "abc")
 
   assert structure_factory() is structure_factory2()
 
-  structure_factory3 = MSv2StructureFactory(table_factory, partition_columns, "def")
+  structure_factory3 = MSv2StructureFactory(table_factory, partition_schema, "def")
 
   assert structure_factory() is not structure_factory3()

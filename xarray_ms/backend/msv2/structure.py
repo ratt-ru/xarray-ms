@@ -407,10 +407,10 @@ class MSv2Structure(Mapping):
     if isinstance(key, str):
       key = self.parse_partition_key(key)
 
-    column_set = set(self._partition_columns)
+    column_set = set(self._partition_columns) | set(self._subtable_partition_columns)
 
     # Check that the key columns and values are valid
-    new_key: List[Tuple[str, int]] = []
+    new_key: List[Tuple[str, int | str]] = []
     for column, value in key:
       column = column.upper()
       column = SHORT_TO_LONG_PARTITION_COLUMNS.get(column, column)
@@ -419,8 +419,11 @@ class MSv2Structure(Mapping):
           f"{column} is not valid a valid partition column "
           f"{self._partition_columns}"
         )
-      if not isinstance(value, Integral):
-        raise InvalidPartitionKey(f"{value} is not a valid partition value")
+      if not isinstance(value, (str, Integral)):
+        raise InvalidPartitionKey(
+          f"{value} is an invalid partition key value. "
+          f"Should be an integer or (rarely) a string"
+        )
       new_key.append((column, value))
 
     key_set = set(new_key)
@@ -458,7 +461,12 @@ class MSv2Structure(Mapping):
   def partition_columns_from_schema(
     self, partition_schema: List[str]
   ) -> Tuple[List[str], List[str]]:
-    """Given a partitioning schema, produce a list of partitioning columns"""
+    """Given a partitioning schema, produce
+
+    1. a list of partitioning columns of the MAIN table
+    2. a list of subtable partitioning columns.
+       i.e. `FIELD.SOURCE_ID` and `STATE.OBS_MODE`
+    """
     schema: Set[str] = set(partition_schema)
 
     # Always partition by these columns
@@ -566,8 +574,16 @@ class MSv2Structure(Mapping):
     value: Dict[str, npt.NDArray],
     pool: cf.Executor,
     ncpus: int,
-  ) -> PartitionData:
-    """Generate a `PartitionData` object"""
+  ) -> Tuple[PartitionKeyT, PartitionData]:
+    """Generate an updated partition key and
+    `PartitionData` object.
+
+    The partition key is updated with subtable partitioning keys
+    (primarily `FIELD.SOURCE_ID` and `STATE.OBSMODE`).
+
+    The `PartitionData` object represents a summary of the
+    partition data passed in via arguments.
+    """
     time = value["TIME"]
     interval = value["INTERVAL"]
     ant1 = value["ANTENNA1"]
@@ -601,6 +617,11 @@ class MSv2Structure(Mapping):
       fields = self._field.take(ufield_ids)
       field_names = fields["NAME"].to_pylist()
       source_ids = fields["SOURCE_ID"].to_pylist()
+
+      if "SOURCE_ID" in self._subtable_partition_columns:
+        assert len(source_ids) == 1
+        key += (("SOURCE_ID", source_ids[0]),)
+
       # Select out SOURCES if we have the table
       if hasattr(self, "_source") and len(self._source) > 0:
         sources = self._source.take(source_ids)
@@ -625,6 +646,10 @@ class MSv2Structure(Mapping):
       states = self._state.take(ustate_ids)
       intents = states["OBS_MODE"].to_numpy(zero_copy_only=False).tolist()
       sub_scan_numbers = states["SUB_SCAN"].to_numpy(zero_copy_only=False).tolist()
+
+      if "OBS_MODE" in self._subtable_partition_columns:
+        assert len(intents) == 1
+        key += (("OBS_MODE", intents[0]),)
 
     # Extract polarization information
     pol_id = self._ddid["POLARIZATION_ID"][ddid].as_py()
@@ -665,7 +690,7 @@ class MSv2Structure(Mapping):
     s = partial(partition_args, chunk=chunk_size)
     pool.map(gen_row_map, s(time_ids), s(ant1), s(ant2), s(rows))
 
-    return PartitionData(
+    partition_data = PartitionData(
       time=utime,
       interval=uinterval,
       chan_freq=chan_freq,
@@ -684,6 +709,8 @@ class MSv2Structure(Mapping):
       sub_scan_numbers=sub_scan_numbers,
     )
 
+    return tuple(sorted(key)), partition_data
+
   def __init__(
     self, ms: TableFactory, partition_schema: List[str], auto_corrs: bool = True
   ):
@@ -697,6 +724,7 @@ class MSv2Structure(Mapping):
 
     self._ms_factory = ms
     self._partition_columns = partition_columns
+    self._subtable_partition_columns = subtable_columns
     self._auto_corrs = auto_corrs
 
     ms_table = ms()
@@ -733,8 +761,9 @@ class MSv2Structure(Mapping):
       self._partitions = {}
 
       for k, v in partitions.items():
-        self._partitions[k] = self.partition_data_factory(
+        key, partition = self.partition_data_factory(
           name, auto_corrs, k, v, pool, ncpus
         )
+        self._partitions[key] = partition
 
     logger.info("Reading %s structure in took %fs", name, modtime.time() - start)
