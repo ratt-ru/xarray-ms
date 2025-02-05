@@ -145,7 +145,7 @@ class UTCCoder(TimeCoder):
     attrs.pop("format", None)
 
     if isinstance(data, MSv2Array):
-      data.set_transform(UTCCoder.encode_array)
+      data.transform = UTCCoder.encode_array
     elif isinstance(data, np.ndarray):
       data = UTCCoder.encode_array(data)
     else:
@@ -162,7 +162,7 @@ class UTCCoder(TimeCoder):
     attrs["format"] = "unix"
 
     if isinstance(data, MSv2Array):
-      data.set_transform(UTCCoder.decode_array)
+      data.transform = UTCCoder.decode_array
     elif isinstance(data, np.ndarray):
       data = UTCCoder.decode_array(data)
     else:

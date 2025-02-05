@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Make MSv2Array transform a property (:pr:`56`)
 * Further partitioning improvement and alignment with MSv4 (:pr:`55`)
 * Use epoch to dintinguish multiple instances of the same dataset (:pr:`54`)
 * Use np.logical_or.reduce for generating diffs over more than 2 partitioning arrays (:pr:`53`)
