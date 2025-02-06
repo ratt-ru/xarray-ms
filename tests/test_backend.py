@@ -195,26 +195,21 @@ def test_open_datatree_chunking(simmed_ms):
     preferred_chunks={"time": 3, "frequency": 2},
   )
 
-  for node in dt.subtree:
-    if "version" not in node.attrs:
-      continue
+  assert dict(dt["backend/partition_000"].ds.chunks) == {
+    "time": (3, 2),
+    "baseline_id": (6,),
+    "frequency": (2, 2, 2, 2),
+    "polarization": (4,),
+    "uvw_label": (3,),
+  }
 
-    if node.attrs["data_description_id"] == 0:
-      assert dict(node.ds.chunks) == {
-        "time": (3, 2),
-        "baseline_id": (6,),
-        "frequency": (2, 2, 2, 2),
-        "polarization": (4,),
-        "uvw_label": (3,),
-      }
-    elif node.attrs["data_description_id"] == 1:
-      assert dict(node.ds.chunks) == {
-        "time": (3, 2),
-        "baseline_id": (6,),
-        "frequency": (2, 2),
-        "polarization": (2,),
-        "uvw_label": (3,),
-      }
+  assert dict(dt["backend/partition_001"].ds.chunks) == {
+    "time": (3, 2),
+    "baseline_id": (6,),
+    "frequency": (2, 2),
+    "polarization": (2,),
+    "uvw_label": (3,),
+  }
 
   dt = open_datatree(
     simmed_ms,
@@ -225,25 +220,20 @@ def test_open_datatree_chunking(simmed_ms):
     },
   )
 
-  for node in dt.subtree:
-    if "version" not in node.attrs:
-      continue
-    if node.attrs["data_description_id"] == 0:
-      assert node.ds.chunks == {
-        "time": (2, 2, 1),
-        "baseline_id": (2, 2, 2),
-        "frequency": (8,),
-        "polarization": (4,),
-        "uvw_label": (3,),
-      }
-    elif node.attrs["data_description_id"] == 1:
-      assert node.ds.chunks == {
-        "time": (3, 2),
-        "baseline_id": (6,),
-        "frequency": (2, 2),
-        "polarization": (2,),
-        "uvw_label": (3,),
-      }
+  assert dict(dt["backend/partition_000"].ds.chunks) == {
+    "time": (2, 2, 1),
+    "baseline_id": (2, 2, 2),
+    "frequency": (8,),
+    "polarization": (4,),
+    "uvw_label": (3,),
+  }
+  assert dict(dt["backend/partition_001"].ds.chunks) == {
+    "time": (3, 2),
+    "baseline_id": (6,),
+    "frequency": (2, 2),
+    "polarization": (2,),
+    "uvw_label": (3,),
+  }
 
   # with pytest.warns(UserWarning, match="`preferred_chunks` overriding `chunks`"):
   #   dt = open_datatree(
