@@ -19,7 +19,9 @@ to be developed on well-understood MSv2 data.
     (8, ("XX", "XY", "YX", "YY")),
     (4, ("RR", "LL"))])
 
-  dt = xarray.open_datatree(ms, partition_schema=["FIELD_ID"])
+  ms
+
+  dt = xarray.open_datatree(ms)
 
   dt
 
