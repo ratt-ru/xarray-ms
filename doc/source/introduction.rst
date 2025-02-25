@@ -6,8 +6,6 @@ xarray-ms presents a Measurement Set v4 view (MSv4) over
 It provides access to MSv2 data via the xarray API, allowing MSv4 compliant applications
 to be developed on well-understood MSv2 data.
 
-.. code-block:: python
-
 .. ipython:: python
   :okwarning:
 
