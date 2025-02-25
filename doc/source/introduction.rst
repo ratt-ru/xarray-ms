@@ -8,51 +8,22 @@ to be developed on well-understood MSv2 data.
 
 .. code-block:: python
 
-  >>> import xarray_ms
-  >>> import xarray
-  >>> dt = xarray.open_datatree("/data/L795830_SB001_uv.MS/",
-                                preferred_chunks={"time": 2000, "baseline_id": 1000})
-  >>> dt
-  <xarray.DataTree>
-  Group: /
-  └── Group: /DATA_DESC_ID=0,FIELD_ID=0,OBSERVATION_ID=0
-      │   Dimensions:                     (time: 28760, baseline_id: 2775, frequency: 16,
-      │                                    polarization: 4, uvw_label: 3)
-      │   Coordinates:
-      │       antenna1_name               (baseline_id) object 22kB ...
-      │       antenna2_name               (baseline_id) object 22kB ...
-      │       baseline_id                 (baseline_id) int64 22kB ...
-      │     * frequency                   (frequency) float64 128B 1.202e+08 ... 1.204e+08
-      │     * polarization                (polarization) <U2 32B 'XX' 'XY' 'YX' 'YY'
-      │     * time                        (time) float64 230kB 1.601e+09 ... 1.601e+09
-      │   Dimensions without coordinates: uvw_label
-      │   Data variables:
-      │       EFFECTIVE_INTEGRATION_TIME  (time, baseline_id) float64 638MB ...
-      │       FLAG                        (time, baseline_id, frequency, polarization) uint8 5GB ...
-      │       TIME_CENTROID               (time, baseline_id) float64 638MB ...
-      │       UVW                         (time, baseline_id, uvw_label) float64 2GB ...
-      │       VISIBILITY                  (time, baseline_id, frequency, polarization) complex64 41GB ...
-      │       WEIGHT                      (time, baseline_id, frequency, polarization) float32 20GB ...
-      │   Attributes:
-      │       version:              4.0.0
-      │       creation_date:        2024-09-18T10:49:55.133908+00:00
-      │       data_description_id:  0
-      └── Group: /DATA_DESC_ID=0,FIELD_ID=0,OBSERVATION_ID=0/ANTENNA
-              Dimensions:                 (antenna_name: 74,
-                                           cartesian_pos_label/ellipsoid_pos_label: 3)
-              Coordinates:
-                  baseline_antenna1_name  (baseline_id) object 22kB ...
-                  baseline_antenna2_name  (baseline_id) object 22kB ...
-                  baseline_id             (baseline_id) int64 22kB ...
-                * frequency               (frequency) float64 128B 1.202e+08 1.202e+08 ... 1.204e+08
-                * polarization            (polarization) <U2 32B 'XX' 'XY' 'YX' 'YY'
-                * time                    (time) float64 230kB 1.601e+09 1.601e+09 ... 1.601e+09
-                * antenna_name            (antenna_name) object 592B 'CS001HBA0' ... 'IE613HBA'
-                  mount                   (antenna_name) object 592B 'X-Y' 'X-Y' ... 'X-Y' 'X-Y'
-                  station                 (antenna_name) object 592B 'LOFAR' 'LOFAR' ... 'LOFAR'
-              Dimensions without coordinates: cartesian_pos_label/ellipsoid_pos_label
-              Data variables:
-                  ANTENNA_POSITION        (antenna_name, cartesian_pos_label/ellipsoid_pos_label) float64 2kB ...
+.. ipython:: python
+  :okwarning:
+
+  import xarray_ms
+  import xarray
+  import xarray.testing
+  from xarray_ms.testing.simulator import simulate
+
+  # Simulate a Measurement Set with 2 channel and polarisation configurations
+  ms = simulate("test.ms", data_description=[
+    (8, ("XX", "XY", "YX", "YY")),
+    (4, ("RR", "LL"))])
+
+  dt = xarray.open_datatree(ms, partition_schema=["FIELD_ID"])
+
+  dt
 
 Measurement Set v4
 ------------------
