@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Move README content into the Documentation (:pr:`62`)
 * Allow varying intervals in the last timestep of a partition (:pr:`61`)
 * Rename ANTENNA dataset to antenna_xds (:pr:`60`)
 * Depend on arcae ^0.2.7 (:pr:`59`)

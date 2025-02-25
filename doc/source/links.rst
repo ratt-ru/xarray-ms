@@ -5,7 +5,7 @@
 .. _SKAO: https://www.skao.int/
 .. _NRAO: https://public.nrao.edu/
 .. _msv2-spec: https://casa.nrao.edu/Memos/229.html
-.. _msv4-spec: https://docs.google.com/spreadsheets/d/14a6qMap9M5r_vjpLnaBKxsR9TF4azN5LVdOxLacOX-s/
+.. _msv4-spec: https://docs.google.com/spreadsheets/d/1KIaYp6Qru1appToleyVqRdOEy9hmPhirpg0yR3ovAx0/
 .. _xradio: https://github.com/casangi/xradio
 .. _dask-ms: https://github.com/ratt-ru/dask-ms
 .. _arcae: https://github.com/ratt-ru/arcae

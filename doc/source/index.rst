@@ -10,7 +10,7 @@ xarray-ms documentation
    :maxdepth: 2
    :caption: Contents:
 
-   readme
+   introduction
    install
    tutorial
    api
