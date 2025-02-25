@@ -594,9 +594,6 @@ class MSv2Structure(Mapping):
     # Compute the unique times and their inverse index
     utime, time_ids = self.par_unique(pool, ncpus, time, return_inverse=True)
 
-    # Compute unique intervals
-    uinterval = self.par_unique(pool, ncpus, interval)
-
     try:
       ddid = next(int(i) for (c, i) in key if c == "DATA_DESC_ID")
     except StopIteration:
@@ -678,18 +675,33 @@ class MSv2Structure(Mapping):
     spw_meas_freq_ref = self._spw["MEAS_FREQ_REF"][spw_id].as_py()
     spw_frame = FrequencyMeasures(spw_meas_freq_ref).name.lower()
 
-    # Generate the row map in parallel
-    row_map = np.full(utime.size * self.nbl, -1, dtype=np.int64)
+    # Generate the row map and interval grid in parallel
+    row_map = np.full(utime.size * self.nbl, -1.0, dtype=np.int64)
+    interval_grid = np.full(utime.size * self.nbl, -1.0, dtype=np.float64)
     chunk_size = (len(rows) + ncpus - 1) // ncpus
 
-    def gen_row_map(time_ids, ant1, ant2, rows):
+    def gen_row_map(time_ids, ant1, ant2, ints, rows):
+      assert len(ints) == len(rows) == len(ant1) == len(ant2) == len(time_ids)
       bl_ids = baseline_id(ant1, ant2, self.na, auto_corrs=auto_corrs)
-      row_map[time_ids * self.nbl + bl_ids] = rows
-
-    assert len(ant1) == len(rows)
+      idx = time_ids.copy()
+      idx *= self.nbl
+      idx += bl_ids
+      row_map[idx] = rows
+      interval_grid[idx] = ints
 
     s = partial(partition_args, chunk=chunk_size)
-    pool.map(gen_row_map, s(time_ids), s(ant1), s(ant2), s(rows))
+    list(pool.map(gen_row_map, s(time_ids), s(ant1), s(ant2), s(interval), s(rows)))
+
+    # In the case of averaged datasets, intervals in the last timestep
+    # may differ from the rest of the interval, remove it and try to find
+    # a unique interval
+    interval_grid = interval_grid.reshape(utime.size, self.nbl)
+
+    if interval_grid.shape[0] > 1:
+      interval_grid = interval_grid[:-1, :]
+
+    uinterval = self.par_unique(pool, ncpus, interval_grid.ravel())
+    uinterval = uinterval[uinterval >= 0]
 
     partition_data = PartitionData(
       time=utime,
