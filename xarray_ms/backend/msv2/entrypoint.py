@@ -444,6 +444,6 @@ class MSv2EntryPoint(BackendEntrypoint):
 
       path = f"{ms_name}/partition_{p:03}"
       datasets[path] = ds
-      datasets[f"{path}/ANTENNA"] = antenna_factory.get_dataset()
+      datasets[f"{path}/antenna_xds"] = antenna_factory.get_dataset()
 
     return datasets

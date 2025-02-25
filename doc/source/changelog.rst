@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Rename ANTENNA dataset to antenna_xds (:pr:`60`)
 * Depend on arcae ^0.2.7 (:pr:`59`)
 * Fix test cases that succeeded after attributes changed (:pr:`57`)
 * Make MSv2Array transform a property (:pr:`56`)
