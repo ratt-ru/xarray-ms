@@ -12,6 +12,8 @@ if TYPE_CHECKING:
   from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
   from xarray_ms.backend.msv2.table_factory import TableFactory
 
+  TransformerT = Callable[[npt.NDArray], npt.NDArray] | None
+
 
 def slice_length(s, max_len):
   if isinstance(s, np.ndarray):
@@ -35,7 +37,7 @@ class MSv2Array(BackendArray):
   _shape: Tuple[int, ...]
   _dtype: npt.DTypeLike
   _default: Any | None
-  _transform: Callable[[npt.NDArray], npt.NDArray] | None
+  _transform: TransformerT
 
   def __init__(
     self,
@@ -46,7 +48,7 @@ class MSv2Array(BackendArray):
     shape: Tuple[int, ...],
     dtype: npt.DTypeLike,
     default: Any | None = None,
-    transform: Callable[[npt.NDArray], npt.NDArray] | None = None,
+    transform: TransformerT = None,
   ):
     self._table_factory = table_factory
     self._structure_factory = structure_factory
@@ -76,5 +78,10 @@ class MSv2Array(BackendArray):
     result = result.reshape(rows.shape + expected_shape[2:])
     return self._transform(result) if self._transform else result
 
-  def set_transform(self, transform: Callable[[npt.NDArray], npt.NDArray]):
-    self._transform = transform
+  @property
+  def transform(self) -> TransformerT:
+    return self._transform
+
+  @transform.setter
+  def transform(self, value: TransformerT):
+    self._transform = value

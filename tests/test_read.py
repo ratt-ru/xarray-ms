@@ -21,18 +21,18 @@ def test_regular_read(simmed_ms):
   """Test for ramp function values produced by simulator"""
   xdt = open_datatree(simmed_ms)
 
-  for node in xdt.subtree:
-    if "data_description_id" in node.attrs:
-      vis = node.VISIBILITY.values
-      nelements = reduce(mul, vis.shape, 1)
-      expected = np.arange(nelements, dtype=np.float64)
-      expected = (expected + expected * 1j).reshape(vis.shape)
-      assert_array_equal(vis, expected)
+  for p in ["000", "001"]:
+    node = xdt[f"backend/partition_{p}"]
+    vis = node.VISIBILITY.values
+    nelements = reduce(mul, vis.shape, 1)
+    expected = np.arange(nelements, dtype=np.float64)
+    expected = (expected + expected * 1j).reshape(vis.shape)
+    assert_array_equal(vis, expected)
 
-      uvw = node.UVW.values
-      nelements = reduce(mul, uvw.shape, 1)
-      expected = np.arange(nelements, dtype=np.float64).reshape(uvw.shape)
-      assert_array_equal(uvw, expected)
+    uvw = node.UVW.values
+    nelements = reduce(mul, uvw.shape, 1)
+    expected = np.arange(nelements, dtype=np.float64).reshape(uvw.shape)
+    assert_array_equal(uvw, expected)
 
 
 ANT1_SUBSET = [0, 0, 1]
@@ -72,38 +72,39 @@ def test_irregular_read(simmed_ms):
   """Test that excluding baselines works"""
   xdt = open_datatree(simmed_ms)
 
-  for node in xdt.subtree:
-    if "data_description_id" in node.attrs:
-      bl_index = _select_rows(
-        node.baseline_antenna1_name.values,
-        node.baseline_antenna2_name.values,
-        [f"ANTENNA-{i}" for i in ANT1_SUBSET],
-        [f"ANTENNA-{i}" for i in ANT2_SUBSET],
-      )
+  for p in ["000", "001"]:
+    node = xdt[f"backend/partition_{p}"]
 
-      vis = node.VISIBILITY.values
-      # Selected baseline elements are as expected
-      nelements = reduce(mul, vis.shape, 1)
-      expected = np.arange(nelements, dtype=np.float32)
-      expected = (expected + expected * 1j).reshape(vis.shape)
-      assert_array_equal(vis[:, bl_index], expected[:, bl_index])
-      # Other baseline elements are nan
-      vis = node.VISIBILITY.values
-      assert np.all(np.isnan((vis[:, ~bl_index])))
+    bl_index = _select_rows(
+      node.baseline_antenna1_name.values,
+      node.baseline_antenna2_name.values,
+      [f"ANTENNA-{i}" for i in ANT1_SUBSET],
+      [f"ANTENNA-{i}" for i in ANT2_SUBSET],
+    )
 
-      uvw = node.UVW.values
-      # Selected baseline elements are as expected
-      nelements = reduce(mul, uvw.shape, 1)
-      expected = np.arange(nelements, dtype=np.float64).reshape(uvw.shape)
-      assert_array_equal(uvw[:, bl_index], expected[:, bl_index])
-      # Other baseline elements are nan
-      assert np.all(np.isnan((uvw[:, ~bl_index, ...])))
+    vis = node.VISIBILITY.values
+    # Selected baseline elements are as expected
+    nelements = reduce(mul, vis.shape, 1)
+    expected = np.arange(nelements, dtype=np.float32)
+    expected = (expected + expected * 1j).reshape(vis.shape)
+    assert_array_equal(vis[:, bl_index], expected[:, bl_index])
+    # Other baseline elements are nan
+    vis = node.VISIBILITY.values
+    assert np.all(np.isnan((vis[:, ~bl_index])))
 
-      flag = node.FLAG.values
-      # Selected baseline elements are as expected
-      nelements = reduce(mul, flag.shape, 1)
-      expected = np.where(np.arange(nelements) & 0x1, 0, 1)
-      expected = expected.reshape(flag.shape)
-      assert_array_equal(flag[:, bl_index], expected[:, bl_index])
-      # Other baseline elements are flagged
-      assert np.all(flag[:, ~bl_index, ...] == 1)
+    uvw = node.UVW.values
+    # Selected baseline elements are as expected
+    nelements = reduce(mul, uvw.shape, 1)
+    expected = np.arange(nelements, dtype=np.float64).reshape(uvw.shape)
+    assert_array_equal(uvw[:, bl_index], expected[:, bl_index])
+    # Other baseline elements are nan
+    assert np.all(np.isnan((uvw[:, ~bl_index, ...])))
+
+    flag = node.FLAG.values
+    # Selected baseline elements are as expected
+    nelements = reduce(mul, flag.shape, 1)
+    expected = np.where(np.arange(nelements) & 0x1, 0, 1)
+    expected = expected.reshape(flag.shape)
+    assert_array_equal(flag[:, bl_index], expected[:, bl_index])
+    # Other baseline elements are flagged
+    assert np.all(flag[:, ~bl_index, ...] == 1)
