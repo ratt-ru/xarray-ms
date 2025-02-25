@@ -138,7 +138,9 @@ class MainDatasetFactory:
         f"{missing} / {row_map.size} ({100. * missing / row_map.size:.1f}%) "
         f"rows missing from the full (time, baseline_id) grid "
         f"in partition {self._partition_key}. "
-        f"Dataset variables will be padded",
+        f"Dataset variables will be padded with nans "
+        f"in the case of data variables "
+        f"and flags will be set",
         IrregularGridWarning,
       )
 
@@ -184,7 +186,8 @@ class MainDatasetFactory:
         f"Multiple intervals {partition.interval} "
         f"found in partition {self._partition_key}. "
         f'Setting time.attrs["integration_time"] = nan and '
-        f"adding full resolution TIME and INTERVAL columns. ",
+        f"adding full resolution TIME and INTEGRATION_TIME columns. "
+        f"{'They contain nans in missing rows' if missing else ''}",
         IrregularGridWarning,
       )
       time_attrs = {"integration_time": np.nan}
@@ -223,7 +226,7 @@ class MainDatasetFactory:
         f"adding full resolution CHANNEL_FREQUENCY column. ",
       )
       raise NotImplementedError(
-        "Full resolution CHANNEL_FREQUENCY " " and CHANNEL_WIDTH columns"
+        "Full resolution CHANNEL_FREQUENCY and CHANNEL_WIDTH columns"
       )
 
     coordinates.append(
