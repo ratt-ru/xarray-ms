@@ -171,6 +171,7 @@ class MainDatasetFactory:
         (("baseline_id",), ant2_names, {"coordinates": "baseline_antenna2_name"}),
       ),
       ("polarization", (("polarization",), partition.corr_type, None)),
+      ("uvw_label", (("uvw_label",), ["u", "v", "w"], None)),
     ]
 
     e = {"preferred_chunks": self._preferred_chunks} if self._preferred_chunks else None
