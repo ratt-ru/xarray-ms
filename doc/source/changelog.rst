@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Remove ellipsoid_pos_label from ANTENNA_POSITION component coordinate (:pr:`64`)
 * Move README content into the Documentation (:pr:`62`)
 * Allow varying intervals in the last timestep of a partition (:pr:`61`)
 * Rename ANTENNA dataset to antenna_xds (:pr:`60`)
