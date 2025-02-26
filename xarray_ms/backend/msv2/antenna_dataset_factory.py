@@ -20,9 +20,7 @@ class AntennaDatasetFactory:
 
     return Dataset(
       data_vars={
-        "ANTENNA_POSITION": Variable(
-          ("antenna_name", "cartesian_pos_label/ellipsoid_pos_label"), ant_pos
-        )
+        "ANTENNA_POSITION": Variable(("antenna_name", "cartesian_pos_label"), ant_pos)
       },
       coords={
         "antenna_name": Variable("antenna_name", ants["NAME"].to_numpy()),
