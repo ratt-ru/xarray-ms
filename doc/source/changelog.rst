@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Add u, v and w labels to the uvw_label coordinate (:pr:`65`)
 * Remove ellipsoid_pos_label from ANTENNA_POSITION component coordinate (:pr:`64`)
 * Move README content into the Documentation (:pr:`62`)
 * Allow varying intervals in the last timestep of a partition (:pr:`61`)
