@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Remove superfluous hollow DataTree node containing the Measurement Set name (:pr:`66`)
 
 0.2.2 (DD-MM-YYYY)
 ------------------

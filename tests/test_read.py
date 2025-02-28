@@ -24,7 +24,7 @@ def test_regular_read(simmed_ms):
   xdt = xarray.open_datatree(simmed_ms)
 
   for p in ["000", "001"]:
-    node = xdt[f"backend/partition_{p}"]
+    node = xdt[f"backend_partition_{p}"]
     vis = node.VISIBILITY.values
     nelements = reduce(mul, vis.shape, 1)
     expected = np.arange(nelements, dtype=np.float64)
@@ -73,7 +73,7 @@ def test_irregular_read(simmed_ms):
     xdt = xarray.open_datatree(simmed_ms)
 
   for p in ["000", "001"]:
-    node = xdt[f"backend/partition_{p}"]
+    node = xdt[f"backend_partition_{p}"]
 
     bl_index = _select_baseline_rows(
       node.baseline_antenna1_name.values,
@@ -138,7 +138,7 @@ def test_differing_trailing_intervals(simmed_ms):
   xdt = xarray.open_datatree(simmed_ms)
 
   for p in ["000", "001"]:
-    node = xdt[f"backend/partition_{p}"]
+    node = xdt[f"backend_partition_{p}"]
     assert node.time.attrs["integration_time"] == 8.0
 
 
@@ -171,5 +171,5 @@ def test_differing_start_intervals(simmed_ms):
     xdt = xarray.open_datatree(simmed_ms)
 
   for p in ["000", "001"]:
-    node = xdt[f"backend/partition_{p}"]
+    node = xdt[f"backend_partition_{p}"]
     assert np.isnan(node.time.attrs["integration_time"])
