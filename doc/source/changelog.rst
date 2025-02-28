@@ -3,11 +3,11 @@
 Changelog
 =========
 
-X.Y.Z (DD-MM-YYYY)
+0.2.3 (28-02-2025)
 ------------------
 * Remove superfluous hollow DataTree node containing the Measurement Set name (:pr:`66`)
 
-0.2.2 (DD-MM-YYYY)
+0.2.2 (27-02-2025)
 ------------------
 * Add u, v and w labels to the uvw_label coordinate (:pr:`65`)
 * Remove ellipsoid_pos_label from ANTENNA_POSITION component coordinate (:pr:`64`)
