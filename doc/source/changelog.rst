@@ -5,6 +5,7 @@ Changelog
 
 0.2.3 (28-02-2025)
 ------------------
+* Remove unused and commented out test cases (:pr:`67`)
 * Remove superfluous hollow DataTree node containing the Measurement Set name (:pr:`66`)
 
 0.2.2 (27-02-2025)
