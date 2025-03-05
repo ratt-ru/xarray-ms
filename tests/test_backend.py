@@ -234,13 +234,3 @@ def test_open_datatree_chunking(simmed_ms):
     "polarization": (2,),
     "uvw_label": (3,),
   }
-
-  # with pytest.warns(UserWarning, match="`preferred_chunks` overriding `chunks`"):
-  #   dt = open_datatree(
-  #     simmed_ms,
-  #     chunks={},
-  #     preferred_chunks={
-  #       "D=0": {"time": 2, "baseline_id": 2},
-  #       "D=1": {"time": 3, "frequency": 2},
-  #     },
-  #   )
