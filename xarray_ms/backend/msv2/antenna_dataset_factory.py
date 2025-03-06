@@ -16,11 +16,13 @@ class AntennaDatasetFactory:
 
     import pyarrow.compute as pac
 
-    ant_pos = pac.list_flatten(ants["POSITION"]).to_numpy().reshape(-1, 3)
+    position = pac.list_flatten(ants["POSITION"]).to_numpy().reshape(-1, 3)
+    diameter = ants["DISH_DIAMETER"].to_numpy()
 
     return Dataset(
       data_vars={
-        "ANTENNA_POSITION": Variable(("antenna_name", "cartesian_pos_label"), ant_pos)
+        "ANTENNA_POSITION": Variable(("antenna_name", "cartesian_pos_label"), position),
+        "ANTENNA_DISH_DIAMETER": Variable(("antenna_name",), diameter),
       },
       coords={
         "antenna_name": Variable("antenna_name", ants["NAME"].to_numpy()),
