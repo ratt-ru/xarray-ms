@@ -392,15 +392,20 @@ class MSv2Structure(Mapping):
   def parse_partition_key(key: str) -> PartitionKeyT:
     """Parses a "DATA_DESC_ID=0, FIELD_ID_1,..." style string
     into a tuple of (column, id) tuples"""
-    pairs = []
+    pairs: List[Tuple[str, int | str]] = []
 
     for component in [k.strip() for k in key.split(",")]:
       try:
-        column, value = component.split("=")
+        column, str_value = component.split("=")
       except ValueError as e:
         raise InvalidPartitionKey(f"Invalid partition key {key!r}") from e
       else:
-        pairs.append((column, int(value)))
+        try:
+          int_value = int(str_value)
+        except ValueError:
+          pairs.append((column, str_value))
+        else:
+          pairs.append((column, int_value))
 
     return tuple(sorted(pairs))
 
