@@ -5,6 +5,7 @@ Changelog
 
 0.2.3 (28-02-2025)
 ------------------
+* Check that each partition has a unique feed index pair (:pr:`68`)
 * Remove unused and commented out test cases (:pr:`67`)
 * Remove superfluous hollow DataTree node containing the Measurement Set name.
   Visibility partition structure changes to ``msname_partition_000``. (:pr:`66`)

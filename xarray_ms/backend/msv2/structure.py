@@ -590,6 +590,28 @@ class MSv2Structure(Mapping):
     ant1 = value["ANTENNA1"]
     ant2 = value["ANTENNA2"]
     rows = value["row"]
+    feed1 = value["FEED1"]
+    feed2 = value["FEED2"]
+
+    # Check that we have a single feed pair which should be the case
+    # as we always partition by DATA_DESC_ID
+    feed1_id = feed1[0].item()
+    feed2_id = feed2[0].item()
+
+    def check_feeds(f1, f2):
+      return np.all(f1 == feed1_id) and np.all(f2 == feed2_id)
+
+    split_feed1 = partition_args(feed1, (feed1.size + ncpus - 1) // ncpus)
+    split_feed2 = partition_args(feed2, (feed2.size + ncpus - 1) // ncpus)
+
+    if not all(pool.map(check_feeds, split_feed1, split_feed2)):
+      ufeed1 = self.par_unique(pool, ncpus, feed1)
+      ufeed2 = self.par_unique(pool, ncpus, feed2)
+      raise InvalidMeasurementSet(
+        f"Multiple feeds present in partition {key}. "
+        f"FEED1: {ufeed1.tolist()}. "
+        f"FEED2: {ufeed2.tolist()}."
+      )
 
     # Compute the unique times and their inverse index
     utime, time_ids = self.par_unique(pool, ncpus, time, return_inverse=True)
@@ -754,7 +776,7 @@ class MSv2Structure(Mapping):
 
     self._column_descs = FrozenDict(coldescs)
 
-    other_columns = ["INTERVAL"]
+    other_columns = ["FEED1", "FEED2", "INTERVAL"]
     read_columns = (
       set(VALID_MAIN_PARTITION_COLUMNS) | set(SORT_COLUMNS) | set(other_columns)
     )
