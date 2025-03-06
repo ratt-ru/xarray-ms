@@ -11,6 +11,10 @@ class InvalidPartitionKey(ValueError):
   """Raised when a string representing a partition key is invalid"""
 
 
+class PartitioningError(ValueError):
+  """Raised when a logical error is encountered during Measurement Set partitioning"""
+
+
 class MissingMeasuresInfo(ValueError):
   """Raised when Measures information is missing from the column"""
 

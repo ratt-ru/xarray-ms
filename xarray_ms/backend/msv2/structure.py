@@ -29,7 +29,11 @@ from xarray.core.utils import FrozenDict
 
 from xarray_ms.backend.msv2.table_factory import TableFactory
 from xarray_ms.casa_types import ColumnDesc, FrequencyMeasures, Polarisations
-from xarray_ms.errors import InvalidMeasurementSet, InvalidPartitionKey
+from xarray_ms.errors import (
+  InvalidMeasurementSet,
+  InvalidPartitionKey,
+  PartitioningError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -607,7 +611,7 @@ class MSv2Structure(Mapping):
     if not all(pool.map(check_feeds, split_feed1, split_feed2)):
       ufeed1 = self.par_unique(pool, ncpus, feed1)
       ufeed2 = self.par_unique(pool, ncpus, feed2)
-      raise InvalidMeasurementSet(
+      raise PartitioningError(
         f"Multiple feeds present in partition {key}. "
         f"FEED1: {ufeed1.tolist()}. "
         f"FEED2: {ufeed2.tolist()}."
@@ -639,7 +643,14 @@ class MSv2Structure(Mapping):
       source_ids = fields["SOURCE_ID"].to_pylist()
 
       if "SOURCE_ID" in self._subtable_partition_columns:
-        assert len(source_ids) == 1
+        if len(source_ids) != 1:
+          # We should have partitioned on FIELD_ID
+          raise PartitioningError(
+            f"Multiple FIELD_ID values encountered {ufield_ids} "
+            f"when partitioning on SOURCE_ID requested. "
+            f"FIELD_ID should be present in key {key}."
+          )
+
         key += (("SOURCE_ID", source_ids[0]),)
 
       # Select out SOURCES if we have the table
