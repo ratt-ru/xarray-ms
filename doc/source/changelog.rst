@@ -6,7 +6,8 @@ Changelog
 0.2.3 (28-02-2025)
 ------------------
 * Remove unused and commented out test cases (:pr:`67`)
-* Remove superfluous hollow DataTree node containing the Measurement Set name (:pr:`66`)
+* Remove superfluous hollow DataTree node containing the Measurement Set name.
+  Visibility partition structure changes to ``msname_partition_000``. (:pr:`66`)
 
 0.2.2 (27-02-2025)
 ------------------
@@ -19,7 +20,7 @@ Changelog
 * Fix test cases that succeeded after attributes changed (:pr:`57`)
 * Make MSv2Array transform a property (:pr:`56`)
 * Further partitioning improvement and alignment with MSv4 (:pr:`55`)
-* Use epoch to dintinguish multiple instances of the same dataset (:pr:`54`)
+* Use epoch to distinguish multiple instances of the same dataset (:pr:`54`)
 * Use np.logical_or.reduce for generating diffs over more than 2 partitioning arrays (:pr:`53`)
 * Improve Missing Column error (:pr:`52`)
 * Fix `open_datatree` instructions in the README (:pr:`51`)
