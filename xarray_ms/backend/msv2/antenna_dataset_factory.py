@@ -32,5 +32,6 @@ class AntennaDatasetFactory:
           "antenna_name",
           ants["STATION"].to_numpy(),
         ),
+        "cartesian_pos_label": Variable(("cartesian_pos_label",), ["x", "y", "z"]),
       },
     )
