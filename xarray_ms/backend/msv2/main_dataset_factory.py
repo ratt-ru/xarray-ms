@@ -224,7 +224,8 @@ class MainDatasetFactory:
         f"Multiple channel widths {partition.chan_width} "
         f"found in partition {self._partition_key}. "
         f'Setting frequency.attrs["channel_width"] = nan and '
-        f"adding full resolution CHANNEL_FREQUENCY column. ",
+        f"adding full resolution CHANNEL_FREQUENCY column.",
+        IrregularGridWarning,
       )
       raise NotImplementedError(
         "Full resolution CHANNEL_FREQUENCY and CHANNEL_WIDTH columns"
