@@ -3,8 +3,9 @@
 Changelog
 =========
 
-0.2.3 (28-02-2025)
+X.Y.Z (DD-MM-YYYY)
 ------------------
+* Add observation_info attribute (:pr:`74`)
 * Add ANTENNA_DISH_DIAMETER variable to antenna dataset (:pr:`73`)
 * Add cartesian_pos_label labels to antenna dataset (:pr:`72`)
 * Allow fallback to string values in partition keys (:pr:`71`)
@@ -12,6 +13,10 @@ Changelog
 * Tighten SOURCE_ID partitioning checks (:pr:`69`)
 * Check that each partition has a unique feed index pair (:pr:`68`)
 * Remove unused and commented out test cases (:pr:`67`)
+
+
+0.2.3 (28-02-2025)
+------------------
 * Remove superfluous hollow DataTree node containing the Measurement Set name.
   Visibility partition structure changes to ``msname_partition_000``. (:pr:`66`)
 
