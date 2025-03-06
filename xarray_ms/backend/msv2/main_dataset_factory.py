@@ -256,5 +256,22 @@ class MainDatasetFactory:
       )
     )
 
+  def _observation_info(self) -> Dict[str, Any]:
+    structure = self._structure_factory()
+    partition = structure[self._partition_key]
+
+    return dict(
+      sorted(
+        {
+          "observer": partition.observer,
+          "project": partition.project,
+          # "release_date": partition.release_date,
+        }.items()
+      )
+    )
+
   def get_attrs(self) -> Dict[Any, Any]:
-    return {"partition_info": self._partition_info()}
+    return {
+      "observation_info": self._observation_info(),
+      "partition_info": self._partition_info(),
+    }

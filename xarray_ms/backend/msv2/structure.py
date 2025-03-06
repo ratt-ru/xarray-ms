@@ -6,6 +6,7 @@ import logging
 import multiprocessing as mp
 import os.path
 from collections import defaultdict
+from datetime import datetime, timezone
 from functools import partial
 from numbers import Integral
 from typing import (
@@ -163,21 +164,31 @@ SORT_COLUMNS: List[str] = ["TIME", "ANTENNA1", "ANTENNA2"]
 class PartitionData:
   """Dataclass describing data unique to a partition"""
 
+  # Main table
   time: npt.NDArray[np.float64]
   interval: npt.NDArray[np.float64]
-  chan_freq: npt.NDArray[np.float64]
-  chan_width: npt.NDArray[np.float64]
+  scan_numbers: List[int]
+  # Polarization
   corr_type: npt.NDArray[np.int32]
+  # Field
   field_names: List[str]
   line_names: List[str]
   source_names: List[str]
-  intents: List[str]
+  # Spectral Window
   spw_name: str
   spw_freq_group_name: str
   spw_ref_freq: float
   spw_frame: str
-  scan_numbers: List[int]
+  chan_freq: npt.NDArray[np.float64]
+  chan_width: npt.NDArray[np.float64]
+  # State
+  intents: List[str]
   sub_scan_numbers: List[int]
+  # Observation
+  telescope_name: str
+  observer: str
+  project: str
+  release_date: str
 
   row_map: npt.NDArray[np.int64]
 
@@ -347,6 +358,7 @@ class MSv2Structure(Mapping):
   _ddid: pa.Table
   _feed: pa.Table
   _spw: pa.Table
+  _obs: pa.Table
   _pol: pa.Table
   _field: pa.Table
   _state: pa.Table
@@ -548,6 +560,7 @@ class MSv2Structure(Mapping):
       ("ANTENNA", "_ant", True),
       ("DATA_DESCRIPTION", "_ddid", True),
       ("SPECTRAL_WINDOW", "_spw", True),
+      ("OBSERVATION", "_obs", True),
       ("POLARIZATION", "_pol", True),
       ("FEED", "_feed", True),
       ("FIELD", "_field", False),
@@ -629,11 +642,11 @@ class MSv2Structure(Mapping):
       ddid = next(int(i) for (c, i) in key if c == "DATA_DESC_ID")
     except StopIteration:
       raise KeyError(f"DATA_DESC_ID must be present in partition key {key}")
-
-    if ddid >= len(self._ddid):
-      raise InvalidMeasurementSet(
-        f"DATA_DESC_ID {ddid} does not exist in {name}::DATA_DESCRIPTION"
-      )
+    else:
+      if ddid >= len(self._ddid):
+        raise InvalidMeasurementSet(
+          f"DATA_DESC_ID {ddid} does not exist in {name}::DATA_DESCRIPTION"
+        )
 
     # Extract field and source names
     field_id = value.get("FIELD_ID")
@@ -741,6 +754,23 @@ class MSv2Structure(Mapping):
     uinterval = self.par_unique(pool, ncpus, interval_grid.ravel())
     uinterval = uinterval[uinterval >= 0]
 
+    try:
+      obs_id = next(int(i) for (c, i) in key if c == "OBSERVATION_ID")
+    except StopIteration:
+      raise KeyError(f"OBSERVATION_ID must be present in partition_key {key}")
+    else:
+      if obs_id >= len(self._obs):
+        raise InvalidMeasurementSet(
+          f"OBSERVATION_ID {obs_id} does not exist in {name}::OBSERVATION"
+        )
+
+    obs = self._obs.take([obs_id])
+    telescope_name = obs["TELESCOPE_NAME"].to_numpy().item()
+    observer = obs["OBSERVER"].to_numpy().item()
+    project = obs["PROJECT"].to_numpy().item()
+    # TODO(sjperkins). Do a proper measures conversion
+    release_date = datetime.now(timezone.utc).isoformat()
+
     partition_data = PartitionData(
       time=utime,
       interval=uinterval,
@@ -758,6 +788,10 @@ class MSv2Structure(Mapping):
       row_map=row_map.reshape(utime.size, self.nbl),
       scan_numbers=scan_numbers,
       sub_scan_numbers=sub_scan_numbers,
+      telescope_name=telescope_name,
+      observer=observer,
+      project=project,
+      release_date=release_date,
     )
 
     return tuple(sorted(key)), partition_data
