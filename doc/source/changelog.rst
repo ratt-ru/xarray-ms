@@ -5,6 +5,7 @@ Changelog
 
 0.2.3 (28-02-2025)
 ------------------
+* Report irregular channel widths with an IrregularGridWarning (:pr:`70`)
 * Tighten SOURCE_ID partitioning checks (:pr:`69`)
 * Check that each partition has a unique feed index pair (:pr:`68`)
 * Remove unused and commented out test cases (:pr:`67`)
