@@ -5,6 +5,7 @@ Changelog
 
 0.2.3 (28-02-2025)
 ------------------
+* Add ANTENNA_DISH_DIAMETER variable to antenna dataset (:pr:`73`)
 * Add cartesian_pos_label labels to antenna dataset (:pr:`72`)
 * Allow fallback to string values in partition keys (:pr:`71`)
 * Report irregular channel widths with an IrregularGridWarning (:pr:`70`)
