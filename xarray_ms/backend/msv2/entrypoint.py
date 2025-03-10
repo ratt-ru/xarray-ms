@@ -115,8 +115,8 @@ class MSv2Store(AbstractWritableDataStore):
   _table_factory: TableFactory
   _structure_factory: MSv2StructureFactory
   _partition_schema: List[str]
+  _partition_key: PartitionKeyT
   _preferred_chunks: Dict[str, int]
-  _partition: PartitionKeyT
   _autocorrs: bool
   _ninstances: int
   _epoch: str
