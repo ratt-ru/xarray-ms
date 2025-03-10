@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Fix MSv2Store._partition_key typing (:pr:`76`)
 * Add observation_info attribute (:pr:`74`)
 * Add ANTENNA_DISH_DIAMETER variable to antenna dataset (:pr:`73`)
 * Add cartesian_pos_label labels to antenna dataset (:pr:`72`)
