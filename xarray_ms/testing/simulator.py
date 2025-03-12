@@ -3,6 +3,7 @@ import os
 import tempfile
 import typing
 from collections.abc import Callable
+from itertools import product
 from typing import (
   Any,
   Dict,
@@ -225,18 +226,24 @@ class MSStructureSimulator:
     nddid = len(self.data_description)
 
     with Table.from_filename(f"{output_ms}::FEED", **kw) as T:
-      T.addrows(len(self.feeds))
-      for r, feed in enumerate(self.feeds.values()):
-        pol_types = np.array(feed.polarisation_types())[None, :]
-        index = (np.array([r]),)
-        T.putcol("NUM_RECEPTORS", np.array([feed.nreceptors]), index=index)
-        T.putcol("BEAM_OFFSET", np.zeros((1, 2, feed.nreceptors)), index=index)
-        T.putcol("RECEPTOR_ANGLE", np.zeros((1, feed.nreceptors)), index=index)
-        T.putcol("POLARIZATION_TYPE", pol_types, index=index)
+      ant_id_feeds = list(product(range(self.nantenna), enumerate(self.feeds.values())))
+      T.addrows(len(ant_id_feeds))
+      for r, (antenna_id, (feed_id, feed)) in enumerate(ant_id_feeds):
+        i = (np.array([r]),)
+        T.putcol("FEED_ID", np.array([feed_id]), index=i)
+        T.putcol("ANTENNA_ID", np.array([antenna_id]), index=i)
+        # Feed setup applies to all SPW's
+        T.putcol("SPECTRAL_WINDOW_ID", np.array([-1]), index=i)
+        T.putcol("NUM_RECEPTORS", np.array([feed.nreceptors]), index=i)
+        T.putcol("BEAM_OFFSET", np.full((1, 2, feed.nreceptors), 0.1), index=i)
+        T.putcol("RECEPTOR_ANGLE", np.full((1, feed.nreceptors), 0.1), index=i)
+        T.putcol(
+          "POLARIZATION_TYPE", np.array(feed.polarisation_types())[None, :], index=i
+        )
         T.putcol(
           "POL_RESPONSE",
-          np.zeros((1, feed.nreceptors, feed.nreceptors), np.complex64),
-          index=index,
+          np.full((1, feed.nreceptors, feed.nreceptors), 0.1 + 0.1j, np.complex64),
+          index=i,
         )
 
     # Populate the main DATA_DESCRIPTION table
@@ -282,6 +289,7 @@ class MSStructureSimulator:
       )
       T.putcol("POSITION", position)
       T.putcol("OFFSET", position)  # Use a ramp here too
+      T.putcol("DISH_DIAMETER", np.asarray([13.5] * self.nantenna))
       T.putcol("NAME", np.asarray([f"ANTENNA-{i}" for i in range(self.nantenna)]))
       T.putcol("MOUNT", np.asarray(["ALT-AZ" for _ in range(self.nantenna)]))
       T.putcol("STATION", np.asarray([f"STATION-{i}" for i in range(self.nantenna)]))

@@ -440,7 +440,7 @@ class MSv2EntryPoint(BackendEntrypoint):
         **kwargs,
       )
 
-      antenna_factory = AntennaDatasetFactory(structure_factory)
+      antenna_factory = AntennaDatasetFactory(partition_key, structure_factory)
 
       path = f"{ms_name}_partition_{p:03}"
       datasets[path] = ds
