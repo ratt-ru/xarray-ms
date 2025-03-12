@@ -168,6 +168,7 @@ class PartitionData:
   time: npt.NDArray[np.float64]
   interval: npt.NDArray[np.float64]
   scan_numbers: List[int]
+  feed_id: int
   # Polarization
   corr_type: npt.NDArray[np.int32]
   # Field
@@ -175,6 +176,7 @@ class PartitionData:
   line_names: List[str]
   source_names: List[str]
   # Spectral Window
+  spw_id: int
   spw_name: str
   spw_freq_group_name: str
   spw_ref_freq: float
@@ -635,6 +637,16 @@ class MSv2Structure(Mapping):
         f"FEED2: {ufeed2.tolist()}."
       )
 
+    if feed1_id != feed2_id:
+      raise NotImplementedError(
+        f"FEED1 != FEED2 ({feed1_id} != {feed2_id}) "
+        f"in partition {key}. Differing FEED ids "
+        f"per DATA_DESC_ID are currently regarded "
+        f"as an edge case of interest. "
+        f"Consider raising a github issue "
+        f"regarding your Measurement Set."
+      )
+
     # Compute the unique times and their inverse index
     utime, time_ids = self.par_unique(pool, ncpus, time, return_inverse=True)
 
@@ -781,6 +793,8 @@ class MSv2Structure(Mapping):
       field_names=field_names,
       line_names=line_names,
       source_names=source_names,
+      feed_id=feed1_id,
+      spw_id=spw_id,
       spw_name=spw_name,
       spw_freq_group_name=spw_freq_group_name,
       spw_ref_freq=spw_ref_freq,
