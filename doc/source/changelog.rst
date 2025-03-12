@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Extend the antenna dataset implementation (:pr:`77`)
 * Fix MSv2Store._partition_key typing (:pr:`76`)
 * Add observation_info attribute (:pr:`74`)
 * Add ANTENNA_DISH_DIAMETER variable to antenna dataset (:pr:`73`)
