@@ -278,6 +278,8 @@ class MainDatasetFactory:
     obs = self._obs_factory()
     observer = obs["OBSERVER"][partition.obs_id].as_py()
     project = obs["PROJECT"][partition.obs_id].as_py()
+    # TODO: A Measures conversions is needed here
+    release_date = obs["RELEASE_DATE"][partition.obs_id].as_py()  # noqa: F841
 
     return dict(
       sorted(
