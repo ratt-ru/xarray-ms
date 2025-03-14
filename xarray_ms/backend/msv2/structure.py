@@ -614,8 +614,9 @@ class MSv2Structure(Mapping):
     auto_corrs: bool,
   ) -> None:
     """Populate the row map and interval grids"""
-    # Normalise the antenna id's to np.arange(feed_antennas)
-    if not np.all(feed_antennas == np.arange(feed_antennas.size)):
+    normed_antennas = np.arange(feed_antennas.size, dtype=feed_antennas.dtype)
+    # Perhaps normalise the antenna id's to np.arange(feed_antennas)
+    if not np.all(feed_antennas == normed_antennas):
       antenna1 = np.searchsorted(feed_antennas, antenna1)
       antenna2 = np.searchsorted(feed_antennas, antenna2)
     index = time_ids * nbl
