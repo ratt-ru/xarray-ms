@@ -68,34 +68,55 @@ def promote_chunks(
   return return_chunks
 
 
+DEFAULT_SUBTABLES = [
+  "ANTENNA",
+  "DATA_DESCRIPTION",
+  "FEED",
+  "SPECTRAL_WINDOW",
+  "POLARIZATION",
+  "OBSERVATION",
+]
+
+
 def initialise_default_args(
   ms: str,
   ninstances: int,
   auto_corrs: bool,
   epoch: str | None,
-  table_factory: TableFactory | None,
+  ms_factory: TableFactory | None,
+  subtable_factories: Dict[str, TableFactory] | None,
   partition_schema: List[str] | None,
   structure_factory: MSv2StructureFactory | None,
-) -> Tuple[str, TableFactory, List[str], MSv2StructureFactory]:
+) -> Tuple[str, TableFactory, Dict[str, TableFactory], List[str], MSv2StructureFactory]:
   """
   Ensures consistency when initialising default arguments from multiple locations
   """
   if not os.path.exists(ms):
     raise ValueError(f"MS {ms} does not exist")
 
-  table_factory = table_factory or TableFactory(
+  ms_factory = ms_factory or TableFactory(
     Table.from_filename,
     ms,
     ninstances=ninstances,
     readonly=True,
     lockoptions="nolock",
   )
+  subtable_factories = subtable_factories or {
+    subtable: TableFactory(
+      lambda n: Table.from_filename(
+        n, ninstances=1, readonly=True, lockoptions="nolock"
+      ).to_arrow(),
+      f"{ms}::{subtable}",
+    )
+    for subtable in DEFAULT_SUBTABLES
+  }
+
   epoch = epoch or uuid4().hex[:8]
   partition_schema = partition_schema or DEFAULT_PARTITION_COLUMNS
   structure_factory = structure_factory or MSv2StructureFactory(
-    table_factory, partition_schema, epoch, auto_corrs=auto_corrs
+    ms_factory, partition_schema, epoch, auto_corrs=auto_corrs
   )
-  return epoch, table_factory, partition_schema, structure_factory
+  return epoch, ms_factory, subtable_factories, partition_schema, structure_factory
 
 
 class MSv2Store(AbstractWritableDataStore):
@@ -103,6 +124,7 @@ class MSv2Store(AbstractWritableDataStore):
 
   __slots__ = (
     "_table_factory",
+    "_subtable_factories",
     "_structure_factory",
     "_partition_schema",
     "_partition_key",
@@ -113,6 +135,7 @@ class MSv2Store(AbstractWritableDataStore):
   )
 
   _table_factory: TableFactory
+  _subtable_factories: Dict[str, TableFactory]
   _structure_factory: MSv2StructureFactory
   _partition_schema: List[str]
   _partition_key: PartitionKeyT
@@ -124,6 +147,7 @@ class MSv2Store(AbstractWritableDataStore):
   def __init__(
     self,
     table_factory: TableFactory,
+    subtable_factories: Dict[str, TableFactory],
     structure_factory: MSv2StructureFactory,
     partition_schema: List[str],
     partition_key: PartitionKeyT,
@@ -133,6 +157,7 @@ class MSv2Store(AbstractWritableDataStore):
     epoch: str,
   ):
     self._table_factory = table_factory
+    self._subtable_factories = subtable_factories
     self._structure_factory = structure_factory
     self._partition_schema = partition_schema
     self._partition_key = partition_key
@@ -157,14 +182,17 @@ class MSv2Store(AbstractWritableDataStore):
     if not isinstance(ms, str):
       raise ValueError("Measurement Sets paths must be strings")
 
-    epoch, table_factory, partition_schema, structure_factory = initialise_default_args(
-      ms,
-      ninstances,
-      auto_corrs,
-      epoch,
-      None,
-      partition_schema,
-      structure_factory,
+    epoch, table_factory, subtable_factories, partition_schema, structure_factory = (
+      initialise_default_args(
+        ms,
+        ninstances,
+        auto_corrs,
+        epoch,
+        None,
+        None,
+        partition_schema,
+        structure_factory,
+      )
     )
 
     # Resolve the user supplied partition key against actual
@@ -186,6 +214,7 @@ class MSv2Store(AbstractWritableDataStore):
 
     return cls(
       table_factory,
+      subtable_factories,
       structure_factory,
       partition_schema=partition_schema,
       partition_key=partition_key,
@@ -198,23 +227,23 @@ class MSv2Store(AbstractWritableDataStore):
   def close(self, **kwargs):
     pass
 
-  def get_variables(self):
-    factory = MainDatasetFactory(
+  def main_dataset_factory(self) -> MainDatasetFactory:
+    return MainDatasetFactory(
       self._partition_key,
       self._preferred_chunks,
       self._table_factory,
       self._structure_factory,
+      self._subtable_factories["ANTENNA"],
+      self._subtable_factories["SPECTRAL_WINDOW"],
+      self._subtable_factories["POLARIZATION"],
+      self._subtable_factories["OBSERVATION"],
     )
 
-    return factory.get_variables()
+  def get_variables(self):
+    return self.main_dataset_factory().get_variables()
 
   def get_attrs(self):
-    factory = MainDatasetFactory(
-      self._partition_key,
-      self._preferred_chunks,
-      self._table_factory,
-      self._structure_factory,
-    )
+    factory = self.main_dataset_factory()
 
     attrs = {
       "schema_version": "4.0.0",
@@ -412,8 +441,10 @@ class MSv2EntryPoint(BackendEntrypoint):
     else:
       raise ValueError("Measurement Set paths must be strings")
 
-    epoch, _, partition_schema, structure_factory = initialise_default_args(
-      ms, ninstances, auto_corrs, epoch, None, partition_schema, None
+    epoch, _, subtable_factories, partition_schema, structure_factory = (
+      initialise_default_args(
+        ms, ninstances, auto_corrs, epoch, None, None, partition_schema, None
+      )
     )
 
     # /path/to/some_name.ext -> some_name
@@ -440,7 +471,13 @@ class MSv2EntryPoint(BackendEntrypoint):
         **kwargs,
       )
 
-      antenna_factory = AntennaDatasetFactory(partition_key, structure_factory)
+      antenna_factory = AntennaDatasetFactory(
+        partition_key,
+        structure_factory,
+        subtable_factories["ANTENNA"],
+        subtable_factories["FEED"],
+        subtable_factories["OBSERVATION"],
+      )
 
       path = f"{ms_name}_partition_{p:03}"
       datasets[path] = ds

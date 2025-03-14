@@ -1,10 +1,40 @@
+from contextlib import nullcontext
+
 import numpy as np
 import numpy.testing as npt
 import pytest
 import xarray
 from arcae.lib.arrow_tables import Table, ms_descriptor
 
-NANTENNA = 4
+from xarray_ms.errors import IrregularGridWarning
+
+NANTENNA = 6
+
+
+def _set_antenna_ids(data_dict):
+  """Align ANTENNA1 and ANTENNA2 with the FEED table setup in the test csae below"""
+  ddid = data_dict["DATA_DESC_ID"][-1]
+  nrow = len(ddid)
+  ddid = np.unique(ddid).item()
+
+  if ddid == 0:
+    ant_ids = np.asarray([1, 2], np.int32)
+  elif ddid == 1:
+    ant_ids = np.array([0, 2], np.int32)
+  else:
+    raise ValueError(f"Invalid DATA_DESC_ID {ddid}")
+
+  # k = 0 produces autocorrs
+  ant1, ant2 = (ant_ids[a] for a in np.triu_indices(len(ant_ids), 0))
+  # This doesn't produce a perfectly aligned grid
+  # but is sufficient for the test case below
+  ant1 = np.tile(ant1, (nrow + ant1.size - 1) // ant1.size)[:nrow]
+  ant2 = np.repeat(ant2, (nrow + ant2.size - 1) // ant2.size)[:nrow]
+
+  data_dict["ANTENNA1"][-1][:] = ant1
+  data_dict["ANTENNA2"][-1][:] = ant2
+
+  return data_dict
 
 
 @pytest.mark.parametrize(
@@ -14,11 +44,13 @@ NANTENNA = 4
       "name": "backend.ms",
       "nantenna": NANTENNA,
       "data_description": [(8, ["XX", "XY", "YX", "YY"]), (4, ["RR", "LL"])],
+      "transform_data": _set_antenna_ids,
     }
   ],
   indirect=True,
 )
-def test_antenna_feed_join(simmed_ms):
+@pytest.mark.parametrize("auto_corrs", [True, False])
+def test_antenna_feed_join(simmed_ms, auto_corrs):
   """Tests a number of cases for the join of the ANTENNA and FEED subtables."""
 
   def _fill_other_columns(T, index):
@@ -93,11 +125,22 @@ def test_antenna_feed_join(simmed_ms):
     T.putcol("POLARIZATION_TYPE", np.array([["R", "L"]]), index=index)
     _fill_other_columns(T, index)
 
-  dt = xarray.open_datatree(simmed_ms)
+  with pytest.warns(IrregularGridWarning) if auto_corrs else nullcontext():
+    dt = xarray.open_datatree(simmed_ms, auto_corrs=auto_corrs)
+
+  # There are two partitions one with ANTENNA-0 and the other with ANTENNA-1
+  # They both share ANTENNA-2.
+  # Feed configuration associated with non-existent partitions are ignored.
+  # This means that each partition has 3 baselines
+  # with auto correlations and 1 baseline without
   assert list(dt.children) == ["backend_partition_000", "backend_partition_001"]
+  dt = dt.load()
 
   p0 = dt["backend_partition_000"]
   p1 = dt["backend_partition_001"]
+
+  assert len(p0.baseline_id) == (3 if auto_corrs else 1)
+  assert len(p1.baseline_id) == (3 if auto_corrs else 1)
 
   npt.assert_array_equal(p0.polarization, ["XX", "XY", "YX", "YY"])
   npt.assert_array_equal(p1.polarization, ["RR", "LL"])
