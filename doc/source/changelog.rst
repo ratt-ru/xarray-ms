@@ -5,6 +5,10 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Refactor partitioning logic to be more robust (:pr:`78`)
+* The set of ANTENNA's related to a partition in the FEED table is
+  used to create the antenna dataset for that partition (:pr:`78`)
+* Metadata extraction moved to dataset factories (:pr:`78`)
 * Extend the antenna dataset implementation (:pr:`77`)
 * Fix MSv2Store._partition_key typing (:pr:`76`)
 * Add observation_info attribute (:pr:`74`)

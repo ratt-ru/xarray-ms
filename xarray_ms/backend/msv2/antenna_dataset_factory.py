@@ -4,6 +4,7 @@ import numpy as np
 from xarray import Dataset, Variable
 
 from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
+from xarray_ms.backend.msv2.table_factory import TableFactory
 from xarray_ms.errors import InvalidMeasurementSet
 
 RELOCATABLE_ARRAY = {"ALMA", "VLA", "NOEMA", "EVLA"}
@@ -12,18 +13,30 @@ RELOCATABLE_ARRAY = {"ALMA", "VLA", "NOEMA", "EVLA"}
 class AntennaDatasetFactory:
   _partition_key: PartitionKeyT
   _structure_factory: MSv2StructureFactory
+  _antenna_factory: TableFactory
 
   def __init__(
-    self, partition_key: PartitionKeyT, structure_factory: MSv2StructureFactory
+    self,
+    partition_key: PartitionKeyT,
+    structure_factory: MSv2StructureFactory,
+    antenna_factory: TableFactory,
+    feed_factory: TableFactory,
+    observation_factory: TableFactory,
   ):
     self._partition_key = partition_key
     self._structure_factory = structure_factory
+    self._antenna_factory = antenna_factory
+    self._feed_factory = feed_factory
+    self._observation_factory = observation_factory
 
   def get_dataset(self) -> Mapping[str, Variable]:
     structure = self._structure_factory()
     partition = structure[self._partition_key]
-    ants = structure._ant
-    feeds = structure._feed
+    ants = self._antenna_factory()
+    feeds = self._feed_factory()
+    obs = self._observation_factory()
+
+    telescope_name = obs["TELESCOPE_NAME"][partition.obs_id].as_py()
 
     import pyarrow.compute as pac
 
@@ -31,33 +44,38 @@ class AntennaDatasetFactory:
     spw_id = feeds["SPECTRAL_WINDOW_ID"].to_numpy()
     feed_ant_id = feeds["ANTENNA_ID"].to_numpy()
     # Select feeds with global spws (-1) or that match the partition spw
-    feed_mask = np.logical_or(spw_id == -1, spw_id == partition.spw_id)
-    # Select feed_id's matching the partition feeds
-    np.logical_and(feed_mask, feed_id == partition.feed_id, out=feed_mask)
+    mask = np.logical_or.reduce(
+      (
+        spw_id == -1,
+        spw_id == partition.spw_id,
+      )
+    )
 
-    # NOTE: This outer product could potentially be large
-    # and could be ameliorated by selecting out feed_ant_id[None, feed_mask]
-    ant_id = np.arange(len(ants))
-    ant_feed_map = ant_id[:, None] == feed_ant_id[None, :]
-    np.logical_and(ant_feed_map, feed_mask[None, :], out=ant_feed_map)
-    ant_mask = np.any(ant_feed_map, axis=1)
+    np.logical_and.reduce(
+      (
+        mask,
+        np.isin(feed_id, partition.feed_ids),
+        np.isin(feed_ant_id, partition.antenna_ids),
+      ),
+      out=mask,
+    )
 
-    filtered_ants = ants.filter(ant_mask)
+    filtered_ants = ants.take(feed_ant_id[mask])
 
     if len(filtered_ants) == 0:
       raise InvalidMeasurementSet(
         f"No antennas were found in FEED matching "
-        f"feed_id = {partition.feed_id} and spw_id = {partition.spw_id}"
+        f"feed_id = {partition.feed_ids} and spw_id = {partition.spw_id}"
       )
 
     antenna_names = filtered_ants["NAME"].to_numpy()
-    telescope_names = np.asarray([partition.telescope_name] * len(antenna_names))
+    telescope_names = np.asarray([telescope_name] * len(antenna_names))
     position = pac.list_flatten(filtered_ants["POSITION"]).to_numpy().reshape(-1, 3)
     diameter = filtered_ants["DISH_DIAMETER"].to_numpy()
     station = filtered_ants["STATION"].to_numpy()
     mount = filtered_ants["MOUNT"].to_numpy()
 
-    filtered_feeds = feeds.take(np.where(ant_feed_map)[-1])
+    filtered_feeds = feeds.take(np.where(mask)[0])
     nreceptors = filtered_feeds["NUM_RECEPTORS"].unique().to_numpy()
 
     if len(nreceptors) != 1 or nreceptors.item() != 2:
@@ -114,7 +132,7 @@ class AntennaDatasetFactory:
       },
       attrs={
         "type": "antenna",
-        "overall_telescope_name": partition.telescope_name,
-        "relocatable_antennas": partition.telescope_name in RELOCATABLE_ARRAY,
+        "overall_telescope_name": telescope_name,
+        "relocatable_antennas": telescope_name in RELOCATABLE_ARRAY,
       },
     )
