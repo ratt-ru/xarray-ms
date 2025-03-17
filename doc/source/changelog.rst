@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Generalise the TableFactory class into a Multiton class (:pr:`79`)
 * Refactor partitioning logic to be more robust (:pr:`78`)
 * The set of ANTENNA's related to a partition in the FEED table is
   used to create the antenna dataset for that partition (:pr:`78`)
