@@ -227,6 +227,7 @@ class MSv2StructureFactory:
   for creating and caching an MSv2Structure"""
 
   _ms_factory: TableFactory
+  _subtable_factories: Dict[str, TableFactory]
   _partition_schema: List[str]
   _epoch: str
   _auto_corrs: bool
@@ -237,11 +238,13 @@ class MSv2StructureFactory:
   def __init__(
     self,
     ms: TableFactory,
+    subtables: Dict[str, TableFactory],
     partition_schema: List[str],
     epoch: str,
     auto_corrs: bool = True,
   ):
     self._ms_factory = ms
+    self._subtable_factories = subtables
     self._partition_schema = partition_schema
     self._epoch = epoch
     self._auto_corrs = auto_corrs
@@ -252,6 +255,7 @@ class MSv2StructureFactory:
 
     return (
       self._ms_factory == other._ms_factory
+      and self._subtable_factories == other._subtable_factories
       and self._partition_schema == other._partition_schema
       and self._epoch == other._epoch
       and self._auto_corrs == other._auto_corrs
@@ -259,13 +263,25 @@ class MSv2StructureFactory:
 
   def __hash__(self):
     return hash(
-      (self._ms_factory, tuple(self._partition_schema), self._epoch, self._auto_corrs)
+      (
+        self._ms_factory,
+        frozenset(self._subtable_factories.items()),
+        tuple(self._partition_schema),
+        self._epoch,
+        self._auto_corrs,
+      )
     )
 
   def __reduce__(self):
     return (
       MSv2StructureFactory,
-      (self._ms_factory, self._partition_schema, self._epoch, self._auto_corrs),
+      (
+        self._ms_factory,
+        self._subtable_factories,
+        self._partition_schema,
+        self._epoch,
+        self._auto_corrs,
+      ),
     )
 
   def __call__(self, *args, **kw) -> MSv2Structure:
@@ -273,7 +289,10 @@ class MSv2StructureFactory:
     return self._STRUCTURE_CACHE.get(
       self,
       lambda self: MSv2Structure(
-        self._ms_factory, self._partition_schema, self._auto_corrs
+        self._ms_factory,
+        self._subtable_factories,
+        self._partition_schema,
+        self._auto_corrs,
       ),
     )
 
@@ -282,6 +301,7 @@ class MSv2Structure(Mapping):
   """Holds structural information about an MSv2 dataset"""
 
   _ms_factory: TableFactory
+  _subtable_factories: Dict[str, TableFactory]
   _partition_columns: List[str]
   _subtable_partition_columns: List[str]
   _partitions: Mapping[PartitionKeyT, PartitionData]
@@ -550,7 +570,11 @@ class MSv2Structure(Mapping):
       return T.to_arrow(columns=list(columns))
 
   def __init__(
-    self, ms: TableFactory, partition_schema: List[str], auto_corrs: bool = True
+    self,
+    ms: TableFactory,
+    subtable_factories: Dict[str, TableFactory],
+    partition_schema: List[str],
+    auto_corrs: bool = True,
   ):
     import time as modtime
 
@@ -561,6 +585,7 @@ class MSv2Structure(Mapping):
     )
 
     self._ms_factory = ms
+    self._subtable_factories = subtable_factories
     self._partition_columns = partition_columns
     self._subtable_partition_columns = subtable_columns
 
@@ -568,16 +593,12 @@ class MSv2Structure(Mapping):
     ms_name = ms_table.name()
 
     try:
-      data_description: pa.Table = self.read_subtable(ms_name, "DATA_DESCRIPTION")
-      feed = self.read_subtable(
-        ms_name, "FEED", columns=["ANTENNA_ID", "FEED_ID", "SPECTRAL_WINDOW_ID"]
-      )
-      state = self.read_subtable(ms_name, "STATE", columns=["SUB_SCAN", "OBS_MODE"])
-      field = self.read_subtable(ms_name, "FIELD", columns=["SOURCE_ID"])
-    except FileNotFoundError as e:
-      raise InvalidMeasurementSet(
-        "Measurement Set is missing a required subtable"
-      ) from e
+      data_description = subtable_factories["DATA_DESCRIPTION"]()
+      feed = subtable_factories["FEED"]()
+      state = subtable_factories["STATE"]()
+      field = subtable_factories["FIELD"]()
+    except KeyError as e:
+      raise InvalidMeasurementSet(f"Measurement Set is missing required subtable {e}")
 
     other_columns = ["FEED1", "FEED2", "INTERVAL"]
     read_columns = (

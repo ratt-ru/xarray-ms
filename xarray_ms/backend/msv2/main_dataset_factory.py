@@ -50,6 +50,7 @@ class MainDatasetFactory:
   _partition_key: PartitionKeyT
   _preferred_chunks: Dict[str, int]
   _ms_factory: TableFactory
+  _subtable_factories: Dict[str, TableFactory]
   _structure_factory: MSv2StructureFactory
   _antenna_factory: TableFactory
   _spw_factory: TableFactory
@@ -62,20 +63,14 @@ class MainDatasetFactory:
     partition_key: PartitionKeyT,
     preferred_chunks: Dict[str, int],
     ms_factory: TableFactory,
+    subtable_factories: Dict[str, TableFactory],
     structure_factory: MSv2StructureFactory,
-    antenna_factory: TableFactory,
-    spw_factory: TableFactory,
-    pol_factory: TableFactory,
-    obs_factory: TableFactory,
   ):
     self._partition_key = partition_key
     self._preferred_chunks = preferred_chunks
     self._ms_factory = ms_factory
+    self._subtable_factories = subtable_factories
     self._structure_factory = structure_factory
-    self._antenna_factory = antenna_factory
-    self._spw_factory = spw_factory
-    self._pol_factory = pol_factory
-    self._obs_factory = obs_factory
 
     ms = ms_factory()
     ms_table_desc = ms.tabledesc()
@@ -98,8 +93,11 @@ class MainDatasetFactory:
     except KeyError:
       raise KeyError(f"No Column Descriptor exist for {schema.name}")
 
-    chan_freq = self._spw_factory()["CHAN_FREQ"][partition.spw_id].as_py()
-    corr_type = self._pol_factory()["CORR_TYPE"][partition.pol_id].as_py()
+    spw = self._subtable_factories["SPECTRAL_WINDOW"]()
+    pol = self._subtable_factories["POLARIZATION"]()
+
+    chan_freq = spw["CHAN_FREQ"][partition.spw_id].as_py()
+    corr_type = pol["CORR_TYPE"][partition.pol_id].as_py()
 
     dim_sizes = {
       "time": len(partition.time),
@@ -149,14 +147,15 @@ class MainDatasetFactory:
     nbl = partition.nbl
     assert (nbl,) == ant1.shape
 
-    ant_names = self._antenna_factory()["NAME"].to_numpy()
+    antenna = self._subtable_factories["ANTENNA"]()
+    ant_names = antenna["NAME"].to_numpy()
     ant1_names = ant_names[ant1]
     ant2_names = ant_names[ant2]
 
     spw_id = partition.spw_id
     pol_id = partition.pol_id
-    spw = self._spw_factory()
-    pol = self._pol_factory()
+    spw = self._subtable_factories["SPECTRAL_WINDOW"]()
+    pol = self._subtable_factories["POLARIZATION"]()
 
     chan_freq = spw["CHAN_FREQ"][spw_id].as_py()
     uchan_width = np.unique(spw["CHAN_WIDTH"][spw_id].as_py())
@@ -275,7 +274,7 @@ class MainDatasetFactory:
   def _observation_info(self) -> Dict[str, Any]:
     structure = self._structure_factory()
     partition = structure[self._partition_key]
-    obs = self._obs_factory()
+    obs = self._subtable_factories["OBSERVATION"]()
     observer = obs["OBSERVER"][partition.obs_id].as_py()
     project = obs["PROJECT"][partition.obs_id].as_py()
     # TODO: A Measures conversions is needed here

@@ -72,10 +72,18 @@ DEFAULT_SUBTABLES = [
   "ANTENNA",
   "DATA_DESCRIPTION",
   "FEED",
+  "FIELD",
   "SPECTRAL_WINDOW",
+  "STATE",
   "POLARIZATION",
   "OBSERVATION",
 ]
+
+
+def subtable_factory(name: str):
+  return Table.from_filename(
+    name, ninstances=1, readonly=True, lockoptions="nolock"
+  ).to_arrow()
 
 
 def initialise_default_args(
@@ -102,19 +110,14 @@ def initialise_default_args(
     lockoptions="nolock",
   )
   subtable_factories = subtable_factories or {
-    subtable: TableFactory(
-      lambda n: Table.from_filename(
-        n, ninstances=1, readonly=True, lockoptions="nolock"
-      ).to_arrow(),
-      f"{ms}::{subtable}",
-    )
+    subtable: TableFactory(subtable_factory, f"{ms}::{subtable}")
     for subtable in DEFAULT_SUBTABLES
   }
 
   epoch = epoch or uuid4().hex[:8]
   partition_schema = partition_schema or DEFAULT_PARTITION_COLUMNS
   structure_factory = structure_factory or MSv2StructureFactory(
-    ms_factory, partition_schema, epoch, auto_corrs=auto_corrs
+    ms_factory, subtable_factories, partition_schema, epoch, auto_corrs=auto_corrs
   )
   return epoch, ms_factory, subtable_factories, partition_schema, structure_factory
 
@@ -232,11 +235,8 @@ class MSv2Store(AbstractWritableDataStore):
       self._partition_key,
       self._preferred_chunks,
       self._table_factory,
+      self._subtable_factories,
       self._structure_factory,
-      self._subtable_factories["ANTENNA"],
-      self._subtable_factories["SPECTRAL_WINDOW"],
-      self._subtable_factories["POLARIZATION"],
-      self._subtable_factories["OBSERVATION"],
     )
 
   def get_variables(self):
@@ -474,9 +474,7 @@ class MSv2EntryPoint(BackendEntrypoint):
       antenna_factory = AntennaDatasetFactory(
         partition_key,
         structure_factory,
-        subtable_factories["ANTENNA"],
-        subtable_factories["FEED"],
-        subtable_factories["OBSERVATION"],
+        subtable_factories,
       )
 
       path = f"{ms_name}_partition_{p:03}"

@@ -28,10 +28,20 @@ def test_baseline_id(na, auto_corrs):
 def test_structure_factory(simmed_ms, epoch):
   partition_schema = ["FIELD_ID", "DATA_DESC_ID", "OBSERVATION_ID", "OBS_MODE"]
   table_factory = TableFactory(Table.from_filename, simmed_ms)
-  structure_factory = MSv2StructureFactory(table_factory, partition_schema, epoch)
+  from xarray_ms.backend.msv2.entrypoint import subtable_factory
+
+  subtables = {
+    st: TableFactory(subtable_factory, f"{simmed_ms}::{st}")
+    for st in ("DATA_DESCRIPTION", "FEED", "FIELD", "STATE")
+  }
+  structure_factory = MSv2StructureFactory(
+    table_factory, subtables, partition_schema, epoch
+  )
   assert pickle.loads(pickle.dumps(structure_factory)) == structure_factory
 
-  structure_factory2 = MSv2StructureFactory(table_factory, partition_schema, epoch)
+  structure_factory2 = MSv2StructureFactory(
+    table_factory, subtables, partition_schema, epoch
+  )
   assert structure_factory() is structure_factory2()
 
   keys = tuple(k for kv in structure_factory().keys() for k, _ in kv)
@@ -98,11 +108,24 @@ def test_table_partitioner():
 def test_epoch(simmed_ms):
   partition_schema = ["FIELD_ID", "DATA_DESC_ID", "OBSERVATION_ID"]
   table_factory = TableFactory(Table.from_filename, simmed_ms)
-  structure_factory = MSv2StructureFactory(table_factory, partition_schema, "abc")
-  structure_factory2 = MSv2StructureFactory(table_factory, partition_schema, "abc")
+  from xarray_ms.backend.msv2.entrypoint import subtable_factory
+
+  subtables = {
+    st: TableFactory(subtable_factory, f"{simmed_ms}::{st}")
+    for st in ("DATA_DESCRIPTION", "FEED", "FIELD", "STATE")
+  }
+
+  structure_factory = MSv2StructureFactory(
+    table_factory, subtables, partition_schema, "abc"
+  )
+  structure_factory2 = MSv2StructureFactory(
+    table_factory, subtables, partition_schema, "abc"
+  )
 
   assert structure_factory() is structure_factory2()
 
-  structure_factory3 = MSv2StructureFactory(table_factory, partition_schema, "def")
+  structure_factory3 = MSv2StructureFactory(
+    table_factory, subtables, partition_schema, "def"
+  )
 
   assert structure_factory() is not structure_factory3()

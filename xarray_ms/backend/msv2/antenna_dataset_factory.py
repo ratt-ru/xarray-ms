@@ -1,4 +1,4 @@
-from typing import Mapping
+from typing import Dict, Mapping
 
 import numpy as np
 from xarray import Dataset, Variable
@@ -13,28 +13,24 @@ RELOCATABLE_ARRAY = {"ALMA", "VLA", "NOEMA", "EVLA"}
 class AntennaDatasetFactory:
   _partition_key: PartitionKeyT
   _structure_factory: MSv2StructureFactory
-  _antenna_factory: TableFactory
+  _subtable_factories: Dict[str, TableFactory]
 
   def __init__(
     self,
     partition_key: PartitionKeyT,
     structure_factory: MSv2StructureFactory,
-    antenna_factory: TableFactory,
-    feed_factory: TableFactory,
-    observation_factory: TableFactory,
+    subtable_factories: Dict[str, TableFactory],
   ):
     self._partition_key = partition_key
     self._structure_factory = structure_factory
-    self._antenna_factory = antenna_factory
-    self._feed_factory = feed_factory
-    self._observation_factory = observation_factory
+    self._subtable_factories = subtable_factories
 
   def get_dataset(self) -> Mapping[str, Variable]:
     structure = self._structure_factory()
     partition = structure[self._partition_key]
-    ants = self._antenna_factory()
-    feeds = self._feed_factory()
-    obs = self._observation_factory()
+    ants = self._subtable_factories["ANTENNA"]()
+    feeds = self._subtable_factories["FEED"]()
+    obs = self._subtable_factories["OBSERVATION"]()
 
     telescope_name = obs["TELESCOPE_NAME"][partition.obs_id].as_py()
 
