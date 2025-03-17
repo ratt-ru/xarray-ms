@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Release resources when datasets or datatrees are closed (:pr:`81`)
 * Use creator attribute to record xarray-ms version (:pr:`80`)
 * Generalise the TableFactory class into a Multiton class (:pr:`79`)
 * Refactor partitioning logic to be more robust (:pr:`78`)
