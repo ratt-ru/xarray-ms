@@ -99,15 +99,6 @@ def baseline_id(
   return result
 
 
-def is_partition_key(key: PartitionKeyT) -> bool:
-  return (
-    isinstance(key, tuple)
-    and len(key) == 2
-    and isinstance(key[0], str)
-    and isinstance(key[1], int)
-  )
-
-
 def partition_args(data: npt.NDArray, chunk: int) -> List[npt.NDArray]:
   return [data[i : i + chunk] for i in range(0, len(data), chunk)]
 
