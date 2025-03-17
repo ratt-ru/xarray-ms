@@ -1,12 +1,11 @@
 import pickle
 
-import pytest
+import xarray
 from arcae.lib.arrow_tables import Table
 
 from xarray_ms.multiton import Multiton
 
 
-@pytest.mark.parametrize("simmed_ms", [{"name": "proxy.ms"}], indirect=True)
 def test_multiton_duplicate_args(simmed_ms):
   """Tests that when opened with duplicate arguments,
   the same Multiton is returned"""
@@ -49,7 +48,15 @@ def test_multiton_release():
   assert data["closed"] is True
 
 
-@pytest.mark.parametrize("simmed_ms", [{"name": "proxy.ms"}], indirect=True)
+def test_multiton_datatree_release(simmed_ms):
+  assert len(Multiton._INSTANCE_CACHE) == 0
+
+  with xarray.open_datatree(simmed_ms):
+    assert len(Multiton._INSTANCE_CACHE) > 0
+
+  assert len(Multiton._INSTANCE_CACHE) == 0
+
+
 def test_multiton_pickling(simmed_ms):
   """Test that a pickle roundtrip of the Multiton results in the same object"""
 

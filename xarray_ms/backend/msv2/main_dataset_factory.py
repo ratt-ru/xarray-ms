@@ -1,6 +1,6 @@
 import dataclasses
 import warnings
-from typing import Any, Dict, Mapping, Tuple, Type
+from typing import Any, Dict, List, Mapping, Tuple, Type
 
 import numpy as np
 from xarray import Variable
@@ -18,6 +18,8 @@ from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
 from xarray_ms.casa_types import ColumnDesc, FrequencyMeasures, Polarisations
 from xarray_ms.errors import IrregularGridWarning
 from xarray_ms.multiton import Multiton
+
+MAIN_DATASET_TYPES: List[str] = ["visibility", "spectrum", "wvr"]
 
 
 @dataclasses.dataclass
