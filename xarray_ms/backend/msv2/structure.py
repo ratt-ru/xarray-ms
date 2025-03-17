@@ -543,10 +543,6 @@ class MSv2Structure(Mapping):
     with Table.from_filename(subtable_path, lockoptions="nolock") as T:
       return T.to_arrow(columns=list(columns))
 
-  @property
-  def ms_factory(self) -> TableFactory:
-    return self._ms_factory
-
   def __init__(
     self, ms: TableFactory, partition_schema: List[str], auto_corrs: bool = True
   ):
