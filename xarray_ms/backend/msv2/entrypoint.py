@@ -251,7 +251,10 @@ class MSv2Store(AbstractWritableDataStore):
       "schema_version": "4.0.0",
       "creation_date": datetime.now(timezone.utc).isoformat(),
       "type": "visibility",
-      "xarray_ms_version": importlib_version("xarray-ms"),
+      "creator": {
+        "software_name": "xarray-ms",
+        "version": importlib_version("xarray-ms"),
+      },
     }
 
     return dict(sorted({**attrs, **factory.get_attrs()}.items()))
