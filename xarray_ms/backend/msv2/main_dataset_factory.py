@@ -16,6 +16,7 @@ from xarray_ms.backend.msv2.encoders import (
 )
 from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
 from xarray_ms.backend.msv2.table_factory import TableFactory
+from xarray_ms.casa_types import ColumnDesc, FrequencyMeasures, Polarisations
 from xarray_ms.errors import IrregularGridWarning
 
 
@@ -48,26 +49,39 @@ FIXED_DIMENSION_SIZES = {"uvw_label": 3}
 class MainDatasetFactory:
   _partition_key: PartitionKeyT
   _preferred_chunks: Dict[str, int]
-  _table_factory: TableFactory
+  _ms_factory: TableFactory
+  _subtable_factories: Dict[str, TableFactory]
   _structure_factory: MSv2StructureFactory
+  _antenna_factory: TableFactory
+  _spw_factory: TableFactory
+  _pol_factory: TableFactory
+  _obs_factory: TableFactory
+  _column_descs: Dict[str, ColumnDesc]
 
   def __init__(
     self,
     partition_key: PartitionKeyT,
     preferred_chunks: Dict[str, int],
-    table_factory: TableFactory,
+    ms_factory: TableFactory,
+    subtable_factories: Dict[str, TableFactory],
     structure_factory: MSv2StructureFactory,
   ):
     self._partition_key = partition_key
     self._preferred_chunks = preferred_chunks
-    self._table_factory = table_factory
+    self._ms_factory = ms_factory
+    self._subtable_factories = subtable_factories
     self._structure_factory = structure_factory
+
+    ms = ms_factory()
+    ms_table_desc = ms.tabledesc()
+    self._main_column_descs = {
+      c: ColumnDesc.from_descriptor(c, ms_table_desc) for c in ms.columns()
+    }
 
   def _variable_from_column(self, column: str) -> Variable:
     """Derive an xarray Variable from the MSv2 column descriptor and schemas"""
     structure = self._structure_factory()
     partition = structure[self._partition_key]
-    main_column_descs = structure.column_descs["MAIN"]
 
     try:
       schema = MSV4_to_MSV2_COLUMN_SCHEMAS[column]
@@ -75,15 +89,21 @@ class MainDatasetFactory:
       raise KeyError(f"Column {column} was not present")
 
     try:
-      column_desc = main_column_descs[schema.name]
+      column_desc = self._main_column_descs[schema.name]
     except KeyError:
       raise KeyError(f"No Column Descriptor exist for {schema.name}")
 
+    spw = self._subtable_factories["SPECTRAL_WINDOW"]()
+    pol = self._subtable_factories["POLARIZATION"]()
+
+    chan_freq = spw["CHAN_FREQ"][partition.spw_id].as_py()
+    corr_type = pol["CORR_TYPE"][partition.pol_id].as_py()
+
     dim_sizes = {
       "time": len(partition.time),
-      "baseline_id": structure.nbl,
-      "frequency": len(partition.chan_freq),
-      "polarization": len(partition.corr_type),
+      "baseline_id": partition.nbl,
+      "frequency": len(chan_freq),
+      "polarization": len(corr_type),
       **FIXED_DIMENSION_SIZES,
     }
 
@@ -97,7 +117,7 @@ class MainDatasetFactory:
     default = column_desc.dtype.type(schema.default)
 
     data = MSv2Array(
-      self._table_factory,
+      self._ms_factory,
       self._structure_factory,
       self._partition_key,
       schema.name,
@@ -110,7 +130,7 @@ class MainDatasetFactory:
 
     # Apply any measures encoding
     if schema.coder:
-      coder = schema.coder(schema.name, structure.column_descs["MAIN"])
+      coder = schema.coder(schema.name, self._main_column_descs)
       var = coder.decode(var)
 
     dims, data, attrs, encoding = unpack_for_decoding(var)
@@ -123,13 +143,29 @@ class MainDatasetFactory:
   def get_variables(self) -> Mapping[str, Variable]:
     structure = self._structure_factory()
     partition = structure[self._partition_key]
-    ant1, ant2 = structure.antenna_pairs
-    nbl = structure.nbl
+    ant1, ant2 = partition.antenna_pairs
+    nbl = partition.nbl
     assert (nbl,) == ant1.shape
 
-    ant_names = structure._ant["NAME"].to_numpy()
+    antenna = self._subtable_factories["ANTENNA"]()
+    ant_names = antenna["NAME"].to_numpy()
     ant1_names = ant_names[ant1]
     ant2_names = ant_names[ant2]
+
+    spw_id = partition.spw_id
+    pol_id = partition.pol_id
+    spw = self._subtable_factories["SPECTRAL_WINDOW"]()
+    pol = self._subtable_factories["POLARIZATION"]()
+
+    chan_freq = spw["CHAN_FREQ"][spw_id].as_py()
+    uchan_width = np.unique(spw["CHAN_WIDTH"][spw_id].as_py())
+    spw_name = spw["NAME"][spw_id].as_py()
+    spw_freq_group_name = spw["FREQ_GROUP_NAME"][spw_id].as_py()
+    spw_ref_freq = spw["REF_FREQUENCY"][spw_id].as_py()
+    spw_meas_freq_ref = spw["MEAS_FREQ_REF"][spw_id].as_py()
+    spw_frame = FrequencyMeasures(spw_meas_freq_ref).name.lower()
+
+    corr_type = Polarisations.from_values(pol["CORR_TYPE"][pol_id].as_py()).to_str()
 
     row_map = partition.row_map
     missing = np.count_nonzero(row_map == -1)
@@ -170,7 +206,7 @@ class MainDatasetFactory:
         "baseline_antenna2_name",
         (("baseline_id",), ant2_names, {"coordinates": "baseline_antenna2_name"}),
       ),
-      ("polarization", (("polarization",), partition.corr_type, None)),
+      ("polarization", (("polarization",), corr_type, None)),
       ("uvw_label", (("uvw_label",), ["u", "v", "w"], None)),
     ]
 
@@ -178,7 +214,7 @@ class MainDatasetFactory:
     coordinates = [(n, Variable(d, v, a, e)) for n, (d, v, a) in coordinates]
 
     # Add time coordinate
-    time_coder = TimeCoder("TIME", structure.column_descs["MAIN"])
+    time_coder = TimeCoder("TIME", self._main_column_descs)
 
     if partition.interval.size == 1:
       time_attrs = {"integration_time": partition.interval.item()}
@@ -206,22 +242,22 @@ class MainDatasetFactory:
     # Add frequency coordinate
     freq_attrs = {
       "type": "spectral_coord",
-      "frame": partition.spw_frame,
+      "frame": spw_frame,
       "units": ["Hz"],
-      "spectral_window_name": partition.spw_name or "<Unknown>",
-      "reference_frequency": partition.spw_ref_freq,
+      "spectral_window_name": spw_name or "<Unknown>",
+      "reference_frequency": spw_ref_freq,
       "effective_channel_width": "EFFECTIVE_CHANNEL_WIDTH",
     }
 
-    if partition.spw_freq_group_name:
-      freq_attrs["frequency_group_name"] = partition.spw_freq_group_name
+    if spw_freq_group_name:
+      freq_attrs["frequency_group_name"] = spw_freq_group_name
 
-    if partition.chan_width.size == 1:
-      freq_attrs["channel_width"] = partition.chan_width.item()
+    if uchan_width.size == 1:
+      freq_attrs["channel_width"] = uchan_width.item()
     else:
       freq_attrs["channel_width"] = np.nan
       warnings.warn(
-        f"Multiple channel widths {partition.chan_width} "
+        f"Multiple channel widths {uchan_width} "
         f"found in partition {self._partition_key}. "
         f'Setting frequency.attrs["channel_width"] = nan and '
         f"adding full resolution CHANNEL_FREQUENCY column.",
@@ -231,41 +267,24 @@ class MainDatasetFactory:
         "Full resolution CHANNEL_FREQUENCY and CHANNEL_WIDTH columns"
       )
 
-    coordinates.append(
-      ("frequency", Variable("frequency", partition.chan_freq, freq_attrs))
-    )
+    coordinates.append(("frequency", Variable("frequency", chan_freq, freq_attrs)))
 
     return FrozenDict(sorted(data_vars + coordinates))
-
-  def _partition_info(self) -> Dict[Any, Any]:
-    structure = self._structure_factory()
-    partition = structure[self._partition_key]
-
-    return dict(
-      sorted(
-        {
-          "spectal_window_name": partition.spw_name,
-          "field_name": list(set(partition.field_names)),
-          "polarization_setup": partition.corr_type,
-          "scan_number": list(set(partition.scan_numbers)),
-          "sub_scan_number": list(set(partition.sub_scan_numbers)),
-          "source_name": list(set(partition.source_names)),
-          "line_name": list(map(list, set(map(tuple, partition.line_names)))),
-          "intent": list(set(partition.intents)),
-        }.items()
-      )
-    )
 
   def _observation_info(self) -> Dict[str, Any]:
     structure = self._structure_factory()
     partition = structure[self._partition_key]
+    obs = self._subtable_factories["OBSERVATION"]()
+    observer = obs["OBSERVER"][partition.obs_id].as_py()
+    project = obs["PROJECT"][partition.obs_id].as_py()
+    # TODO: A Measures conversions is needed here
+    release_date = obs["RELEASE_DATE"][partition.obs_id].as_py()  # noqa: F841
 
     return dict(
       sorted(
         {
-          "observer": partition.observer,
-          "project": partition.project,
-          # "release_date": partition.release_date,
+          "observer": observer,
+          "project": project,
         }.items()
       )
     )
@@ -273,5 +292,4 @@ class MainDatasetFactory:
   def get_attrs(self) -> Dict[Any, Any]:
     return {
       "observation_info": self._observation_info(),
-      "partition_info": self._partition_info(),
     }
