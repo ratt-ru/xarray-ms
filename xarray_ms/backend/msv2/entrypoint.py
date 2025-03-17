@@ -17,7 +17,10 @@ from xarray.core.datatree import DataTree
 from xarray.core.utils import try_read_magic_number_from_file_or_path
 
 from xarray_ms.backend.msv2.antenna_dataset_factory import AntennaDatasetFactory
-from xarray_ms.backend.msv2.main_dataset_factory import MainDatasetFactory
+from xarray_ms.backend.msv2.main_dataset_factory import (
+  MAIN_DATASET_TYPES,
+  MainDatasetFactory,
+)
 from xarray_ms.backend.msv2.structure import (
   DEFAULT_PARTITION_COLUMNS,
   MSv2Structure,
@@ -420,7 +423,22 @@ class MSv2EntryPoint(BackendEntrypoint):
       **kwargs,
     )
 
-    return DataTree.from_dict(groups_dict)
+    dt = DataTree.from_dict(groups_dict)
+
+    # NOTE: Graft the main dataset close function onto the tree
+    # This does not seem to be properly transferred from the
+    # group_dict datasets yet
+    if (
+      len(
+        vis_ds := [
+          n for n in groups_dict.values() if n.attrs.get("type") in MAIN_DATASET_TYPES
+        ]
+      )
+      > 0
+    ):
+      dt.set_close(vis_ds[0]._close)
+
+    return dt
 
   @format_docstring(DEFAULT_PARTITION_COLUMNS=DEFAULT_PARTITION_COLUMNS)
   def open_groups_as_dict(

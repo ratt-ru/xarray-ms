@@ -5,7 +5,6 @@ import pytest
 import xarray
 import xarray.testing as xt
 from numpy.testing import assert_array_equal
-from xarray.backends.api import open_datatree
 
 from xarray_ms.backend.msv2.entrypoint import MSv2EntryPoint
 from xarray_ms.testing.utils import id_string
@@ -148,7 +147,7 @@ def test_open_datatree(simmed_ms):
 
   # Works with xarray default load mechanism
   with ExitStack() as stack:
-    mem_dt = open_datatree(simmed_ms)
+    mem_dt = stack.enter_context(xarray.open_datatree(simmed_ms))
     mem_dt.load()
     for node in mem_dt.subtree:
       if node.attrs.get("type") == "visibility":
@@ -159,7 +158,7 @@ def test_open_datatree(simmed_ms):
 
   # Works with default dask scheduler
   with ExitStack() as stack:
-    dt = open_datatree(simmed_ms, preferred_chunks=chunks)
+    dt = stack.enter_context(xarray.open_datatree(simmed_ms, preferred_chunks=chunks))
     for node in dt.subtree:
       if node.attrs.get("type") == "visibility":
         del node.attrs["creation_date"]
@@ -169,7 +168,7 @@ def test_open_datatree(simmed_ms):
   with ExitStack() as stack:
     cluster = stack.enter_context(LocalCluster(processes=True, n_workers=4))
     stack.enter_context(Client(cluster))
-    dt = open_datatree(simmed_ms, preferred_chunks=chunks)
+    dt = stack.enter_context(xarray.open_datatree(simmed_ms, preferred_chunks=chunks))
     for node in dt.subtree:
       if node.attrs.get("type") == "visibility":
         del node.attrs["creation_date"]
@@ -189,7 +188,7 @@ def test_open_datatree(simmed_ms):
 def test_open_datatree_chunking(simmed_ms):
   """Test opening a datatree with both uniform
   and partition-specific chunking"""
-  dt = open_datatree(
+  dt = xarray.open_datatree(
     simmed_ms,
     chunks={},
     preferred_chunks={"time": 3, "frequency": 2},
@@ -211,7 +210,7 @@ def test_open_datatree_chunking(simmed_ms):
     "uvw_label": (3,),
   }
 
-  dt = open_datatree(
+  dt = xarray.open_datatree(
     simmed_ms,
     chunks={},
     preferred_chunks={
