@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Use creator attribute to record xarray-ms version (:pr:`80`)
 * Generalise the TableFactory class into a Multiton class (:pr:`79`)
 * Refactor partitioning logic to be more robust (:pr:`78`)
 * The set of ANTENNA's related to a partition in the FEED table is
