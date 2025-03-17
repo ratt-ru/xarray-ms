@@ -370,8 +370,10 @@ class MSv2Structure(Mapping):
     def par_assign(sid, fid):
       sid[:] = field_source_id[fid]
 
-    pool.map(
-      par_assign, partition_args(source_id, chunk), partition_args(field_id, chunk)
+    list(
+      pool.map(
+        par_assign, partition_args(source_id, chunk), partition_args(field_id, chunk)
+      )
     )
     return source_id
 
@@ -391,8 +393,10 @@ class MSv2Structure(Mapping):
     def par_assign(ssn, sid):
       ssn[:] = state_ssn[sid]
 
-    pool.map(
-      par_assign, partition_args(subscan_nr, chunk), partition_args(state_id, chunk)
+    list(
+      pool.map(
+        par_assign, partition_args(subscan_nr, chunk), partition_args(state_id, chunk)
+      )
     )
     return subscan_nr
 
@@ -426,8 +430,10 @@ class MSv2Structure(Mapping):
     def par_assign(oid, sid):
       oid[:] = state_id_obs_mode_id_map[sid]
 
-    pool.map(
-      par_assign, partition_args(obs_mode_id, chunk), partition_args(state_id, chunk)
+    list(
+      pool.map(
+        par_assign, partition_args(obs_mode_id, chunk), partition_args(state_id, chunk)
+      )
     )
     return obs_mode_id, dict(obs_mode_state_id_map)
 
@@ -478,7 +484,7 @@ class MSv2Structure(Mapping):
       def par_assign(target, data):
         target[:] = data
 
-      data_ids = pool.map(inv_fn, udatas, indices)
+      data_ids = list(pool.map(inv_fn, udatas, indices))
       inverse = np.empty(len(data), dtype=indices[0].dtype)
       list(pool.map(par_assign, partition_args(inverse, chunk_size), data_ids))
 
