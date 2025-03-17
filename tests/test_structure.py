@@ -12,7 +12,7 @@ from xarray_ms.backend.msv2.structure import (
   TablePartitioner,
   baseline_id,
 )
-from xarray_ms.backend.msv2.table_factory import TableFactory
+from xarray_ms.multiton import Multiton
 
 
 @pytest.mark.parametrize("na", [4, 7])
@@ -27,11 +27,11 @@ def test_baseline_id(na, auto_corrs):
 @pytest.mark.parametrize("epoch", ["abcdef"])
 def test_structure_factory(simmed_ms, epoch):
   partition_schema = ["FIELD_ID", "DATA_DESC_ID", "OBSERVATION_ID", "OBS_MODE"]
-  table_factory = TableFactory(Table.from_filename, simmed_ms)
+  table_factory = Multiton(Table.from_filename, simmed_ms)
   from xarray_ms.backend.msv2.entrypoint import subtable_factory
 
   subtables = {
-    st: TableFactory(subtable_factory, f"{simmed_ms}::{st}")
+    st: Multiton(subtable_factory, f"{simmed_ms}::{st}")
     for st in ("DATA_DESCRIPTION", "FEED", "FIELD", "STATE")
   }
   structure_factory = MSv2StructureFactory(
@@ -107,11 +107,11 @@ def test_table_partitioner():
 
 def test_epoch(simmed_ms):
   partition_schema = ["FIELD_ID", "DATA_DESC_ID", "OBSERVATION_ID"]
-  table_factory = TableFactory(Table.from_filename, simmed_ms)
+  table_factory = Multiton(Table.from_filename, simmed_ms)
   from xarray_ms.backend.msv2.entrypoint import subtable_factory
 
   subtables = {
-    st: TableFactory(subtable_factory, f"{simmed_ms}::{st}")
+    st: Multiton(subtable_factory, f"{simmed_ms}::{st}")
     for st in ("DATA_DESCRIPTION", "FEED", "FIELD", "STATE")
   }
 

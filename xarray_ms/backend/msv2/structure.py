@@ -28,11 +28,11 @@ from arcae.lib.arrow_tables import Table
 from cacheout import Cache
 
 from xarray_ms.backend.msv2.partition import PartitionKeyT, TablePartitioner
-from xarray_ms.backend.msv2.table_factory import TableFactory
 from xarray_ms.errors import (
   InvalidMeasurementSet,
   InvalidPartitionKey,
 )
+from xarray_ms.multiton import Multiton
 
 logger = logging.getLogger(__name__)
 
@@ -226,8 +226,8 @@ class MSv2StructureFactory:
   """Hashable, callable and picklable factory class
   for creating and caching an MSv2Structure"""
 
-  _ms_factory: TableFactory
-  _subtable_factories: Dict[str, TableFactory]
+  _ms_factory: Multiton
+  _subtable_factories: Dict[str, Multiton]
   _partition_schema: List[str]
   _epoch: str
   _auto_corrs: bool
@@ -237,8 +237,8 @@ class MSv2StructureFactory:
 
   def __init__(
     self,
-    ms: TableFactory,
-    subtables: Dict[str, TableFactory],
+    ms: Multiton,
+    subtables: Dict[str, Multiton],
     partition_schema: List[str],
     epoch: str,
     auto_corrs: bool = True,
@@ -300,8 +300,8 @@ class MSv2StructureFactory:
 class MSv2Structure(Mapping):
   """Holds structural information about an MSv2 dataset"""
 
-  _ms_factory: TableFactory
-  _subtable_factories: Dict[str, TableFactory]
+  _ms_factory: Multiton
+  _subtable_factories: Dict[str, Multiton]
   _partition_columns: List[str]
   _subtable_partition_columns: List[str]
   _partitions: Mapping[PartitionKeyT, PartitionData]
@@ -571,8 +571,8 @@ class MSv2Structure(Mapping):
 
   def __init__(
     self,
-    ms: TableFactory,
-    subtable_factories: Dict[str, TableFactory],
+    ms: Multiton,
+    subtable_factories: Dict[str, Multiton],
     partition_schema: List[str],
     auto_corrs: bool = True,
   ):
@@ -589,16 +589,18 @@ class MSv2Structure(Mapping):
     self._partition_columns = partition_columns
     self._subtable_partition_columns = subtable_columns
 
-    ms_table = ms()
+    ms_table = ms.instance
     ms_name = ms_table.name()
 
     try:
-      data_description = subtable_factories["DATA_DESCRIPTION"]()
-      feed = subtable_factories["FEED"]()
-      state = subtable_factories["STATE"]()
-      field = subtable_factories["FIELD"]()
+      data_description = subtable_factories["DATA_DESCRIPTION"].instance
+      feed = subtable_factories["FEED"].instance
+      state = subtable_factories["STATE"].instance
+      field = subtable_factories["FIELD"].instance
     except KeyError as e:
-      raise InvalidMeasurementSet(f"Measurement Set is missing required subtable {e}")
+      raise InvalidMeasurementSet(
+        f"Measurement Set {ms_name} is missing required subtable {e}"
+      )
 
     other_columns = ["FEED1", "FEED2", "INTERVAL"]
     read_columns = (

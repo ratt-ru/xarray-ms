@@ -23,8 +23,8 @@ from xarray_ms.backend.msv2.structure import (
   MSv2Structure,
   MSv2StructureFactory,
 )
-from xarray_ms.backend.msv2.table_factory import TableFactory
 from xarray_ms.errors import InvalidPartitionKey
+from xarray_ms.multiton import Multiton
 from xarray_ms.utils import format_docstring
 
 if TYPE_CHECKING:
@@ -91,18 +91,18 @@ def initialise_default_args(
   ninstances: int,
   auto_corrs: bool,
   epoch: str | None,
-  ms_factory: TableFactory | None,
-  subtable_factories: Dict[str, TableFactory] | None,
+  ms_factory: Multiton | None,
+  subtable_factories: Dict[str, Multiton] | None,
   partition_schema: List[str] | None,
   structure_factory: MSv2StructureFactory | None,
-) -> Tuple[str, TableFactory, Dict[str, TableFactory], List[str], MSv2StructureFactory]:
+) -> Tuple[str, Multiton, Dict[str, Multiton], List[str], MSv2StructureFactory]:
   """
   Ensures consistency when initialising default arguments from multiple locations
   """
   if not os.path.exists(ms):
     raise ValueError(f"MS {ms} does not exist")
 
-  ms_factory = ms_factory or TableFactory(
+  ms_factory = ms_factory or Multiton(
     Table.from_filename,
     ms,
     ninstances=ninstances,
@@ -110,7 +110,7 @@ def initialise_default_args(
     lockoptions="nolock",
   )
   subtable_factories = subtable_factories or {
-    subtable: TableFactory(subtable_factory, f"{ms}::{subtable}")
+    subtable: Multiton(subtable_factory, f"{ms}::{subtable}")
     for subtable in DEFAULT_SUBTABLES
   }
 
@@ -137,8 +137,8 @@ class MSv2Store(AbstractWritableDataStore):
     "_epoch",
   )
 
-  _table_factory: TableFactory
-  _subtable_factories: Dict[str, TableFactory]
+  _table_factory: Multiton
+  _subtable_factories: Dict[str, Multiton]
   _structure_factory: MSv2StructureFactory
   _partition_schema: List[str]
   _partition_key: PartitionKeyT
@@ -149,8 +149,8 @@ class MSv2Store(AbstractWritableDataStore):
 
   def __init__(
     self,
-    table_factory: TableFactory,
-    subtable_factories: Dict[str, TableFactory],
+    table_factory: Multiton,
+    subtable_factories: Dict[str, Multiton],
     structure_factory: MSv2StructureFactory,
     partition_schema: List[str],
     partition_key: PartitionKeyT,
@@ -228,7 +228,9 @@ class MSv2Store(AbstractWritableDataStore):
     )
 
   def close(self, **kwargs):
-    pass
+    self._table_factory.release()
+    for subtable_factory in self._subtable_factories.values():
+      subtable_factory.release()
 
   def main_dataset_factory(self) -> MainDatasetFactory:
     return MainDatasetFactory(

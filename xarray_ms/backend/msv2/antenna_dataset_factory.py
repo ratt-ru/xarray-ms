@@ -4,8 +4,8 @@ import numpy as np
 from xarray import Dataset, Variable
 
 from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
-from xarray_ms.backend.msv2.table_factory import TableFactory
 from xarray_ms.errors import InvalidMeasurementSet
+from xarray_ms.multiton import Multiton
 
 RELOCATABLE_ARRAY = {"ALMA", "VLA", "NOEMA", "EVLA"}
 
@@ -13,13 +13,13 @@ RELOCATABLE_ARRAY = {"ALMA", "VLA", "NOEMA", "EVLA"}
 class AntennaDatasetFactory:
   _partition_key: PartitionKeyT
   _structure_factory: MSv2StructureFactory
-  _subtable_factories: Dict[str, TableFactory]
+  _subtable_factories: Dict[str, Multiton]
 
   def __init__(
     self,
     partition_key: PartitionKeyT,
     structure_factory: MSv2StructureFactory,
-    subtable_factories: Dict[str, TableFactory],
+    subtable_factories: Dict[str, Multiton],
   ):
     self._partition_key = partition_key
     self._structure_factory = structure_factory
@@ -28,9 +28,9 @@ class AntennaDatasetFactory:
   def get_dataset(self) -> Mapping[str, Variable]:
     structure = self._structure_factory()
     partition = structure[self._partition_key]
-    ants = self._subtable_factories["ANTENNA"]()
-    feeds = self._subtable_factories["FEED"]()
-    obs = self._subtable_factories["OBSERVATION"]()
+    ants = self._subtable_factories["ANTENNA"].instance
+    feeds = self._subtable_factories["FEED"].instance
+    obs = self._subtable_factories["OBSERVATION"].instance
 
     telescope_name = obs["TELESCOPE_NAME"][partition.obs_id].as_py()
 
