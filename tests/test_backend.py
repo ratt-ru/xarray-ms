@@ -190,6 +190,7 @@ def test_open_datatree_chunking(simmed_ms):
   and partition-specific chunking"""
   dt = xarray.open_datatree(
     simmed_ms,
+    auto_corrs=True,
     chunks={},
     preferred_chunks={"time": 3, "frequency": 2},
   )
@@ -212,6 +213,7 @@ def test_open_datatree_chunking(simmed_ms):
 
   dt = xarray.open_datatree(
     simmed_ms,
+    auto_corrs=True,
     chunks={},
     preferred_chunks={
       "D=0": {"time": 2, "baseline_id": 2},

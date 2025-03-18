@@ -21,7 +21,7 @@ from xarray_ms.errors import IrregularGridWarning
 )
 def test_regular_read(simmed_ms):
   """Test for ramp function values produced by simulator"""
-  xdt = xarray.open_datatree(simmed_ms)
+  xdt = xarray.open_datatree(simmed_ms, auto_corrs=True)
 
   for p in ["000", "001"]:
     node = xdt[f"backend_partition_{p}"]
@@ -70,7 +70,7 @@ def _excise_some_baselines(data_dict):
 def test_irregular_read(simmed_ms):
   """Test that excluding baselines works"""
   with pytest.warns(IrregularGridWarning, match="rows missing from the full"):
-    xdt = xarray.open_datatree(simmed_ms)
+    xdt = xarray.open_datatree(simmed_ms, auto_corrs=True)
 
   for p in ["000", "001"]:
     node = xdt[f"backend_partition_{p}"]
@@ -135,7 +135,7 @@ def _randomise_trailing_intervals(data_dict):
 )
 def test_differing_trailing_intervals(simmed_ms):
   """Test that differing interval values in the trailing timestep are ignored"""
-  xdt = xarray.open_datatree(simmed_ms)
+  xdt = xarray.open_datatree(simmed_ms, auto_corrs=True)
 
   for p in ["000", "001"]:
     node = xdt[f"backend_partition_{p}"]
@@ -168,7 +168,7 @@ def _randomise_starting_intervals(data_dict):
 def test_differing_start_intervals(simmed_ms):
   """Test that starting differing interval values result in nan intervals"""
   with pytest.warns(IrregularGridWarning, match="Multiple intervals"):
-    xdt = xarray.open_datatree(simmed_ms)
+    xdt = xarray.open_datatree(simmed_ms, auto_corrs=True)
 
   for p in ["000", "001"]:
     node = xdt[f"backend_partition_{p}"]
