@@ -578,7 +578,7 @@ class MSv2Structure(Mapping):
     ms: Multiton,
     subtable_factories: Dict[str, Multiton],
     partition_schema: List[str],
-    auto_corrs: bool = True,
+    auto_corrs: bool,
   ):
     import time as modtime
 
