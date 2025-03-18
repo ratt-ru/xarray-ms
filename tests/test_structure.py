@@ -4,6 +4,7 @@ import pickle
 import numpy as np
 import pyarrow as pa
 import pytest
+import xarray
 from arcae.lib.arrow_tables import Table
 from numpy.testing import assert_array_equal, assert_equal
 
@@ -28,7 +29,7 @@ def test_baseline_id(na, auto_corrs):
 def test_structure_factory(simmed_ms, epoch):
   partition_schema = ["FIELD_ID", "DATA_DESC_ID", "OBSERVATION_ID", "OBS_MODE"]
   table_factory = Multiton(Table.from_filename, simmed_ms)
-  from xarray_ms.backend.msv2.entrypoint import subtable_factory
+  from xarray_ms.backend.msv2.entrypoint_args import subtable_factory
 
   subtables = {
     st: Multiton(subtable_factory, f"{simmed_ms}::{st}")
@@ -42,9 +43,9 @@ def test_structure_factory(simmed_ms, epoch):
   structure_factory2 = MSv2StructureFactory(
     table_factory, subtables, partition_schema, epoch
   )
-  assert structure_factory() is structure_factory2()
+  assert structure_factory.instance is structure_factory2.instance
 
-  keys = tuple(k for kv in structure_factory().keys() for k, _ in kv)
+  keys = tuple(k for kv in structure_factory.instance.keys() for k, _ in kv)
   assert tuple(sorted(partition_schema)) == keys
 
 
@@ -108,7 +109,7 @@ def test_table_partitioner():
 def test_epoch(simmed_ms):
   partition_schema = ["FIELD_ID", "DATA_DESC_ID", "OBSERVATION_ID"]
   table_factory = Multiton(Table.from_filename, simmed_ms)
-  from xarray_ms.backend.msv2.entrypoint import subtable_factory
+  from xarray_ms.backend.msv2.entrypoint_args import subtable_factory
 
   subtables = {
     st: Multiton(subtable_factory, f"{simmed_ms}::{st}")
@@ -122,10 +123,19 @@ def test_epoch(simmed_ms):
     table_factory, subtables, partition_schema, "abc"
   )
 
-  assert structure_factory() is structure_factory2()
+  assert structure_factory.instance is structure_factory2.instance
 
   structure_factory3 = MSv2StructureFactory(
     table_factory, subtables, partition_schema, "def"
   )
 
-  assert structure_factory() is not structure_factory3()
+  assert structure_factory.instance is not structure_factory3.instance
+
+
+def test_msv2_structure_release(simmed_ms):
+  assert len(MSv2StructureFactory._STRUCTURE_CACHE) == 0
+
+  with xarray.open_datatree(simmed_ms):
+    assert len(MSv2StructureFactory._STRUCTURE_CACHE) > 0
+
+  assert len(MSv2StructureFactory._STRUCTURE_CACHE) == 0

@@ -26,7 +26,7 @@ class AntennaDatasetFactory:
     self._subtable_factories = subtable_factories
 
   def get_dataset(self) -> Mapping[str, Variable]:
-    structure = self._structure_factory()
+    structure = self._structure_factory.instance
     partition = structure[self._partition_key]
     ants = self._subtable_factories["ANTENNA"].instance
     feeds = self._subtable_factories["FEED"].instance
