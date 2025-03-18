@@ -5,7 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
-* Refactor dataset factories into `factories` subpackage (:pr:`83`)
+* Refactor dataset factories into `factories` subpackage (:pr:`83`, :pr:`86`)
 * Use a CommonStoreArgs class to default initialise common store arguments (:pr:`83`)
 * Release resources when datasets or datatrees are closed (:pr:`81`)
 * Use creator attribute to record xarray-ms version (:pr:`80`)

@@ -417,7 +417,7 @@ class MSv2EntryPoint(BackendEntrypoint):
       preferred_chunks,
       None,
       None,
-      None,
+      structure_factory,
     )
 
     # /path/to/some_name.ext -> some_name
