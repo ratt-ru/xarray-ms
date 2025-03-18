@@ -4,11 +4,9 @@ import os
 import warnings
 from datetime import datetime, timezone
 from importlib.metadata import version as importlib_version
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Tuple
-from uuid import uuid4
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping
 
 import xarray
-from arcae.lib.arrow_tables import Table
 from xarray.backends import BackendEntrypoint
 from xarray.backends.common import AbstractWritableDataStore, _normalize_path
 from xarray.backends.store import StoreBackendEntrypoint
@@ -16,10 +14,10 @@ from xarray.core.dataset import Dataset
 from xarray.core.datatree import DataTree
 from xarray.core.utils import try_read_magic_number_from_file_or_path
 
-from xarray_ms.backend.msv2.antenna_dataset_factory import AntennaDatasetFactory
-from xarray_ms.backend.msv2.main_dataset_factory import (
-  MAIN_DATASET_TYPES,
-  MainDatasetFactory,
+from xarray_ms.backend.msv2.entrypoint_utils import CommonStoreArgs
+from xarray_ms.backend.msv2.factories import (
+  AntennaDatasetFactory,
+  CorrelatedDatasetFactory,
 )
 from xarray_ms.backend.msv2.structure import (
   DEFAULT_PARTITION_COLUMNS,
@@ -27,6 +25,7 @@ from xarray_ms.backend.msv2.structure import (
   MSv2StructureFactory,
 )
 from xarray_ms.errors import InvalidPartitionKey
+from xarray_ms.msv4_types import CORRELATED_DATASET_TYPES
 from xarray_ms.multiton import Multiton
 from xarray_ms.utils import format_docstring
 
@@ -69,60 +68,6 @@ def promote_chunks(
       return_chunks.update((k, v) for k in rkeys)
 
   return return_chunks
-
-
-DEFAULT_SUBTABLES = [
-  "ANTENNA",
-  "DATA_DESCRIPTION",
-  "FEED",
-  "FIELD",
-  "SPECTRAL_WINDOW",
-  "STATE",
-  "POLARIZATION",
-  "OBSERVATION",
-]
-
-
-def subtable_factory(name: str):
-  return Table.from_filename(
-    name, ninstances=1, readonly=True, lockoptions="nolock"
-  ).to_arrow()
-
-
-def initialise_default_args(
-  ms: str,
-  ninstances: int,
-  auto_corrs: bool,
-  epoch: str | None,
-  ms_factory: Multiton | None,
-  subtable_factories: Dict[str, Multiton] | None,
-  partition_schema: List[str] | None,
-  structure_factory: MSv2StructureFactory | None,
-) -> Tuple[str, Multiton, Dict[str, Multiton], List[str], MSv2StructureFactory]:
-  """
-  Ensures consistency when initialising default arguments from multiple locations
-  """
-  if not os.path.exists(ms):
-    raise ValueError(f"MS {ms} does not exist")
-
-  ms_factory = ms_factory or Multiton(
-    Table.from_filename,
-    ms,
-    ninstances=ninstances,
-    readonly=True,
-    lockoptions="nolock",
-  )
-  subtable_factories = subtable_factories or {
-    subtable: Multiton(subtable_factory, f"{ms}::{subtable}")
-    for subtable in DEFAULT_SUBTABLES
-  }
-
-  epoch = epoch or uuid4().hex[:8]
-  partition_schema = partition_schema or DEFAULT_PARTITION_COLUMNS
-  structure_factory = structure_factory or MSv2StructureFactory(
-    ms_factory, subtable_factories, partition_schema, epoch, auto_corrs=auto_corrs
-  )
-  return epoch, ms_factory, subtable_factories, partition_schema, structure_factory
 
 
 class MSv2Store(AbstractWritableDataStore):
@@ -188,22 +133,21 @@ class MSv2Store(AbstractWritableDataStore):
     if not isinstance(ms, str):
       raise ValueError("Measurement Sets paths must be strings")
 
-    epoch, table_factory, subtable_factories, partition_schema, structure_factory = (
-      initialise_default_args(
-        ms,
-        ninstances,
-        auto_corrs,
-        epoch,
-        None,
-        None,
-        partition_schema,
-        structure_factory,
-      )
+    store_args = CommonStoreArgs(
+      ms,
+      ninstances,
+      auto_corrs,
+      epoch,
+      partition_schema,
+      preferred_chunks,
+      None,
+      None,
+      structure_factory,
     )
 
     # Resolve the user supplied partition key against actual
     # partition keys
-    structure = structure_factory()
+    structure = store_args.structure_factory.instance
     partition_keys = structure.resolve_key(partition_key)
     if len(partition_keys) == 0:
       raise ValueError(f"{partition_key} not in {list(structure.keys())}")
@@ -215,28 +159,26 @@ class MSv2Store(AbstractWritableDataStore):
         )
       partition_key = first_key
 
-    if preferred_chunks is None:
-      preferred_chunks = {}
-
     return cls(
-      table_factory,
-      subtable_factories,
-      structure_factory,
-      partition_schema=partition_schema,
+      store_args.ms_factory,
+      store_args.subtable_factories,
+      store_args.structure_factory,
+      partition_schema=store_args.partition_schema,
       partition_key=partition_key,
-      preferred_chunks=preferred_chunks,
-      auto_corrs=auto_corrs,
-      ninstances=ninstances,
-      epoch=epoch,
+      preferred_chunks=store_args.preferred_chunks,
+      auto_corrs=store_args.auto_corrs,
+      ninstances=store_args.ninstances,
+      epoch=store_args.epoch,
     )
 
   def close(self, **kwargs):
     self._table_factory.release()
+    self._structure_factory.release()
     for subtable_factory in self._subtable_factories.values():
       subtable_factory.release()
 
-  def main_dataset_factory(self) -> MainDatasetFactory:
-    return MainDatasetFactory(
+  def main_dataset_factory(self) -> CorrelatedDatasetFactory:
+    return CorrelatedDatasetFactory(
       self._partition_key,
       self._preferred_chunks,
       self._table_factory,
@@ -431,7 +373,9 @@ class MSv2EntryPoint(BackendEntrypoint):
     if (
       len(
         vis_ds := [
-          n for n in groups_dict.values() if n.attrs.get("type") in MAIN_DATASET_TYPES
+          n
+          for n in groups_dict.values()
+          if n.attrs.get("type") in CORRELATED_DATASET_TYPES
         ]
       )
       > 0
@@ -464,40 +408,46 @@ class MSv2EntryPoint(BackendEntrypoint):
     else:
       raise ValueError("Measurement Set paths must be strings")
 
-    epoch, _, subtable_factories, partition_schema, structure_factory = (
-      initialise_default_args(
-        ms, ninstances, auto_corrs, epoch, None, None, partition_schema, None
-      )
+    store_args = CommonStoreArgs(
+      ms,
+      ninstances,
+      auto_corrs,
+      epoch,
+      partition_schema,
+      preferred_chunks,
+      None,
+      None,
+      None,
     )
 
     # /path/to/some_name.ext -> some_name
     ms_name, _ = os.path.splitext(os.path.basename(ms.rstrip(os.path.sep)))
 
-    structure = structure_factory()
+    structure = store_args.structure_factory.instance
     datasets = {}
-    pchunks = promote_chunks(structure, preferred_chunks)
+    pchunks = promote_chunks(structure, store_args.preferred_chunks)
 
     for p, partition_key in enumerate(structure):
       ds = xarray.open_dataset(
-        ms,
+        store_args.ms,
         drop_variables=drop_variables,
         engine="xarray-ms:msv2",
-        partition_schema=partition_schema,
+        partition_schema=store_args.partition_schema,
         partition_key=partition_key,
         preferred_chunks=pchunks[partition_key]
         if isinstance(pchunks, Mapping)
         else pchunks,
-        auto_corrs=auto_corrs,
-        ninstances=ninstances,
-        epoch=epoch,
-        structure_factory=structure_factory,
+        auto_corrs=store_args.auto_corrs,
+        ninstances=store_args.ninstances,
+        epoch=store_args.epoch,
+        structure_factory=store_args.structure_factory,
         **kwargs,
       )
 
       antenna_factory = AntennaDatasetFactory(
         partition_key,
-        structure_factory,
-        subtable_factories,
+        store_args.structure_factory,
+        store_args.subtable_factories,
       )
 
       path = f"{ms_name}_partition_{p:03}"

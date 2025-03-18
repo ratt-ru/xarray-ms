@@ -70,7 +70,7 @@ class MSv2Array(BackendArray):
     assert len(key) == len(self.shape)
     expected_shape = tuple(slice_length(k, s) for k, s in zip(key, self.shape))
     # Map the (time, baseline_id) coordinates onto row indices
-    rows = self._structure_factory()[self._partition].row_map[key[:2]]
+    rows = self._structure_factory.instance[self._partition].row_map[key[:2]]
     xkey = (rows.ravel(),) + key[2:]
     row_shape = (rows.size,) + expected_shape[2:]
     result = np.full(row_shape, self._default, dtype=self.dtype)

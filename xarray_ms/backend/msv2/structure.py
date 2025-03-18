@@ -284,17 +284,21 @@ class MSv2StructureFactory:
       ),
     )
 
-  def __call__(self, *args, **kw) -> MSv2Structure:
-    assert not args and not kw
-    return self._STRUCTURE_CACHE.get(
-      self,
-      lambda self: MSv2Structure(
-        self._ms_factory,
-        self._subtable_factories,
-        self._partition_schema,
-        self._auto_corrs,
-      ),
+  @staticmethod
+  def _create_instance(self):
+    return MSv2Structure(
+      self._ms_factory,
+      self._subtable_factories,
+      self._partition_schema,
+      self._auto_corrs,
     )
+
+  @property
+  def instance(self) -> MSv2Structure:
+    return self._STRUCTURE_CACHE.get(self, self._create_instance)
+
+  def release(self) -> bool:
+    return self._STRUCTURE_CACHE.delete(self) > 0
 
 
 class MSv2Structure(Mapping):

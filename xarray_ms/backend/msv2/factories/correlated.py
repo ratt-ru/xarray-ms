@@ -1,6 +1,6 @@
 import dataclasses
 import warnings
-from typing import Any, Dict, List, Mapping, Tuple, Type
+from typing import Any, Dict, Mapping, Tuple, Type
 
 import numpy as np
 from xarray import Variable
@@ -18,8 +18,6 @@ from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
 from xarray_ms.casa_types import ColumnDesc, FrequencyMeasures, Polarisations
 from xarray_ms.errors import IrregularGridWarning
 from xarray_ms.multiton import Multiton
-
-MAIN_DATASET_TYPES: List[str] = ["visibility", "spectrum", "wvr"]
 
 
 @dataclasses.dataclass
@@ -48,7 +46,7 @@ MSV4_to_MSV2_COLUMN_SCHEMAS = {
 FIXED_DIMENSION_SIZES = {"uvw_label": 3}
 
 
-class MainDatasetFactory:
+class CorrelatedDatasetFactory:
   _partition_key: PartitionKeyT
   _preferred_chunks: Dict[str, int]
   _ms_factory: Multiton
@@ -82,7 +80,7 @@ class MainDatasetFactory:
 
   def _variable_from_column(self, column: str) -> Variable:
     """Derive an xarray Variable from the MSv2 column descriptor and schemas"""
-    structure = self._structure_factory()
+    structure = self._structure_factory.instance
     partition = structure[self._partition_key]
 
     try:
@@ -143,7 +141,7 @@ class MainDatasetFactory:
     return Variable(dims, LazilyIndexedArray(data), attrs, encoding, fastpath=True)
 
   def get_variables(self) -> Mapping[str, Variable]:
-    structure = self._structure_factory()
+    structure = self._structure_factory.instance
     partition = structure[self._partition_key]
     ant1, ant2 = partition.antenna_pairs
     nbl = partition.nbl
@@ -274,7 +272,7 @@ class MainDatasetFactory:
     return FrozenDict(sorted(data_vars + coordinates))
 
   def _observation_info(self) -> Dict[str, Any]:
-    structure = self._structure_factory()
+    structure = self._structure_factory.instance
     partition = structure[self._partition_key]
     obs = self._subtable_factories["OBSERVATION"].instance
     observer = obs["OBSERVER"][partition.obs_id].as_py()
