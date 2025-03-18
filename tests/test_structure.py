@@ -29,7 +29,7 @@ def test_baseline_id(na, auto_corrs):
 def test_structure_factory(simmed_ms, epoch):
   partition_schema = ["FIELD_ID", "DATA_DESC_ID", "OBSERVATION_ID", "OBS_MODE"]
   table_factory = Multiton(Table.from_filename, simmed_ms)
-  from xarray_ms.backend.msv2.entrypoint_args import subtable_factory
+  from xarray_ms.backend.msv2.entrypoint_utils import subtable_factory
 
   subtables = {
     st: Multiton(subtable_factory, f"{simmed_ms}::{st}")
@@ -109,7 +109,7 @@ def test_table_partitioner():
 def test_epoch(simmed_ms):
   partition_schema = ["FIELD_ID", "DATA_DESC_ID", "OBSERVATION_ID"]
   table_factory = Multiton(Table.from_filename, simmed_ms)
-  from xarray_ms.backend.msv2.entrypoint_args import subtable_factory
+  from xarray_ms.backend.msv2.entrypoint_utils import subtable_factory
 
   subtables = {
     st: Multiton(subtable_factory, f"{simmed_ms}::{st}")

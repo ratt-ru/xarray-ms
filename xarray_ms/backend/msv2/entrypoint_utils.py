@@ -39,9 +39,22 @@ class CommonStoreArgs:
   auto_corrs: bool
   epoch: str
   partition_schema: List[str]
+  preferred_chunks: Dict[str, int]
   ms_factory: Multiton
   subtable_factories: Dict[str, Multiton]
   structure_factory: MSv2StructureFactory
+
+  __slots__ = (
+    "ms",
+    "ninstances",
+    "auto_corrs",
+    "epoch",
+    "partition_schema",
+    "preferred_chunks",
+    "ms_factory",
+    "subtable_factories",
+    "structure_factory",
+  )
 
   def __init__(
     self,
@@ -50,6 +63,7 @@ class CommonStoreArgs:
     auto_corrs: bool = True,
     epoch: str | None = None,
     partition_schema: List[str] | None = None,
+    preferred_chunks: Dict[str, int] | None = None,
     ms_factory: Multiton | None = None,
     subtable_factories: Dict[str, Multiton] | None = None,
     structure_factory: MSv2StructureFactory | None = None,
@@ -62,6 +76,7 @@ class CommonStoreArgs:
     self.auto_corrs = auto_corrs
     self.epoch = epoch or uuid4().hex[:8]
     self.partition_schema = partition_schema or DEFAULT_PARTITION_COLUMNS
+    self.preferred_chunks = preferred_chunks or {}
     self.ms_factory = ms_factory or Multiton(
       Table.from_filename,
       self.ms,

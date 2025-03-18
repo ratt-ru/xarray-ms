@@ -14,7 +14,7 @@ from xarray.core.dataset import Dataset
 from xarray.core.datatree import DataTree
 from xarray.core.utils import try_read_magic_number_from_file_or_path
 
-from xarray_ms.backend.msv2.entrypoint_args import CommonStoreArgs
+from xarray_ms.backend.msv2.entrypoint_utils import CommonStoreArgs
 from xarray_ms.backend.msv2.factories import (
   AntennaDatasetFactory,
   CorrelatedDatasetFactory,
@@ -134,7 +134,15 @@ class MSv2Store(AbstractWritableDataStore):
       raise ValueError("Measurement Sets paths must be strings")
 
     store_args = CommonStoreArgs(
-      ms, ninstances, auto_corrs, epoch, partition_schema, None, None, structure_factory
+      ms,
+      ninstances,
+      auto_corrs,
+      epoch,
+      partition_schema,
+      preferred_chunks,
+      None,
+      None,
+      structure_factory,
     )
 
     # Resolve the user supplied partition key against actual
@@ -151,16 +159,13 @@ class MSv2Store(AbstractWritableDataStore):
         )
       partition_key = first_key
 
-    if preferred_chunks is None:
-      preferred_chunks = {}
-
     return cls(
       store_args.ms_factory,
       store_args.subtable_factories,
       store_args.structure_factory,
       partition_schema=store_args.partition_schema,
       partition_key=partition_key,
-      preferred_chunks=preferred_chunks,
+      preferred_chunks=store_args.preferred_chunks,
       auto_corrs=store_args.auto_corrs,
       ninstances=store_args.ninstances,
       epoch=store_args.epoch,
@@ -404,7 +409,15 @@ class MSv2EntryPoint(BackendEntrypoint):
       raise ValueError("Measurement Set paths must be strings")
 
     store_args = CommonStoreArgs(
-      ms, ninstances, auto_corrs, epoch, partition_schema, None, None, None
+      ms,
+      ninstances,
+      auto_corrs,
+      epoch,
+      partition_schema,
+      preferred_chunks,
+      None,
+      None,
+      None,
     )
 
     # /path/to/some_name.ext -> some_name
@@ -412,11 +425,11 @@ class MSv2EntryPoint(BackendEntrypoint):
 
     structure = store_args.structure_factory.instance
     datasets = {}
-    pchunks = promote_chunks(structure, preferred_chunks)
+    pchunks = promote_chunks(structure, store_args.preferred_chunks)
 
     for p, partition_key in enumerate(structure):
       ds = xarray.open_dataset(
-        ms,
+        store_args.ms,
         drop_variables=drop_variables,
         engine="xarray-ms:msv2",
         partition_schema=store_args.partition_schema,
