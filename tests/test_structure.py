@@ -36,12 +36,12 @@ def test_structure_factory(simmed_ms, epoch):
     for st in ("DATA_DESCRIPTION", "FEED", "FIELD", "STATE")
   }
   structure_factory = MSv2StructureFactory(
-    table_factory, subtables, partition_schema, epoch
+    table_factory, subtables, partition_schema, epoch, True
   )
   assert pickle.loads(pickle.dumps(structure_factory)) == structure_factory
 
   structure_factory2 = MSv2StructureFactory(
-    table_factory, subtables, partition_schema, epoch
+    table_factory, subtables, partition_schema, epoch, True
   )
   assert structure_factory.instance is structure_factory2.instance
 
@@ -117,16 +117,16 @@ def test_epoch(simmed_ms):
   }
 
   structure_factory = MSv2StructureFactory(
-    table_factory, subtables, partition_schema, "abc"
+    table_factory, subtables, partition_schema, "abc", True
   )
   structure_factory2 = MSv2StructureFactory(
-    table_factory, subtables, partition_schema, "abc"
+    table_factory, subtables, partition_schema, "abc", True
   )
 
   assert structure_factory.instance is structure_factory2.instance
 
   structure_factory3 = MSv2StructureFactory(
-    table_factory, subtables, partition_schema, "def"
+    table_factory, subtables, partition_schema, "def", True
   )
 
   assert structure_factory.instance is not structure_factory3.instance

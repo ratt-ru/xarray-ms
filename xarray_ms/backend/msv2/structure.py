@@ -241,7 +241,7 @@ class MSv2StructureFactory:
     subtables: Dict[str, Multiton],
     partition_schema: List[str],
     epoch: str,
-    auto_corrs: bool = True,
+    auto_corrs: bool,
   ):
     self._ms_factory = ms
     self._subtable_factories = subtables
