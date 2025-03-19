@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Fix no-autocorrelation case when constructing partition row maps (:pr:`85`)
 * Default auto correlations to `False` (:pr:`85`)
 * Refactor dataset factories into `factories` subpackage (:pr:`83`, :pr:`86`)
 * Use a CommonStoreArgs class to default initialise common store arguments (:pr:`83`)
