@@ -1,40 +1,27 @@
-from contextlib import nullcontext
-
 import numpy as np
 import numpy.testing as npt
 import pytest
 import xarray
 from arcae.lib.arrow_tables import Table, ms_descriptor
 
-from xarray_ms.errors import IrregularGridWarning
-
 NANTENNA = 6
 
 
-def _set_antenna_ids(data_dict):
-  """Align ANTENNA1 and ANTENNA2 with the FEED table setup in the test csae below"""
-  ddid = data_dict["DATA_DESC_ID"][-1]
-  nrow = len(ddid)
-  ddid = np.unique(ddid).item()
-
-  if ddid == 0:
-    ant_ids = np.asarray([1, 2], np.int32)
-  elif ddid == 1:
+def _set_ddid_antenna_ids(desc):
+  if desc.DATA_DESC_ID.item() == 0:
+    ant_ids = np.array([1, 2], np.int32)
+  elif desc.DATA_DESC_ID.item() == 1:
     ant_ids = np.array([0, 2], np.int32)
   else:
-    raise ValueError(f"Invalid DATA_DESC_ID {ddid}")
+    raise NotImplementedError(f"DATA_DESC_ID {desc.DATA_DESC_ID}")
 
-  # k = 0 produces autocorrs
-  ant1, ant2 = (ant_ids[a] for a in np.triu_indices(len(ant_ids), 0))
-  # This doesn't produce a perfectly aligned grid
-  # but is sufficient for the test case below
-  ant1 = np.tile(ant1, (nrow + ant1.size - 1) // ant1.size)[:nrow]
-  ant2 = np.repeat(ant2, (nrow + ant2.size - 1) // ant2.size)[:nrow]
+  # k = 0 produces full resolution grid
+  ant1, ant2 = (ant_ids[a] for a in np.triu_indices(ant_ids.size, 0))
 
-  data_dict["ANTENNA1"][-1][:] = ant1
-  data_dict["ANTENNA2"][-1][:] = ant2
+  desc.ANTENNA1 = ant1
+  desc.ANTENNA2 = ant2
 
-  return data_dict
+  return desc
 
 
 @pytest.mark.parametrize(
@@ -44,7 +31,8 @@ def _set_antenna_ids(data_dict):
       "name": "backend.ms",
       "nantenna": NANTENNA,
       "data_description": [(8, ["XX", "XY", "YX", "YY"]), (4, ["RR", "LL"])],
-      "transform_data": _set_antenna_ids,
+      "transform_desc": _set_ddid_antenna_ids,
+      "auto_corrs": True,
     }
   ],
   indirect=True,
@@ -125,8 +113,7 @@ def test_antenna_feed_join(simmed_ms, auto_corrs):
     T.putcol("POLARIZATION_TYPE", np.array([["R", "L"]]), index=index)
     _fill_other_columns(T, index)
 
-  with pytest.warns(IrregularGridWarning) if auto_corrs else nullcontext():
-    dt = xarray.open_datatree(simmed_ms, auto_corrs=auto_corrs)
+  dt = xarray.open_datatree(simmed_ms, auto_corrs=auto_corrs)
 
   # There are two partitions one with ANTENNA-0 and the other with ANTENNA-1
   # They both share ANTENNA-2.

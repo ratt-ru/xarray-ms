@@ -16,7 +16,7 @@ from xarray_ms.backend.msv2.structure import (
 from xarray_ms.multiton import Multiton
 
 
-@pytest.mark.parametrize("na", [4, 7])
+@pytest.mark.parametrize("na", [1, 2, 3, 4, 7])
 @pytest.mark.parametrize("auto_corrs", [True, False])
 def test_baseline_id(na, auto_corrs):
   ant1, ant2 = np.triu_indices(na, 0 if auto_corrs else 1)
@@ -36,12 +36,12 @@ def test_structure_factory(simmed_ms, epoch):
     for st in ("DATA_DESCRIPTION", "FEED", "FIELD", "STATE")
   }
   structure_factory = MSv2StructureFactory(
-    table_factory, subtables, partition_schema, epoch
+    table_factory, subtables, partition_schema, epoch, True
   )
   assert pickle.loads(pickle.dumps(structure_factory)) == structure_factory
 
   structure_factory2 = MSv2StructureFactory(
-    table_factory, subtables, partition_schema, epoch
+    table_factory, subtables, partition_schema, epoch, True
   )
   assert structure_factory.instance is structure_factory2.instance
 
@@ -117,16 +117,16 @@ def test_epoch(simmed_ms):
   }
 
   structure_factory = MSv2StructureFactory(
-    table_factory, subtables, partition_schema, "abc"
+    table_factory, subtables, partition_schema, "abc", True
   )
   structure_factory2 = MSv2StructureFactory(
-    table_factory, subtables, partition_schema, "abc"
+    table_factory, subtables, partition_schema, "abc", True
   )
 
   assert structure_factory.instance is structure_factory2.instance
 
   structure_factory3 = MSv2StructureFactory(
-    table_factory, subtables, partition_schema, "def"
+    table_factory, subtables, partition_schema, "def", True
   )
 
   assert structure_factory.instance is not structure_factory3.instance

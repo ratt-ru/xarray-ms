@@ -115,7 +115,10 @@ class MSStructureSimulator:
   simulate_data: bool
   model: Dict[str, Any]
   data_description: DataDescription
-  transform_data: Callable[[PartitionDataType], PartitionDataType] | None
+  transform_desc: Callable[[PartitionDescriptor], PartitionDescriptor] | None
+  transform_data: (
+    Callable[[PartitionDescriptor, PartitionDataType], PartitionDataType] | None
+  )
 
   def __init__(
     self,
@@ -131,7 +134,11 @@ class MSStructureSimulator:
     partition: Tuple[str, ...] = ("OBSERVATION_ID", "FIELD_ID", "DATA_DESC_ID"),
     auto_corrs: bool = True,
     simulate_data: bool = True,
-    transform_data: Callable[[PartitionDataType], PartitionDataType] | None = None,
+    transform_desc: Callable[[PartitionDescriptor], PartitionDescriptor] | None = None,
+    transform_data: Callable[
+      [PartitionDescriptor, PartitionDataType], PartitionDataType
+    ]
+    | None = None,
   ):
     assert ntime >= 1
     assert time_chunks > 0
@@ -189,6 +196,7 @@ class MSStructureSimulator:
     self.simulate_data = simulate_data
     self.partition_names = cbp_names
     self.partition_indices = bcbp_indices
+    self.transform_desc = transform_desc
     self.transform_data = transform_data
     self.model = {
       "data_description": self.data_description,
@@ -211,9 +219,16 @@ class MSStructureSimulator:
       startrow = 0
 
       for chunk_desc in self.generate_descriptors():
+        # Apply any chunk descriptor transforms
+        if self.transform_desc is not None:
+          chunk_desc = self.transform_desc(chunk_desc)
+
+        # Generate the chunk data
         data_dict = self.data_factory(chunk_desc)
+
+        # Apply any data transforms
         if self.transform_data is not None:
-          data_dict = self.transform_data(data_dict)
+          data_dict = self.transform_data(chunk_desc, data_dict)
         (nrow,) = data_dict["TIME"][1].shape
         T.addrows(nrow)
 
