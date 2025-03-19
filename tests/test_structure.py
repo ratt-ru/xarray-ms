@@ -16,7 +16,7 @@ from xarray_ms.backend.msv2.structure import (
 from xarray_ms.multiton import Multiton
 
 
-@pytest.mark.parametrize("na", [4, 7])
+@pytest.mark.parametrize("na", [1, 2, 3, 4, 7])
 @pytest.mark.parametrize("auto_corrs", [True, False])
 def test_baseline_id(na, auto_corrs):
   ant1, ant2 = np.triu_indices(na, 0 if auto_corrs else 1)

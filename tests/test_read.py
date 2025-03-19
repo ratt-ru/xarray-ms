@@ -15,43 +15,57 @@ from xarray_ms.errors import IrregularGridWarning
     {
       "name": "backend.ms",
       "data_description": [(8, ["XX", "XY", "YX", "YY"]), (4, ["RR", "LL"])],
+      "auto_corrs": True,
     }
   ],
   indirect=True,
 )
-def test_regular_read(simmed_ms):
+@pytest.mark.parametrize("auto_corrs", [True, False])
+def test_regular_read(simmed_ms, auto_corrs):
   """Test for ramp function values produced by simulator"""
-  xdt = xarray.open_datatree(simmed_ms, auto_corrs=True)
+  xdt = xarray.open_datatree(simmed_ms, auto_corrs=auto_corrs)
+
+  def _selection(n):
+    a1 = n.baseline_antenna1_name.values
+    a2 = n.baseline_antenna2_name.values
+    dtype = [("a1", a1.dtype), ("a2", a2.dtype)]
+    ds_baselines = np.rec.fromarrays([a1, a2], dtype)
+    ant_names = node["antenna_xds"].antenna_name.values
+    # Baselines containing auto_corrs
+    ant1i, ant2i = np.triu_indices(len(ant_names), 0)
+    all_baselines = np.rec.fromarrays([ant_names[ant1i], ant_names[ant2i]], dtype)
+    bl_index = np.isin(all_baselines, ds_baselines)
+    shape = (n.time.size, ant1i.size, n.frequency.size, n.polarization.size)
+    return bl_index, shape
 
   for p in ["000", "001"]:
     node = xdt[f"backend_partition_{p}"]
-    vis = node.VISIBILITY.values
-    nelements = reduce(mul, vis.shape, 1)
+    all_bl, vis_shape = _selection(node)
+
+    # Produce expected full resolution values
+    nelements = reduce(mul, vis_shape, 1)
     expected = np.arange(nelements, dtype=np.float64)
-    expected = (expected + expected * 1j).reshape(vis.shape)
-    assert_array_equal(vis, expected)
+    expected = (expected + expected * 1j).reshape(vis_shape)
+    assert_array_equal(node.VISIBILITY, expected[:, all_bl])
 
-    uvw = node.UVW.values
-    nelements = reduce(mul, uvw.shape, 1)
-    expected = np.arange(nelements, dtype=np.float64).reshape(uvw.shape)
-    assert_array_equal(uvw, expected)
-
-
-ANT1_SUBSET = [0, 0, 1]
-ANT2_SUBSET = [0, 1, 2]
+    uvw_shape = vis_shape[:2] + (3,)
+    nelements = reduce(mul, uvw_shape, 1)
+    expected = np.arange(nelements, dtype=np.float64).reshape(uvw_shape)
+    assert_array_equal(node.UVW, expected[:, all_bl])
 
 
-def _select_baseline_rows(antenna1, antenna2, ant1_subset, ant2_subset):
-  dtype = [("a1", antenna1.dtype), ("a2", antenna2.dtype)]
-  baselines = np.rec.fromarrays([antenna1, antenna2], dtype=dtype)
-  desired = np.rec.fromarrays([ant1_subset, ant2_subset], dtype=dtype)
-  return np.isin(baselines, desired)
+# Baseline subset present
+ANT1_SUBSET = [0, 1, 2]
+ANT2_SUBSET = [2, 2, 3]
 
 
-def _excise_some_baselines(data_dict):
+def _excise_some_baselines(chunk_desc, data_dict):
   _, ant1 = data_dict["ANTENNA1"]
   _, ant2 = data_dict["ANTENNA2"]
-  index = _select_baseline_rows(ant1, ant2, ANT1_SUBSET, ANT2_SUBSET)
+  dtype = [("a1", ant1.dtype), ("a2", ant2.dtype)]
+  baselines = np.rec.fromarrays([ant1, ant2], dtype)
+  desired = np.rec.fromarrays([ANT1_SUBSET, ANT2_SUBSET], dtype)
+  index = np.isin(baselines, desired)
   return {k: (d, v[index]) for k, (d, v) in data_dict.items()}
 
 
@@ -60,64 +74,85 @@ def _excise_some_baselines(data_dict):
   [
     {
       "name": "backend.ms",
-      "nantenna": 3,
+      "nantenna": 4,
       "data_description": [(8, ["XX", "XY", "YX", "YY"]), (4, ["RR", "LL"])],
       "transform_data": _excise_some_baselines,
+      "auto_corrs": True,
     }
   ],
   indirect=True,
 )
-def test_irregular_read(simmed_ms):
+@pytest.mark.parametrize("auto_corrs", [True, False])
+def test_irregular_read(simmed_ms, auto_corrs):
   """Test that excluding baselines works"""
   with pytest.warns(IrregularGridWarning, match="rows missing from the full"):
-    xdt = xarray.open_datatree(simmed_ms, auto_corrs=True)
+    xdt = xarray.open_datatree(simmed_ms, auto_corrs=auto_corrs)
+
+  def _selection(n):
+    a1 = n.baseline_antenna1_name.values
+    a2 = n.baseline_antenna2_name.values
+    dtype = [("a1", a1.dtype), ("a2", a2.dtype)]
+    ds_baselines = np.rec.fromarrays([a1, a2], dtype)
+    ant_names = node["antenna_xds"].antenna_name.values
+    # All baselines, including autocorrs
+    ant1i, ant2i = np.triu_indices(len(ant_names), 0)
+    all_baselines = np.rec.fromarrays([ant_names[ant1i], ant_names[ant2i]], dtype)
+    present_baselines = np.rec.fromarrays(
+      [
+        [f"ANTENNA-{i}" for i in ANT1_SUBSET],
+        [f"ANTENNA-{i}" for i in ANT2_SUBSET],
+      ],
+      dtype,
+    )
+    # Selects out baselines from the full resolution data that are
+    #   1. in the possibly lower resolution dataset
+    #   2. present in the the data
+    full_bl_index = np.logical_and(
+      np.isin(all_baselines, ds_baselines), np.isin(all_baselines, present_baselines)
+    )
+    # Selects out baselines from the possibly lower resolution dataset
+    # that are present in the data
+    ds_bl_index = np.isin(ds_baselines, present_baselines)
+    shape = (n.time.size, ant1i.size, n.frequency.size, n.polarization.size)
+    return full_bl_index, ds_bl_index, shape
 
   for p in ["000", "001"]:
     node = xdt[f"backend_partition_{p}"]
 
-    bl_index = _select_baseline_rows(
-      node.baseline_antenna1_name.values,
-      node.baseline_antenna2_name.values,
-      [f"ANTENNA-{i}" for i in ANT1_SUBSET],
-      [f"ANTENNA-{i}" for i in ANT2_SUBSET],
-    )
+    all_bl, ds_bl, full_vis_shape = _selection(node)
 
-    vis = node.VISIBILITY.values
     # Selected baseline elements are as expected
-    nelements = reduce(mul, vis.shape, 1)
+    nelements = reduce(mul, full_vis_shape, 1)
     expected = np.arange(nelements, dtype=np.float32)
-    expected = (expected + expected * 1j).reshape(vis.shape)
-    assert_array_equal(vis[:, bl_index], expected[:, bl_index])
+    expected = (expected + expected * 1j).reshape(full_vis_shape)
+    assert_array_equal(node.VISIBILITY[:, ds_bl], expected[:, all_bl])
     # Other baseline elements are nan
-    vis = node.VISIBILITY.values
-    assert np.all(np.isnan((vis[:, ~bl_index])))
+    assert np.all(np.isnan((node.VISIBILITY[:, ~ds_bl])))
 
-    uvw = node.UVW.values
+    full_uvw_shape = full_vis_shape[:2] + (3,)
     # Selected baseline elements are as expected
-    nelements = reduce(mul, uvw.shape, 1)
-    expected = np.arange(nelements, dtype=np.float64).reshape(uvw.shape)
-    assert_array_equal(uvw[:, bl_index], expected[:, bl_index])
+    nelements = reduce(mul, full_uvw_shape, 1)
+    expected = np.arange(nelements, dtype=np.float64).reshape(full_uvw_shape)
+    assert_array_equal(node.UVW[:, ds_bl], expected[:, all_bl])
     # Other baseline elements are nan
-    assert np.all(np.isnan((uvw[:, ~bl_index, ...])))
+    assert np.all(np.isnan((node.UVW[:, ~ds_bl, ...])))
 
     flag = node.FLAG.values
     # Selected baseline elements are as expected
-    nelements = reduce(mul, flag.shape, 1)
+    nelements = reduce(mul, full_vis_shape, 1)
     expected = np.where(np.arange(nelements) & 0x1, 0, 1)
-    expected = expected.reshape(flag.shape)
-    assert_array_equal(flag[:, bl_index], expected[:, bl_index])
+    expected = expected.reshape(full_vis_shape)
+    assert_array_equal(flag[:, ds_bl], expected[:, all_bl])
     # Other baseline elements are flagged
-    assert np.all(flag[:, ~bl_index, ...] == 1)
+    assert np.all(flag[:, ~ds_bl, ...] == 1)
 
 
-def _randomise_trailing_intervals(data_dict):
-  _, ant1 = data_dict["ANTENNA1"]
-  _, ant2 = data_dict["ANTENNA2"]
+def _randomise_trailing_intervals(chunk_desc, data_dict):
   _, interval = data_dict["INTERVAL"]
+  nbl = chunk_desc.ANTENNA1.size
+  ntime = chunk_desc.TIME.size
 
-  ubl = np.unique(np.stack([ant1, ant2], axis=1), axis=0)
-  shape = (-1, ubl.shape[0])
-  interval.reshape(shape, copy=False)[-1, :] = np.random.random(ubl.shape[0])
+  interval.reshape((ntime, nbl), copy=False)[-1, :] = np.random.random(nbl)
   return data_dict
 
 
@@ -142,14 +177,12 @@ def test_differing_trailing_intervals(simmed_ms):
     assert node.time.attrs["integration_time"] == 8.0
 
 
-def _randomise_starting_intervals(data_dict):
-  _, ant1 = data_dict["ANTENNA1"]
-  _, ant2 = data_dict["ANTENNA2"]
+def _randomise_starting_intervals(chunk_desc, data_dict):
   _, interval = data_dict["INTERVAL"]
+  nbl = chunk_desc.ANTENNA1.size
+  ntime = chunk_desc.TIME.size
 
-  ubl = np.unique(np.stack([ant1, ant2], axis=1), axis=0)
-  nbl, _ = ubl.shape
-  interval.reshape((-1, nbl), copy=False)[0, :] = np.random.random(nbl)
+  interval.reshape((ntime, nbl), copy=False)[0, :] = np.random.random(nbl)
   return data_dict
 
 

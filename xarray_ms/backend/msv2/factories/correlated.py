@@ -220,7 +220,7 @@ class CorrelatedDatasetFactory:
       time_attrs = {"integration_time": partition.interval.item()}
     else:
       warnings.warn(
-        f"Multiple intervals {partition.interval} "
+        f"Missing/Multiple intervals {partition.interval} "
         f"found in partition {self._partition_key}. "
         f'Setting time.attrs["integration_time"] = nan and '
         f"adding full resolution TIME and INTEGRATION_TIME columns. "

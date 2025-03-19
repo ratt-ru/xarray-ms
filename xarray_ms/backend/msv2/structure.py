@@ -31,6 +31,7 @@ from xarray_ms.backend.msv2.partition import PartitionKeyT, TablePartitioner
 from xarray_ms.errors import (
   InvalidMeasurementSet,
   InvalidPartitionKey,
+  PartitioningError,
 )
 from xarray_ms.multiton import Multiton
 
@@ -545,15 +546,32 @@ class MSv2Structure(Mapping):
     auto_corrs: bool,
   ) -> None:
     """Populate the row map and interval grids"""
+
+    # If the row_map contains no auto-correlations
+    # they must be stripped out of the data
+    if not auto_corrs and not np.all(mask := antenna1 != antenna2):
+      time_ids = time_ids[mask]
+      antenna1 = antenna1[mask]
+      antenna2 = antenna2[mask]
+      rows = rows[mask]
+      intervals = intervals[mask]
+
+    # Normalise the baseline direction
+    if np.any(mask := antenna1 > antenna2):
+      antenna1[mask], antenna2[mask] = antenna2[mask], antenna1[mask]
+
+    # Maybe normalise the antenna id's to np.arange(feed_antennas)
     normed_antennas = np.arange(feed_antennas.size, dtype=feed_antennas.dtype)
-    # Perhaps normalise the antenna id's to np.arange(feed_antennas)
     if not np.all(feed_antennas == normed_antennas):
       antenna1 = np.searchsorted(feed_antennas, antenna1)
       antenna2 = np.searchsorted(feed_antennas, antenna2)
+
     index = time_ids * nbl
     index += baseline_id(antenna1, antenna2, na, auto_corrs)
     row_map[index] = rows
     interval_grid[index] = intervals
+
+    return index
 
   @staticmethod
   def read_subtable(
@@ -717,7 +735,7 @@ class MSv2Structure(Mapping):
         row_map = np.full(utime.size * nbl, -1, dtype=np.int64)
         interval_grid = np.full(utime.size * nbl, -1.0, dtype=np.float64)
 
-        list(
+        index_list = list(
           pool.map(
             partial(
               self.gen_row_interval_grids,
@@ -735,6 +753,29 @@ class MSv2Structure(Mapping):
             partition_args(rows, chunk),
           )
         )
+
+        indices = np.concatenate(index_list)
+
+        if np.any(np.bincount(indices) > 1):
+          msg = []
+          if len(ufeeds) > 1:
+            msg.append(f"Multiple feeds {ufeeds} are present")
+          if len(ustate_ids) > 1:
+            msg.append(f"Multiple STATE_ID {ustate_ids} are present")
+          if len(ufield_ids) > 1:
+            msg.append(f"Multiple FIELD_ID {ufield_ids}  are present")
+
+          msg_str = "\n  ".join(msg)
+
+          raise PartitioningError(
+            f"Multiple occurences of a (TIME, ANTENNA1, ANTENNA2) "
+            f"tuple are present in partition {key}. "
+            f"It is not possible to establish a unique "
+            f"(time, baseline) grid for this partition. "
+            f"Generally, the solution is to partition more finely by adding "
+            f"columns to the partition_schema.\n"
+            f"{msg_str}"
+          )
 
         # In the case of averaged datasets, intervals in the last timestep
         # may differ from other intervals. Remove it and try to find
