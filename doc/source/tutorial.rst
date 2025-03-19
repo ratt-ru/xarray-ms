@@ -38,7 +38,7 @@ to open multiple partitions of a Measurement Set.
     (8, ("XX", "XY", "YX", "YY")),
     (4, ("RR", "LL"))])
 
-  dt = xarray.open_datatree(ms, partition_schema=["FIELD_ID"], auto_corrs=True)
+  dt = xarray.open_datatree(ms, partition_schema=["FIELD_ID"])
 
   dt
 
@@ -59,9 +59,9 @@ For example, one could select select some specific dimensions out:
 
 .. ipython:: python
 
-  dt = xarray.open_datatree(ms, partition_schema=["FIELD_ID"], auto_corrs=True)
+  dt = xarray.open_datatree(ms, partition_schema=["FIELD_ID"])
 
-  subdt = dt.isel(time=slice(1, 3), baseline_id=[1, 3, 5], frequency=slice(2, 4))
+  subdt = dt.isel(time=slice(1, 3), baseline_id=[0, 2], frequency=slice(2, 4))
   subdt
 
 At this point, the ``subdt`` DataTree is still lazy -- no Data variables have been loaded
@@ -105,7 +105,6 @@ to specify different chunking setups for each partition.
 .. ipython:: python
 
   dt = xarray.open_datatree(ms, partition_schema=["FIELD_ID"],
-    auto_corrs=True,
     chunks={},
     preferred_chunks={
       (("DATA_DESC_ID", 0),): {"time": 2, "frequency": 4},
@@ -134,7 +133,6 @@ this to a zarr_ store.
   import tempfile
 
   dt = xarray.open_datatree(ms, partition_schema=["FIELD_ID"],
-    auto_corrs=True,
     chunks={},
     preferred_chunks={
       (("DATA_DESC_ID", 0),): {"time": 2, "frequency": 4},
