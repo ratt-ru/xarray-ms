@@ -71,10 +71,10 @@ class MSv2Array(BackendArray):
     expected_shape = tuple(slice_length(k, s) for k, s in zip(key, self.shape))
     # Map the (time, baseline_id) coordinates onto row indices
     rows = self._structure_factory.instance[self._partition].row_map[key[:2]]
-    xkey = (rows.ravel(),) + key[2:]
+    row_key = (rows.ravel(),) + key[2:]
     row_shape = (rows.size,) + expected_shape[2:]
     result = np.full(row_shape, self._default, dtype=self.dtype)
-    self._table_factory.instance.getcol(self._column, xkey, result)
+    self._table_factory.instance.getcol(self._column, row_key, result)
     result = result.reshape(rows.shape + expected_shape[2:])
     return self._transform(result) if self._transform else result
 
@@ -85,3 +85,67 @@ class MSv2Array(BackendArray):
   @transform.setter
   def transform(self, value: TransformerT):
     self._transform = value
+
+
+class BroadcastMSv2Array(MSv2Array):
+  """Backend Array that reads an MSv2 column and
+  broadcasts the result up to a desired shape"""
+
+  _low_resolution_shape: Tuple[int, ...]
+
+  def __init__(
+    self,
+    table_factory: Multiton,
+    structure_factory: MSv2StructureFactory,
+    partition: PartitionKeyT,
+    column: str,
+    shape: Tuple[int, ...],
+    low_resolution_shape: Tuple[int, ...],
+    dtype: npt.DTypeLike,
+    default: Any | None = None,
+    transform: TransformerT = None,
+  ):
+    super().__init__(
+      table_factory,
+      structure_factory,
+      partition,
+      column,
+      shape,
+      dtype,
+      default,
+      transform,
+    )
+
+    self._low_resolution_shape = low_resolution_shape
+    assert self._low_resolution_shape == self.shape[: len(low_resolution_shape)]
+
+  # def _getitem(self, key) -> npt.NDArray:
+  #   high_ndim = len(self.shape)
+  #   low_ndim = len(self._low_resolution_shape)
+  #   assert len(key) == len(self.shape)
+  #   low_res_data = self._getitem(key[:low_ndim])
+  #   low_res_index = (slice(None),) * (high_ndim - low_ndim) + (None,) * low_ndim
+  #   high_res_shape = tuple(slice_length(k, s) for k, s in zip(key, self.shape))
+  #   return np.broadcast_to(low_res_data[low_res_index], high_res_shape)
+
+  def _getitem(self, key) -> npt.NDArray:
+    assert len(key) == len(self.shape)
+    high_ndim = len(self.shape)
+    low_ndim = len(self._low_resolution_shape)
+    high_res_shape = tuple(slice_length(k, s) for k, s in zip(key, self.shape))
+    low_res_shape = high_res_shape[:low_ndim]
+
+    # Map the (time, baseline_id) coordinates onto row indices
+    rows = self._structure_factory.instance[self._partition].row_map[key[:2]]
+    row_key = (rows.ravel(),) + key[2:low_ndim]
+    row_shape = (rows.size,) + low_res_shape[2:]
+    result = np.full(row_shape, self._default, dtype=self.dtype)
+    self._table_factory.instance.getcol(self._column, row_key, result)
+    result = result.reshape(rows.shape + row_shape[2:])
+    # Transform the result
+    if self._transform is not None:
+      result = self._transform(result)
+
+    # Broadcast to high-resolution shape
+    low_res_index = (slice(None),) * (high_ndim - low_ndim) + (None,) * low_ndim
+    return np.broadcast_to(result[low_res_index], high_res_shape)
