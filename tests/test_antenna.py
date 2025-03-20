@@ -31,7 +31,7 @@ def _set_ddid_antenna_ids(desc):
       "name": "backend.ms",
       "nantenna": NANTENNA,
       "data_description": [(8, ["XX", "XY", "YX", "YY"]), (4, ["RR", "LL"])],
-      "transform_desc": _set_ddid_antenna_ids,
+      "transform_chunk_desc": _set_ddid_antenna_ids,
       "auto_corrs": True,
     }
   ],

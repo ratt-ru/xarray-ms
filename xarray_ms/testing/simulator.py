@@ -24,8 +24,8 @@ FIRST_FEB_2023_MJDS = 2459976.50000 * 86400
 # Default simulation parameters
 DEFAULT_SIM_PARAMS = {"ntime": 5, "data_description": [(8, ["XX", "XY", "YX", "YY"])]}
 
-# Additional Columns to add
-ADDITIONAL_COLUMNS = {
+# Standard DATA Columns
+STANDARD_DATA_COLUMNS = {
   "DATA": {
     "_c_order": True,
     "comment": "DATA column",
@@ -91,6 +91,8 @@ class PartitionDescriptor:
 
 DDIDArgType = List[Tuple[npt.NDArray[np.float64], List[str]]]
 PartitionDataType = Dict[str, Tuple[Tuple[str, ...], npt.NDArray]]
+ChunkDescriptorTransformerT = Callable[[PartitionDescriptor], PartitionDescriptor]
+DataTransformerT = Callable[[PartitionDescriptor, PartitionDataType], PartitionDataType]
 
 
 class MSStructureSimulator:
@@ -113,12 +115,11 @@ class MSStructureSimulator:
   partition_names: List[str]
   partition_indices: npt.NDArray[np.int32]
   simulate_data: bool
+  table_desc: Dict[str, Any]
   model: Dict[str, Any]
   data_description: DataDescription
-  transform_desc: Callable[[PartitionDescriptor], PartitionDescriptor] | None
-  transform_data: (
-    Callable[[PartitionDescriptor, PartitionDataType], PartitionDataType] | None
-  )
+  transform_chunk_desc: ChunkDescriptorTransformerT | None
+  transform_data: DataTransformerT | None
 
   def __init__(
     self,
@@ -134,11 +135,9 @@ class MSStructureSimulator:
     partition: Tuple[str, ...] = ("OBSERVATION_ID", "FIELD_ID", "DATA_DESC_ID"),
     auto_corrs: bool = True,
     simulate_data: bool = True,
-    transform_desc: Callable[[PartitionDescriptor], PartitionDescriptor] | None = None,
-    transform_data: Callable[
-      [PartitionDescriptor, PartitionDataType], PartitionDataType
-    ]
-    | None = None,
+    table_desc: Dict[str, Any] | None = None,
+    transform_chunk_desc: ChunkDescriptorTransformerT | None = None,
+    transform_data: DataTransformerT | None = None,
   ):
     assert ntime >= 1
     assert time_chunks > 0
@@ -194,9 +193,10 @@ class MSStructureSimulator:
     self.time_chunks = time_chunks
     self.time_start = time_start
     self.simulate_data = simulate_data
+    self.table_desc = STANDARD_DATA_COLUMNS if table_desc is None else table_desc
     self.partition_names = cbp_names
     self.partition_indices = bcbp_indices
-    self.transform_desc = transform_desc
+    self.transform_chunk_desc = transform_chunk_desc
     self.transform_data = transform_data
     self.model = {
       "data_description": self.data_description,
@@ -211,17 +211,16 @@ class MSStructureSimulator:
 
   def simulate_ms(self, output_ms: str) -> None:
     """Simulate data into the given measurement set name"""
-    table_desc = ADDITIONAL_COLUMNS if self.simulate_data else {}
 
     # Generate descriptors, create simulated data from the descriptors
     # and write simulated data to the main Measurement Set
-    with Table.ms_from_descriptor(output_ms, "MAIN", table_desc) as T:
+    with Table.ms_from_descriptor(output_ms, "MAIN", self.table_desc) as T:
       startrow = 0
 
       for chunk_desc in self.generate_descriptors():
         # Apply any chunk descriptor transforms
-        if self.transform_desc is not None:
-          chunk_desc = self.transform_desc(chunk_desc)
+        if self.transform_chunk_desc is not None:
+          chunk_desc = self.transform_chunk_desc(chunk_desc)
 
         # Generate the chunk data
         data_dict = self.data_factory(chunk_desc)
