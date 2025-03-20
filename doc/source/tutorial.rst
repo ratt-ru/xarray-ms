@@ -61,7 +61,7 @@ For example, one could select select some specific dimensions out:
 
   dt = xarray.open_datatree(ms, partition_schema=["FIELD_ID"])
 
-  subdt = dt.isel(time=slice(1, 3), baseline_id=[1, 3, 5], frequency=slice(2, 4))
+  subdt = dt.isel(time=slice(1, 3), baseline_id=[0, 2], frequency=slice(2, 4))
   subdt
 
 At this point, the ``subdt`` DataTree is still lazy -- no Data variables have been loaded
@@ -90,7 +90,7 @@ can be enabled by specifying the ``chunks`` parameter:
 .. ipython:: python
 
   dt = xarray.open_datatree(ms, partition_schema=["FIELD_ID"],
-    chunks={"time": 2, "frequency": 2})
+    chunks={"time": 2, "frequency": 2}, auto_corrs=True)
 
   dt
 

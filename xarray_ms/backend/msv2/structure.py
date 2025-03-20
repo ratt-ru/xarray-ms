@@ -14,6 +14,7 @@ from typing import (
   Dict,
   Iterator,
   List,
+  Literal,
   Mapping,
   Sequence,
   Set,
@@ -23,13 +24,16 @@ from typing import (
 import numpy as np
 import numpy.typing as npt
 import pyarrow as pa
-from arcae.lib.arrow_tables import Table, merge_np_partitions
+from arcae.lib.arrow_tables import Table
 from cacheout import Cache
-from xarray.core.utils import FrozenDict
 
-from xarray_ms.backend.msv2.table_factory import TableFactory
-from xarray_ms.casa_types import ColumnDesc, FrequencyMeasures, Polarisations
-from xarray_ms.errors import InvalidMeasurementSet, InvalidPartitionKey
+from xarray_ms.backend.msv2.partition import PartitionKeyT, TablePartitioner
+from xarray_ms.errors import (
+  InvalidMeasurementSet,
+  InvalidPartitionKey,
+  PartitioningError,
+)
+from xarray_ms.multiton import Multiton
 
 logger = logging.getLogger(__name__)
 
@@ -96,24 +100,17 @@ def baseline_id(
   return result
 
 
-def is_partition_key(key: PartitionKeyT) -> bool:
-  return (
-    isinstance(key, tuple)
-    and len(key) == 2
-    and isinstance(key[0], str)
-    and isinstance(key[1], int)
-  )
-
-
 def partition_args(data: npt.NDArray, chunk: int) -> List[npt.NDArray]:
   return [data[i : i + chunk] for i in range(0, len(data), chunk)]
 
 
-DEFAULT_PARTITION_COLUMNS: List[str] = [
-  "DATA_DESC_ID",
-  "OBS_MODE",
-  "OBSERVATION_ID",
-]  #: Default Partitioning Column Schema
+DEFAULT_MAIN_PARTITION_COLUMNS: List[str] = ["DATA_DESC_ID", "OBSERVATION_ID"]
+
+DEFAULT_SUBTABLE_PARTITION_COLUMNS: List[str] = ["OBS_MODE"]
+
+DEFAULT_PARTITION_COLUMNS: List[str] = (
+  DEFAULT_MAIN_PARTITION_COLUMNS + DEFAULT_SUBTABLE_PARTITION_COLUMNS
+)  #: Default Partitioning Column Schema
 
 
 SHORT_TO_LONG_PARTITION_COLUMNS: Dict[str, str] = {
@@ -157,116 +154,67 @@ SORT_COLUMNS: List[str] = ["TIME", "ANTENNA1", "ANTENNA2"]
 
 @dataclasses.dataclass
 class PartitionData:
-  """Dataclass describing data unique to a partition"""
+  """Dataclass describing data unique to a partition
 
-  time: npt.NDArray[np.float64]
-  interval: npt.NDArray[np.float64]
-  chan_freq: npt.NDArray[np.float64]
-  chan_width: npt.NDArray[np.float64]
-  corr_type: npt.NDArray[np.int32]
-  field_names: List[str]
-  line_names: List[str]
-  source_names: List[str]
-  intents: List[str]
-  spw_name: str
-  spw_freq_group_name: str
-  spw_ref_freq: float
-  spw_frame: str
+  As `DATA_DESC_ID`, `OBSERVATION_ID` and `STATE::OBS_MODE` are
+  always part of the partitioning schema, values related to them
+  are singleton values.
+
+  For other cases, multiple values are generally assumed.
+  """
+
+  # Main table
+  time: npt.NDArray[np.float64]  # Unique timesteps
+  interval: npt.NDArray[np.float64]  # Unique intervals
+  obs_id: int  # unique from OBSERVATION_ID
+  spw_id: int  # unique from DATA_DESC_ID
+  pol_id: int  # unique from DATA_DESC_ID
+  # Multiple values per partition
+  antenna_ids: List[int]
+  feed_ids: List[int]
+  field_ids: List[int]
+  state_ids: List[int]
   scan_numbers: List[int]
+  # FIELD subtable
+  source_ids: List[int]
+  # STATE subtable
+  obs_mode: str  # unique from STATE::OBS_MODE
   sub_scan_numbers: List[int]
 
+  # Row to baseline map
   row_map: npt.NDArray[np.int64]
 
+  @property
+  def ntime(self) -> int:
+    """Number of timesteps"""
+    return self.row_map.shape[0]
 
-PartitionKeyT = Tuple[Tuple[str, int | str], ...]
+  @property
+  def nbl(self) -> int:
+    """Number of baselines"""
+    return self.row_map.shape[1]
 
+  @property
+  def na(self) -> int:
+    """Number of antenna"""
+    return len(self.antenna_ids)
 
-class TablePartitioner:
-  """Partitions and sorts MSv2 indexing columns"""
+  @property
+  def auto_corrs(self) -> bool:
+    """Returns true if auto-correlations are included"""
+    if self.na * (self.na + 1) // 2 == self.nbl:
+      return True
+    elif self.na * (self.na - 1) // 2 == self.nbl:
+      return False
+    else:
+      raise RuntimeError(f"Invalid antenna {self.na} baseline {self.nbl} relation")
 
-  _partitionby: List[str]
-  _sortby: List[str]
-  _other: List[str]
-
-  def __init__(
-    self, partitionby: Sequence[str], sortby: Sequence[str], other: Sequence[str]
-  ):
-    self._partitionby = list(partitionby)
-    self._sortby = list(sortby)
-    self._other = list(other)
-
-  def partition(
-    self, index: pa.Table, pool: cf.ThreadPoolExecutor
-  ) -> Dict[PartitionKeyT, Dict[str, npt.NDArray]]:
-    other = set(self._other)
-
-    try:
-      other.remove("row")
-      index = index.append_column(
-        "row", pa.array(np.arange(len(index), dtype=np.int64))
-      )
-    except KeyError:
-      pass
-
-    nrow = len(index)
-    nworkers = pool._max_workers
-    chunk = (nrow + nworkers - 1) // nworkers
-
-    # Order columns by
-    #
-    # 1. Partitioning columns
-    # 2. Sorting columns
-    # 3. Others (such as row and INTERVAL)
-    # 4. Remaining columns
-    #
-    # 4 is needed for the merge_np_partitions to work
-    ordered_columns = self._partitionby + self._sortby + self._other
-    ordered_columns += list(set(index.column_names) - set(ordered_columns))
-
-    # Create a dictionary out of the pyarrow table
-    table_dict = {k: index[k].to_numpy() for k in ordered_columns}
-    # Partition the data over the workers in the pool
-    partitions = [
-      {k: v[s : s + chunk] for k, v in table_dict.items()}
-      for s in range(0, nrow, chunk)
-    ]
-
-    # Sort each partition in parallel
-    def sort_partition(p):
-      sort_arrays = tuple(p[k] for k in reversed(ordered_columns))
-      indices = np.lexsort(sort_arrays)
-      return {k: v[indices] for k, v in p.items()}
-
-    partitions = list(pool.map(sort_partition, partitions))
-    # Merge partitions
-    merged = merge_np_partitions(partitions)
-
-    # Find the edges of the group partitions in parallel by
-    # partitioning the sorted merged values into chunks, including
-    # the starting value of the next chunk.
-    starts = list(range(0, nrow, chunk))
-    group_values = [
-      {k: v[s : s + chunk + 1] for k, v in merged.items() if k in self._partitionby}
-      for s in starts
-    ]
-    assert len(starts) == len(group_values)
-
-    # Find the group start and end points in parallel by finding edges
-    def find_edges(p, s):
-      diffs = [np.diff(p[v]) > 0 for v in self._partitionby]
-      return np.where(np.logical_or.reduce(diffs))[0] + s + 1
-
-    edges = list(pool.map(find_edges, group_values, starts))
-    group_offsets = np.concatenate([[0]] + edges + [[nrow]])
-
-    # Create the grouped partitions
-    groups: Dict[PartitionKeyT, Dict[str, npt.NDArray]] = {}
-
-    for start, end in zip(group_offsets[:-1], group_offsets[1:]):
-      key = tuple(sorted((k, merged[k][start].item()) for k in self._partitionby))
-      groups[key] = {k: v[start:end] for k, v in merged.items()}
-
-    return groups
+  @property
+  def antenna_pairs(self) -> Tuple[npt.NDArray[np.int32], npt.NDArray[np.int32]]:
+    """Return per-baseline antenna pairs"""
+    a1, a2 = np.triu_indices(self.na, 0 if self.auto_corrs else 1)
+    aids = np.asarray(self.antenna_ids, np.int32)
+    return aids[a1], aids[a2]
 
 
 def on_get_keep_alive(key, value, exists):
@@ -279,7 +227,8 @@ class MSv2StructureFactory:
   """Hashable, callable and picklable factory class
   for creating and caching an MSv2Structure"""
 
-  _ms_factory: TableFactory
+  _ms_factory: Multiton
+  _subtable_factories: Dict[str, Multiton]
   _partition_schema: List[str]
   _epoch: str
   _auto_corrs: bool
@@ -289,12 +238,14 @@ class MSv2StructureFactory:
 
   def __init__(
     self,
-    ms: TableFactory,
+    ms: Multiton,
+    subtables: Dict[str, Multiton],
     partition_schema: List[str],
     epoch: str,
-    auto_corrs: bool = True,
+    auto_corrs: bool,
   ):
     self._ms_factory = ms
+    self._subtable_factories = subtables
     self._partition_schema = partition_schema
     self._epoch = epoch
     self._auto_corrs = auto_corrs
@@ -305,6 +256,7 @@ class MSv2StructureFactory:
 
     return (
       self._ms_factory == other._ms_factory
+      and self._subtable_factories == other._subtable_factories
       and self._partition_schema == other._partition_schema
       and self._epoch == other._epoch
       and self._auto_corrs == other._auto_corrs
@@ -312,40 +264,52 @@ class MSv2StructureFactory:
 
   def __hash__(self):
     return hash(
-      (self._ms_factory, tuple(self._partition_schema), self._epoch, self._auto_corrs)
+      (
+        self._ms_factory,
+        frozenset(self._subtable_factories.items()),
+        tuple(self._partition_schema),
+        self._epoch,
+        self._auto_corrs,
+      )
     )
 
   def __reduce__(self):
     return (
       MSv2StructureFactory,
-      (self._ms_factory, self._partition_schema, self._epoch, self._auto_corrs),
-    )
-
-  def __call__(self, *args, **kw) -> MSv2Structure:
-    assert not args and not kw
-    return self._STRUCTURE_CACHE.get(
-      self,
-      lambda self: MSv2Structure(
-        self._ms_factory, self._partition_schema, self._auto_corrs
+      (
+        self._ms_factory,
+        self._subtable_factories,
+        self._partition_schema,
+        self._epoch,
+        self._auto_corrs,
       ),
     )
+
+  @staticmethod
+  def _create_instance(self):
+    return MSv2Structure(
+      self._ms_factory,
+      self._subtable_factories,
+      self._partition_schema,
+      self._auto_corrs,
+    )
+
+  @property
+  def instance(self) -> MSv2Structure:
+    return self._STRUCTURE_CACHE.get(self, self._create_instance)
+
+  def release(self) -> bool:
+    return self._STRUCTURE_CACHE.delete(self) > 0
 
 
 class MSv2Structure(Mapping):
   """Holds structural information about an MSv2 dataset"""
 
-  _ms_factory: TableFactory
-  _auto_corrs: bool
+  _ms_factory: Multiton
+  _subtable_factories: Dict[str, Multiton]
   _partition_columns: List[str]
+  _subtable_partition_columns: List[str]
   _partitions: Mapping[PartitionKeyT, PartitionData]
-  _column_descs: Dict[str, Dict[str, ColumnDesc]]
-  _ant: pa.Table
-  _ddid: pa.Table
-  _feed: pa.Table
-  _spw: pa.Table
-  _pol: pa.Table
-  _field: pa.Table
-  _state: pa.Table
 
   def __getitem__(self, key: PartitionKeyT) -> PartitionData:
     return self._partitions[key]
@@ -356,47 +320,24 @@ class MSv2Structure(Mapping):
   def __len__(self) -> int:
     return len(self._partitions)
 
-  @property
-  def auto_corrs(self) -> bool:
-    """Are auto-correlations included"""
-    return self._auto_corrs
-
-  @property
-  def column_descs(self) -> Dict[str, Dict[str, ColumnDesc]]:
-    """Return the per-table column descriptors.
-    Outer key is "MAIN", "SPECTRAL_WINDOW", inner key
-    is the column name such as "FLAG" and "WEIGHT_SPECTRUM"
-    """
-    return self._column_descs
-
-  @property
-  def na(self) -> int:
-    """Number of antenna in the Measurement Set"""
-    return len(self._ant)
-
-  @property
-  def antenna_pairs(self) -> Tuple[npt.NDArray[np.int32], npt.NDArray[np.int32]]:
-    """Return default per-baseline antenna pairs"""
-    return tuple(map(np.int32, np.triu_indices(self.na, 0 if self.auto_corrs else 1)))
-
-  @property
-  def nbl(self) -> int:
-    """Number of baselines in the Measurement Set"""
-    return nr_of_baselines(self.na, self.auto_corrs)
-
   @staticmethod
   def parse_partition_key(key: str) -> PartitionKeyT:
     """Parses a "DATA_DESC_ID=0, FIELD_ID_1,..." style string
     into a tuple of (column, id) tuples"""
-    pairs = []
+    pairs: List[Tuple[str, int | str]] = []
 
     for component in [k.strip() for k in key.split(",")]:
       try:
-        column, value = component.split("=")
+        column, str_value = component.split("=")
       except ValueError as e:
         raise InvalidPartitionKey(f"Invalid partition key {key!r}") from e
       else:
-        pairs.append((column, int(value)))
+        try:
+          int_value = int(str_value)
+        except ValueError:
+          pairs.append((column, str_value))
+        else:
+          pairs.append((column, int_value))
 
     return tuple(sorted(pairs))
 
@@ -438,26 +379,88 @@ class MSv2Structure(Mapping):
 
     return matches
 
-  def maybe_get_source_id(
-    self, pool: cf.Executor, ncpus: int, field_id: npt.NDArray[np.int32]
-  ) -> npt.NDArray[np.int32] | None:
+  @staticmethod
+  def broadcast_source_id(
+    pool: cf.Executor,
+    ncpus: int,
+    field: pa.Table,
+    field_id: npt.NDArray[np.int32],
+  ) -> npt.NDArray[np.int32]:
     """Constructs a SOURCE_ID array from MAIN.FIELD_ID
     broadcast against FIELD.SOURCE_ID"""
-    if hasattr(self, "_field") and hasattr(self, "_source") and len(self._source) != 0:
-      field_source_id = self._field["SOURCE_ID"].to_numpy()
-      source_id = np.empty_like(field_id)
-      chunk = (len(source_id) + ncpus - 1) // ncpus
+    field_source_id = field["SOURCE_ID"].to_numpy()
+    source_id = np.empty_like(field_id)
+    chunk = (len(source_id) + ncpus - 1) // ncpus
 
-      def par_copy(source, field):
-        source[:] = field_source_id[field]
+    def par_assign(sid, fid):
+      sid[:] = field_source_id[fid]
 
+    list(
       pool.map(
-        par_copy, partition_args(source_id, chunk), partition_args(field_id, chunk)
+        par_assign, partition_args(source_id, chunk), partition_args(field_id, chunk)
       )
+    )
+    return source_id
 
-      return source_id
+  @staticmethod
+  def broadcast_sub_scan_number(
+    pool: cf.Executor,
+    ncpus: int,
+    state: pa.Table,
+    state_id: npt.NDArray[npt.int32],
+  ) -> npt.NDArray[np.int32]:
+    """Constructs a SUB_SCAN_NUMBER array from MAIN.STATE_ID
+    broadcast against STATE.SUB_SCAN_NUMBER"""
+    state_ssn = state["SUB_SCAN"].to_numpy()
+    subscan_nr = np.empty_like(state_id)
+    chunk = (len(state_id) + ncpus - 1) // ncpus
 
-    return None
+    def par_assign(ssn, sid):
+      ssn[:] = state_ssn[sid]
+
+    list(
+      pool.map(
+        par_assign, partition_args(subscan_nr, chunk), partition_args(state_id, chunk)
+      )
+    )
+    return subscan_nr
+
+  @staticmethod
+  def broadcast_obsmode_id(
+    pool: cf.Executor,
+    ncpus: int,
+    state: pa.Table,
+    state_id: npt.NDArray[npt.int32],
+  ) -> Tuple[npt.NDArray[np.int32], Dict[str, List[int]]]:
+    """Constructs an OBS_MODE_ID array from MAIN.STATE_ID broadcast
+    against unique entries in STATE.OBS_MODE"""
+    obs_mode = state["OBS_MODE"].to_numpy()
+
+    # Map unique observation modes to state_ids
+    obs_mode_state_id_map: Mapping[str, List[int]] = defaultdict(list)
+    for sid, obs_mode in enumerate(obs_mode):
+      obs_mode_state_id_map[obs_mode].append(sid)
+
+    # Generate the reverse mapping of state id's to unique observation mode id's
+    state_id_obs_mode_id_map = np.empty(len(state), np.int32)
+
+    for o, (obs_mode, state_ids) in enumerate(obs_mode_state_id_map.items()):
+      for sid in state_ids:
+        state_id_obs_mode_id_map[sid] = o
+
+    # Broadcast generated observation mode id's against MAIN.STATE_ID
+    obs_mode_id = np.empty_like(state_id)
+    chunk = (len(state_id) + ncpus - 1) // ncpus
+
+    def par_assign(oid, sid):
+      oid[:] = state_id_obs_mode_id_map[sid]
+
+    list(
+      pool.map(
+        par_assign, partition_args(obs_mode_id, chunk), partition_args(state_id, chunk)
+      )
+    )
+    return obs_mode_id, dict(obs_mode_state_id_map)
 
   def partition_columns_from_schema(
     self, partition_schema: List[str]
@@ -470,39 +473,25 @@ class MSv2Structure(Mapping):
     """
     schema: Set[str] = set(partition_schema)
 
-    # Always partition by these columns
-    columns: Dict[str, None] = {c: None for c in DEFAULT_PARTITION_COLUMNS}
+    # Always partition by default columns
+    columns: Dict[str, None] = {c: None for c in DEFAULT_MAIN_PARTITION_COLUMNS}
+    subtable_columns: Dict[str, None] = {
+      c: None for c in DEFAULT_SUBTABLE_PARTITION_COLUMNS
+    }
 
     for column in VALID_MAIN_PARTITION_COLUMNS:
       if column in schema and column not in columns:
         columns[column] = None
 
-    # Add FIELD_ID if partitioning by FIELD columns
-    if (
-      len(set(VALID_FIELD_PARTITION_COLUMNS).intersection(schema)) > 0
-      and "FIELD_ID" not in columns
-    ):
-      columns["FIELD_ID"] = None
+    for column in VALID_FIELD_PARTITION_COLUMNS:
+      if column in schema and column not in subtable_columns:
+        subtable_columns[column] = None
 
-    # Add STATE_ID if partitioning by STATE columns
-    # and the STATE table is present and populated
-    if (
-      hasattr(self, "_state")
-      and len(self._state) != 0
-      and len(set(VALID_STATE_PARTITION_COLUMNS).intersection(schema)) > 0
-      and "STATE_ID" not in columns
-    ):
-      columns["STATE_ID"] = None
+    for column in VALID_STATE_PARTITION_COLUMNS:
+      if column in schema and column not in subtable_columns:
+        subtable_columns[column] = None
 
-    subtable_columns: List[str] = []
-    MAIN_COLUMN_SET: Set[str] = set(VALID_MAIN_PARTITION_COLUMNS)
-
-    for column in list(columns.keys()):
-      if column not in MAIN_COLUMN_SET:
-        subtable_columns.append(column)
-        del columns[column]
-
-    return list(columns.keys()), subtable_columns
+    return list(columns.keys()), list(subtable_columns.keys())
 
   @staticmethod
   def par_unique(pool, ncpus, data, return_inverse=False):
@@ -520,9 +509,9 @@ class MSv2Structure(Mapping):
       def par_assign(target, data):
         target[:] = data
 
-      data_ids = pool.map(inv_fn, udatas, indices)
+      data_ids = list(pool.map(inv_fn, udatas, indices))
       inverse = np.empty(len(data), dtype=indices[0].dtype)
-      pool.map(par_assign, partition_args(inverse, chunk_size), data_ids)
+      list(pool.map(par_assign, partition_args(inverse, chunk_size), data_ids))
 
       return udata, inverse
     else:
@@ -530,190 +519,84 @@ class MSv2Structure(Mapping):
       return np.unique(np.concatenate(udata))
 
   @staticmethod
-  def read_subtables(
-    table_name: str,
-  ) -> Tuple[Dict[str, pa.Table], Dict[str, Dict[str, ColumnDesc]]]:
-    subtables: Dict[str, pa.Table] = {}
-    coldescs: Dict[str, Dict[str, ColumnDesc]] = defaultdict(dict)
-    SUBTABLES: List[Tuple[str, str, bool]] = [
-      ("ANTENNA", "_ant", True),
-      ("DATA_DESCRIPTION", "_ddid", True),
-      ("SPECTRAL_WINDOW", "_spw", True),
-      ("POLARIZATION", "_pol", True),
-      ("FEED", "_feed", True),
-      ("FIELD", "_field", False),
-      ("SOURCE", "_source", False),
-      ("STATE", "_state", False),
-    ]
+  def feed_antennas(
+    feed: pa.Table, spw_id: int, feed_ids: List[int]
+  ) -> npt.NDArray[np.int32]:
+    """Returns the unique ANTENNA_ID's associated with
+    the given SPECTRAL_WINDOW_ID and FEED_IDS"""
+    feed_spw_ids = feed["SPECTRAL_WINDOW_ID"].to_numpy()
+    feed_feed_ids = feed["FEED_ID"].to_numpy()
+    antenna_ids = feed["ANTENNA_ID"].to_numpy()
+    mask = np.logical_or(feed_spw_ids == -1, feed_spw_ids == spw_id)
+    np.logical_and(mask, np.isin(feed_feed_ids, feed_ids), out=mask)
+    return np.unique(antenna_ids[mask])
 
-    for subtable_name, attribute, required in SUBTABLES:
-      subtable_path = os.path.join(table_name, subtable_name)
-      if not os.path.exists(subtable_path):
-        if required:
-          raise FileNotFoundError(f"Required subtable {subtable_name} does not exist")
-        else:
-          continue
-
-      with Table.from_filename(
-        f"{table_name}::{subtable_name}", lockoptions="nolock"
-      ) as subtable:
-        subtables[attribute] = subtable.to_arrow()
-        coldescs[subtable_path] = FrozenDict(
-          {
-            c: ColumnDesc.from_descriptor(c, subtable.tabledesc())
-            for c in subtable.columns()
-          }
-        )
-
-    return subtables, coldescs
-
-  def partition_data_factory(
-    self,
-    name: str,
+  @staticmethod
+  def gen_row_interval_grids(
+    time_ids: npt.NDArray[np.int32],
+    antenna1: npt.NDArray[np.int32],
+    antenna2: npt.NDArray[np.int32],
+    intervals: npt.NDArray[np.float64],
+    rows: npt.NDArray[np.int32],
+    row_map: npt.NDArray[np.int64],
+    interval_grid: npt.NDArray[np.float64],
+    feed_antennas: npt.NDArray[npt.int32],
+    na: int,
+    nbl: int,
     auto_corrs: bool,
-    key: PartitionKeyT,
-    value: Dict[str, npt.NDArray],
-    pool: cf.Executor,
-    ncpus: int,
-  ) -> Tuple[PartitionKeyT, PartitionData]:
-    """Generate an updated partition key and
-    `PartitionData` object.
+  ) -> None:
+    """Populate the row map and interval grids"""
 
-    The partition key is updated with subtable partitioning keys
-    (primarily `FIELD.SOURCE_ID` and `STATE.OBSMODE`).
+    # If the row_map contains no auto-correlations
+    # they must be stripped out of the data
+    if not auto_corrs and not np.all(mask := antenna1 != antenna2):
+      time_ids = time_ids[mask]
+      antenna1 = antenna1[mask]
+      antenna2 = antenna2[mask]
+      rows = rows[mask]
+      intervals = intervals[mask]
 
-    The `PartitionData` object represents a summary of the
-    partition data passed in via arguments.
-    """
-    time = value["TIME"]
-    interval = value["INTERVAL"]
-    ant1 = value["ANTENNA1"]
-    ant2 = value["ANTENNA2"]
-    rows = value["row"]
+    # Normalise the baseline direction
+    if np.any(mask := antenna1 > antenna2):
+      antenna1[mask], antenna2[mask] = antenna2[mask], antenna1[mask]
 
-    # Compute the unique times and their inverse index
-    utime, time_ids = self.par_unique(pool, ncpus, time, return_inverse=True)
+    # Maybe normalise the antenna id's to np.arange(feed_antennas)
+    normed_antennas = np.arange(feed_antennas.size, dtype=feed_antennas.dtype)
+    if not np.all(feed_antennas == normed_antennas):
+      antenna1 = np.searchsorted(feed_antennas, antenna1)
+      antenna2 = np.searchsorted(feed_antennas, antenna2)
 
-    # Compute unique intervals
-    uinterval = self.par_unique(pool, ncpus, interval)
+    index = time_ids * nbl
+    index += baseline_id(antenna1, antenna2, na, auto_corrs)
+    row_map[index] = rows
+    interval_grid[index] = intervals
 
-    try:
-      ddid = next(int(i) for (c, i) in key if c == "DATA_DESC_ID")
-    except StopIteration:
-      raise KeyError(f"DATA_DESC_ID must be present in partition key {key}")
+    return index
 
-    if ddid >= len(self._ddid):
-      raise InvalidMeasurementSet(
-        f"DATA_DESC_ID {ddid} does not exist in {name}::DATA_DESCRIPTION"
-      )
+  @staticmethod
+  def read_subtable(
+    table_name: str,
+    subtable_name: str,
+    missing: Literal["raise", "none"] = "raise",
+    columns: Sequence[str] = (),
+  ) -> pa.Table | None:
+    subtable_path = os.path.join(table_name, subtable_name)
 
-    # Extract field and source names
-    field_id = value.get("FIELD_ID")
-    field_names: List[str] = []
-    source_names: List[str] = []
-    line_names: List[str] = []
+    if not os.path.exists(subtable_path):
+      if missing == "raise":
+        raise FileNotFoundError(f"Required subtable {subtable_name} does not exist")
+      else:
+        return None
 
-    if field_id is not None and len(self._field) > 0:
-      ufield_ids = self.par_unique(pool, ncpus, field_id)
-      fields = self._field.take(ufield_ids)
-      field_names = fields["NAME"].to_pylist()
-      source_ids = fields["SOURCE_ID"].to_pylist()
-
-      if "SOURCE_ID" in self._subtable_partition_columns:
-        assert len(source_ids) == 1
-        key += (("SOURCE_ID", source_ids[0]),)
-
-      # Select out SOURCES if we have the table
-      if hasattr(self, "_source") and len(self._source) > 0:
-        sources = self._source.take(source_ids)
-        source_names = sources["NAME"].to_pylist()
-        if "TRANSITION" in self._source.column_names:
-          line_names = sources["TRANSITION"].to_pylist()
-
-    # Extract scan numbers
-    scan_number = value.get("SCAN_NUMBER")
-    scan_numbers: List[int] = []
-
-    if scan_number is not None:
-      scan_numbers = self.par_unique(pool, ncpus, scan_number).tolist()
-
-    # Extract intents and sub scan numbers
-    state_id = value.get("STATE_ID")
-    intents: List[str] = []
-    sub_scan_numbers: List[int] = []
-
-    if state_id is not None and len(self._state) > 0:
-      ustate_ids = self.par_unique(pool, ncpus, state_id)
-      states = self._state.take(ustate_ids)
-      intents = states["OBS_MODE"].to_numpy(zero_copy_only=False).tolist()
-      sub_scan_numbers = states["SUB_SCAN"].to_numpy(zero_copy_only=False).tolist()
-
-      if "OBS_MODE" in self._subtable_partition_columns:
-        assert len(intents) == 1
-        key += (("OBS_MODE", intents[0]),)
-
-    # Extract polarization information
-    pol_id = self._ddid["POLARIZATION_ID"][ddid].as_py()
-
-    if pol_id >= len(self._pol):
-      raise InvalidMeasurementSet(
-        f"POLARIZATION_ID {pol_id} does not exist in {name}::POLARIZATION"
-      )
-
-    corr_type = Polarisations.from_values(self._pol["CORR_TYPE"][pol_id].as_py())
-
-    # Extract spectral window information
-    spw_id = self._ddid["SPECTRAL_WINDOW_ID"][ddid].as_py()
-
-    if spw_id >= len(self._spw):
-      raise InvalidMeasurementSet(
-        f"SPECTRAL_WINDOW_ID {spw_id} does not exist in {name}::SPECTRAL_WINDOW"
-      )
-
-    chan_freq = self._spw["CHAN_FREQ"][spw_id].as_py()
-    uchan_width = np.unique(self._spw["CHAN_WIDTH"][spw_id].as_py())
-    spw_name = self._spw["NAME"][spw_id].as_py()
-    spw_freq_group_name = self._spw["FREQ_GROUP_NAME"][spw_id].as_py()
-    spw_ref_freq = self._spw["REF_FREQUENCY"][spw_id].as_py()
-    spw_meas_freq_ref = self._spw["MEAS_FREQ_REF"][spw_id].as_py()
-    spw_frame = FrequencyMeasures(spw_meas_freq_ref).name.lower()
-
-    # Generate the row map in parallel
-    row_map = np.full(utime.size * self.nbl, -1, dtype=np.int64)
-    chunk_size = (len(rows) + ncpus - 1) // ncpus
-
-    def gen_row_map(time_ids, ant1, ant2, rows):
-      bl_ids = baseline_id(ant1, ant2, self.na, auto_corrs=auto_corrs)
-      row_map[time_ids * self.nbl + bl_ids] = rows
-
-    assert len(ant1) == len(rows)
-
-    s = partial(partition_args, chunk=chunk_size)
-    pool.map(gen_row_map, s(time_ids), s(ant1), s(ant2), s(rows))
-
-    partition_data = PartitionData(
-      time=utime,
-      interval=uinterval,
-      chan_freq=chan_freq,
-      chan_width=uchan_width,
-      corr_type=corr_type.to_str(),
-      intents=intents,
-      field_names=field_names,
-      line_names=line_names,
-      source_names=source_names,
-      spw_name=spw_name,
-      spw_freq_group_name=spw_freq_group_name,
-      spw_ref_freq=spw_ref_freq,
-      spw_frame=spw_frame,
-      row_map=row_map.reshape(utime.size, self.nbl),
-      scan_numbers=scan_numbers,
-      sub_scan_numbers=sub_scan_numbers,
-    )
-
-    return tuple(sorted(key)), partition_data
+    with Table.from_filename(subtable_path, lockoptions="nolock") as T:
+      return T.to_arrow(columns=list(columns))
 
   def __init__(
-    self, ms: TableFactory, partition_schema: List[str], auto_corrs: bool = True
+    self,
+    ms: Multiton,
+    subtable_factories: Dict[str, Multiton],
+    partition_schema: List[str],
+    auto_corrs: bool,
   ):
     import time as modtime
 
@@ -724,25 +607,24 @@ class MSv2Structure(Mapping):
     )
 
     self._ms_factory = ms
+    self._subtable_factories = subtable_factories
     self._partition_columns = partition_columns
     self._subtable_partition_columns = subtable_columns
-    self._auto_corrs = auto_corrs
 
-    ms_table = ms()
-    name = ms_table.name()
-    table_desc = ms_table.tabledesc()
-    subtables, coldescs = self.read_subtables(name)
+    ms_table = ms.instance
+    ms_name = ms_table.name()
 
-    for a, subtable in subtables.items():
-      setattr(self, a, subtable)
+    try:
+      data_description = subtable_factories["DATA_DESCRIPTION"].instance
+      feed = subtable_factories["FEED"].instance
+      state = subtable_factories["STATE"].instance
+      field = subtable_factories["FIELD"].instance
+    except KeyError as e:
+      raise InvalidMeasurementSet(
+        f"Measurement Set {ms_name} is missing required subtable {e}"
+      )
 
-    coldescs["MAIN"] = FrozenDict(
-      {c: ColumnDesc.from_descriptor(c, table_desc) for c in ms_table.columns()}
-    )
-
-    self._column_descs = FrozenDict(coldescs)
-
-    other_columns = ["INTERVAL"]
+    other_columns = ["FEED1", "FEED2", "INTERVAL"]
     read_columns = (
       set(VALID_MAIN_PARTITION_COLUMNS) | set(SORT_COLUMNS) | set(other_columns)
     )
@@ -750,21 +632,177 @@ class MSv2Structure(Mapping):
 
     ncpus = mp.cpu_count()
     with cf.ThreadPoolExecutor(max_workers=ncpus) as pool:
-      source_id = self.maybe_get_source_id(
-        pool, ncpus, arrow_table["FIELD_ID"].to_numpy()
-      )
-      if source_id is not None:
-        arrow_table = arrow_table.append_column("SOURCE_ID", source_id[None, :])
 
+      def subtable_column_group(s):
+        """Return the group that the subtable column should be assigned to"""
+        return partition_columns if s in subtable_columns else other_columns
+
+      def get_uid_column(column, dkey, ids) -> List[Any]:
+        """Get the unique values for the given column, preferably from the
+        partition key or failing that, from `ids`. Generally should be used with
+        ID columns"""
+        try:
+          return [dkey[column]]
+        except KeyError:
+          return self.par_unique(pool, ncpus, ids).tolist()
+
+      # Broadcast and add FIELD.SOURCE_ID column
+      field_id = arrow_table["FIELD_ID"].to_numpy()
+      source_id = self.broadcast_source_id(pool, ncpus, field, field_id)
+      arrow_table = arrow_table.append_column("SOURCE_ID", source_id[None, :])
+      subtable_column_group("SOURCE_ID").append("SOURCE_ID")
+
+      # Broadcast and add STATE.OBS_MODE and STATE.SUB_SCAN_NUMBER columns
+      state_id = arrow_table["STATE_ID"].to_numpy()
+      obs_mode_id, om_to_sid_map = self.broadcast_obsmode_id(
+        pool, ncpus, state, state_id
+      )
+      subscan_nr = self.broadcast_sub_scan_number(pool, ncpus, state, state_id)
+      arrow_table = arrow_table.append_column("OBS_MODE_ID", obs_mode_id[None, :])
+      arrow_table = arrow_table.append_column("SUB_SCAN_NUMBER", subscan_nr[None, :])
+      subtable_column_group("SUB_SCAN_NUMBER").append("SUB_SCAN_NUMBER")
+      # Substitute OBS_MODE for OBS_MODE_ID
+      partition_columns.append("OBS_MODE_ID")
+
+      # Perform partitioning
       partitions = TablePartitioner(
         partition_columns, SORT_COLUMNS, other_columns + ["row"]
       ).partition(arrow_table, pool)
+
+      # Generate a PartitionData variable per partition
       self._partitions = {}
 
-      for k, v in partitions.items():
-        key, partition = self.partition_data_factory(
-          name, auto_corrs, k, v, pool, ncpus
-        )
-        self._partitions[key] = partition
+      for key, partition in partitions.items():
+        dkey = dict(key)
 
-    logger.info("Reading %s structure in took %fs", name, modtime.time() - start)
+        # The following should always be part of the partioning key
+        try:
+          ddid = int(dkey["DATA_DESC_ID"])
+          obs_id = int(dkey["OBSERVATION_ID"])
+          obs_mode_id = int(dkey.pop("OBS_MODE_ID"))
+        except KeyError as e:
+          raise KeyError(f"{e} must be present in partition key {key}")
+
+        dkey["OBS_MODE"] = tuple(om_to_sid_map.keys())[obs_mode_id]
+
+        if ddid >= len(data_description):
+          raise InvalidMeasurementSet(
+            f"DATA_DESC_ID {ddid} does not exist in {ms_name}::DATA_DESCRIPTION"
+          )
+
+        spw_id = data_description["SPECTRAL_WINDOW_ID"][ddid].as_py()
+        pol_id = data_description["POLARIZATION_ID"][ddid].as_py()
+        antenna1 = partition["ANTENNA1"]
+        antenna2 = partition["ANTENNA2"]
+        interval = partition["INTERVAL"]
+        rows = partition["row"]
+        chunk = (len(rows) + ncpus - 1) // ncpus
+
+        # Unique partition key values
+        ufield_ids = get_uid_column("FIELD_ID", dkey, partition["FIELD_ID"])
+        usubscan_nrs = get_uid_column(
+          "SUB_SCAN_NUMBER", dkey, partition["SUB_SCAN_NUMBER"]
+        )
+        uscan_nrs = get_uid_column("SCAN_NUMBER", dkey, partition["SCAN_NUMBER"])
+        ustate_ids = get_uid_column("STATE_ID", dkey, partition["STATE_ID"])
+        usource_ids = get_uid_column("SOURCE_ID", dkey, partition["SOURCE_ID"])
+
+        # Unique sorting/other column values
+        utime, time_ids = self.par_unique(
+          pool, ncpus, partition["TIME"], return_inverse=True
+        )
+        uantenna1 = self.par_unique(pool, ncpus, antenna1)
+        uantenna2 = self.par_unique(pool, ncpus, antenna2)
+        uantennas = np.union1d(uantenna1, uantenna2)
+        ufeed1s = self.par_unique(pool, ncpus, partition["FEED1"])
+        ufeed2s = self.par_unique(pool, ncpus, partition["FEED2"])
+        ufeeds = np.union1d(ufeed1s, ufeed2s)
+
+        # Query the FEED table to discover all canonical
+        # antennas in this partition
+        feed_antennas = self.feed_antennas(feed, spw_id, ufeeds)
+        if not np.all(np.isin(uantennas, feed_antennas)):
+          raise InvalidMeasurementSet(
+            f"Unique ANTENNA1 and ANTENNA2 values {uantennas} "
+            f"are not a subset of FEED::ANTENNA_ID {feed_antennas} "
+            f"for SPECTRAL_WINDOW_ID={spw_id} and feeds={ufeeds}"
+          )
+
+        na = len(feed_antennas)
+        nbl = nr_of_baselines(na, auto_corrs)
+
+        # Populate row map and interval grids
+        row_map = np.full(utime.size * nbl, -1, dtype=np.int64)
+        interval_grid = np.full(utime.size * nbl, -1.0, dtype=np.float64)
+
+        index_list = list(
+          pool.map(
+            partial(
+              self.gen_row_interval_grids,
+              row_map=row_map,
+              interval_grid=interval_grid,
+              feed_antennas=feed_antennas,
+              na=na,
+              nbl=nbl,
+              auto_corrs=auto_corrs,
+            ),
+            partition_args(time_ids, chunk),
+            partition_args(antenna1, chunk),
+            partition_args(antenna2, chunk),
+            partition_args(interval, chunk),
+            partition_args(rows, chunk),
+          )
+        )
+
+        indices = np.concatenate(index_list)
+
+        if np.any(np.bincount(indices) > 1):
+          msg = []
+          if len(ufeeds) > 1:
+            msg.append(f"Multiple feeds {ufeeds} are present")
+          if len(ustate_ids) > 1:
+            msg.append(f"Multiple STATE_ID {ustate_ids} are present")
+          if len(ufield_ids) > 1:
+            msg.append(f"Multiple FIELD_ID {ufield_ids}  are present")
+
+          msg_str = "\n  ".join(msg)
+
+          raise PartitioningError(
+            f"Multiple occurences of a (TIME, ANTENNA1, ANTENNA2) "
+            f"tuple are present in partition {key}. "
+            f"It is not possible to establish a unique "
+            f"(time, baseline) grid for this partition. "
+            f"Generally, the solution is to partition more finely by adding "
+            f"columns to the partition_schema.\n"
+            f"{msg_str}"
+          )
+
+        # In the case of averaged datasets, intervals in the last timestep
+        # may differ from other intervals. Remove it and try to find
+        # a unique interval
+        interval_grid = interval_grid.reshape(utime.size, nbl)
+
+        if interval_grid.shape[0] > 1:
+          interval_grid = interval_grid[:-1, :]
+
+        uinterval = self.par_unique(pool, ncpus, interval_grid.ravel())
+        uinterval = uinterval[uinterval >= 0]
+
+        self._partitions[tuple(sorted(dkey.items()))] = PartitionData(
+          time=utime,
+          interval=uinterval,
+          obs_id=obs_id,
+          spw_id=spw_id,
+          pol_id=pol_id,
+          antenna_ids=feed_antennas.tolist(),
+          feed_ids=ufeeds.tolist(),
+          field_ids=ufield_ids,
+          scan_numbers=uscan_nrs,
+          source_ids=usource_ids,
+          state_ids=ustate_ids,
+          obs_mode=str(dkey["OBS_MODE"]),
+          sub_scan_numbers=usubscan_nrs,
+          row_map=row_map.reshape(utime.size, nbl),
+        )
+
+    logger.info("Reading %s structure in took %fs", ms_name, modtime.time() - start)

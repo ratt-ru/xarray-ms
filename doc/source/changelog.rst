@@ -5,12 +5,49 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+
+0.2.4 (19-03-2025)
+------------------
+* Fix no-autocorrelation case when constructing partition row maps (:pr:`85`)
+* Default auto correlations to `False` (:pr:`85`)
+* Refactor dataset factories into `factories` subpackage (:pr:`83`, :pr:`86`)
+* Use a CommonStoreArgs class to default initialise common store arguments (:pr:`83`)
+* Release resources when datasets or datatrees are closed (:pr:`81`)
+* Use creator attribute to record xarray-ms version (:pr:`80`)
+* Generalise the TableFactory class into a Multiton class (:pr:`79`)
+* Refactor partitioning logic to be more robust (:pr:`78`)
+* The set of ANTENNA's related to a partition in the FEED table is
+  used to create the antenna dataset for that partition (:pr:`78`)
+* Metadata extraction moved to dataset factories (:pr:`78`)
+* Extend the antenna dataset implementation (:pr:`77`)
+* Fix MSv2Store._partition_key typing (:pr:`76`)
+* Add observation_info attribute (:pr:`74`)
+* Add ANTENNA_DISH_DIAMETER variable to antenna dataset (:pr:`73`)
+* Add cartesian_pos_label labels to antenna dataset (:pr:`72`)
+* Allow fallback to string values in partition keys (:pr:`71`)
+* Report irregular channel widths with an IrregularGridWarning (:pr:`70`)
+* Tighten SOURCE_ID partitioning checks (:pr:`69`)
+* Check that each partition has a unique feed index pair (:pr:`68`)
+* Remove unused and commented out test cases (:pr:`67`)
+
+
+0.2.3 (28-02-2025)
+------------------
+* Remove superfluous hollow DataTree node containing the Measurement Set name.
+  Visibility partition structure changes to ``msname_partition_000``. (:pr:`66`)
+
+0.2.2 (27-02-2025)
+------------------
+* Add u, v and w labels to the uvw_label coordinate (:pr:`65`)
+* Remove ellipsoid_pos_label from ANTENNA_POSITION component coordinate (:pr:`64`)
+* Move README content into the Documentation (:pr:`62`)
+* Allow varying intervals in the last timestep of a partition (:pr:`61`)
 * Rename ANTENNA dataset to antenna_xds (:pr:`60`)
 * Depend on arcae ^0.2.7 (:pr:`59`)
 * Fix test cases that succeeded after attributes changed (:pr:`57`)
 * Make MSv2Array transform a property (:pr:`56`)
 * Further partitioning improvement and alignment with MSv4 (:pr:`55`)
-* Use epoch to dintinguish multiple instances of the same dataset (:pr:`54`)
+* Use epoch to distinguish multiple instances of the same dataset (:pr:`54`)
 * Use np.logical_or.reduce for generating diffs over more than 2 partitioning arrays (:pr:`53`)
 * Improve Missing Column error (:pr:`52`)
 * Fix `open_datatree` instructions in the README (:pr:`51`)

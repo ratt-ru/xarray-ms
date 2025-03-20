@@ -3,6 +3,7 @@ import os
 import tempfile
 import typing
 from collections.abc import Callable
+from itertools import product
 from typing import (
   Any,
   Dict,
@@ -65,14 +66,14 @@ class PartitionDescriptor:
 
       desc = PartitionDescriptor(
           DATA_DESC_ID=[0],
-          PROCESSOR_ID=[0, 1, 2],
+          OBSERVATION_ID=[0, 1, 2],
           FIELD_ID=[0, 1],
           ...
       )
   """
 
   DATA_DESC_ID: npt.NDArray[np.int32]
-  PROCESSOR_ID: npt.NDArray[np.int32]
+  OBSERVATION_ID: npt.NDArray[np.int32]
   FIELD_ID: npt.NDArray[np.int32]
   ANTENNA1: npt.NDArray[np.int32]
   ANTENNA2: npt.NDArray[np.int32]
@@ -114,7 +115,10 @@ class MSStructureSimulator:
   simulate_data: bool
   model: Dict[str, Any]
   data_description: DataDescription
-  transform_data: Callable[[PartitionDataType], PartitionDataType] | None
+  transform_desc: Callable[[PartitionDescriptor], PartitionDescriptor] | None
+  transform_data: (
+    Callable[[PartitionDescriptor, PartitionDataType], PartitionDataType] | None
+  )
 
   def __init__(
     self,
@@ -122,20 +126,24 @@ class MSStructureSimulator:
     time_chunks: int = 10,
     dump_rate: float = 8,
     time_start: float = FIRST_FEB_2023_MJDS,
-    nproc: int = 1,
+    nobs: int = 1,
     nfield: int = 1,
     nstate: int = 1,
     nantenna: int = 3,
     data_description: DataDescArgType | None = None,
-    partition: Tuple[str, ...] = ("PROCESSOR_ID", "FIELD_ID", "DATA_DESC_ID"),
+    partition: Tuple[str, ...] = ("OBSERVATION_ID", "FIELD_ID", "DATA_DESC_ID"),
     auto_corrs: bool = True,
     simulate_data: bool = True,
-    transform_data: Callable[[PartitionDataType], PartitionDataType] | None = None,
+    transform_desc: Callable[[PartitionDescriptor], PartitionDescriptor] | None = None,
+    transform_data: Callable[
+      [PartitionDescriptor, PartitionDataType], PartitionDataType
+    ]
+    | None = None,
   ):
     assert ntime >= 1
     assert time_chunks > 0
     assert dump_rate > 0
-    assert nproc >= 1
+    assert nobs >= 1
     assert nfield >= 1
     assert nantenna >= 1
 
@@ -155,7 +163,7 @@ class MSStructureSimulator:
     feed1, feed2 = feed1.astype(np.int32), feed2.astype(np.int32)
 
     valid_partitions = {
-      "PROCESSOR_ID": np.arange(nproc, dtype=np.int32),
+      "OBSERVATION_ID": np.arange(nobs, dtype=np.int32),
       "FIELD_ID": np.arange(nfield, dtype=np.int32),
       "DATA_DESC_ID": np.arange(len(self.data_description), dtype=np.int32),
       "ANTENNA1": ant1,
@@ -179,6 +187,7 @@ class MSStructureSimulator:
     self.ntime = ntime
     self.nantenna = nantenna
     self.nfield = nfield
+    self.nobs = nobs
     self.nstate = nstate
     self.auto_corrs = auto_corrs
     self.dump_rate = dump_rate
@@ -187,6 +196,7 @@ class MSStructureSimulator:
     self.simulate_data = simulate_data
     self.partition_names = cbp_names
     self.partition_indices = bcbp_indices
+    self.transform_desc = transform_desc
     self.transform_data = transform_data
     self.model = {
       "data_description": self.data_description,
@@ -209,9 +219,16 @@ class MSStructureSimulator:
       startrow = 0
 
       for chunk_desc in self.generate_descriptors():
+        # Apply any chunk descriptor transforms
+        if self.transform_desc is not None:
+          chunk_desc = self.transform_desc(chunk_desc)
+
+        # Generate the chunk data
         data_dict = self.data_factory(chunk_desc)
+
+        # Apply any data transforms
         if self.transform_data is not None:
-          data_dict = self.transform_data(data_dict)
+          data_dict = self.transform_data(chunk_desc, data_dict)
         (nrow,) = data_dict["TIME"][1].shape
         T.addrows(nrow)
 
@@ -224,18 +241,24 @@ class MSStructureSimulator:
     nddid = len(self.data_description)
 
     with Table.from_filename(f"{output_ms}::FEED", **kw) as T:
-      T.addrows(len(self.feeds))
-      for r, feed in enumerate(self.feeds.values()):
-        pol_types = np.array(feed.polarisation_types())[None, :]
-        index = (np.array([r]),)
-        T.putcol("NUM_RECEPTORS", np.array([feed.nreceptors]), index=index)
-        T.putcol("BEAM_OFFSET", np.zeros((1, 2, feed.nreceptors)), index=index)
-        T.putcol("RECEPTOR_ANGLE", np.zeros((1, feed.nreceptors)), index=index)
-        T.putcol("POLARIZATION_TYPE", pol_types, index=index)
+      ant_id_feeds = list(product(range(self.nantenna), enumerate(self.feeds.values())))
+      T.addrows(len(ant_id_feeds))
+      for r, (antenna_id, (feed_id, feed)) in enumerate(ant_id_feeds):
+        i = (np.array([r]),)
+        T.putcol("FEED_ID", np.array([feed_id]), index=i)
+        T.putcol("ANTENNA_ID", np.array([antenna_id]), index=i)
+        # Feed setup applies to all SPW's
+        T.putcol("SPECTRAL_WINDOW_ID", np.array([-1]), index=i)
+        T.putcol("NUM_RECEPTORS", np.array([feed.nreceptors]), index=i)
+        T.putcol("BEAM_OFFSET", np.full((1, 2, feed.nreceptors), 0.1), index=i)
+        T.putcol("RECEPTOR_ANGLE", np.full((1, feed.nreceptors), 0.1), index=i)
+        T.putcol(
+          "POLARIZATION_TYPE", np.array(feed.polarisation_types())[None, :], index=i
+        )
         T.putcol(
           "POL_RESPONSE",
-          np.zeros((1, feed.nreceptors, feed.nreceptors), np.complex64),
-          index=index,
+          np.full((1, feed.nreceptors, feed.nreceptors), 0.1 + 0.1j, np.complex64),
+          index=i,
         )
 
     # Populate the main DATA_DESCRIPTION table
@@ -281,6 +304,7 @@ class MSStructureSimulator:
       )
       T.putcol("POSITION", position)
       T.putcol("OFFSET", position)  # Use a ramp here too
+      T.putcol("DISH_DIAMETER", np.asarray([13.5] * self.nantenna))
       T.putcol("NAME", np.asarray([f"ANTENNA-{i}" for i in range(self.nantenna)]))
       T.putcol("MOUNT", np.asarray(["ALT-AZ" for _ in range(self.nantenna)]))
       T.putcol("STATION", np.asarray([f"STATION-{i}" for i in range(self.nantenna)]))
@@ -294,6 +318,14 @@ class MSStructureSimulator:
       T.addrows(self.nstate)
       T.putcol("SUB_SCAN", np.arange(self.nstate))
       T.putcol("OBS_MODE", np.asarray(["CALIBRATE_AMPL#OFF_SOURCE"] * self.nstate))
+
+    with Table.from_filename(f"{output_ms}::OBSERVATION", **kw) as T:
+      T.addrows(self.nobs)
+      T.putcol("TELESCOPE_NAME", np.asarray(["telescope"] * self.nobs))
+      T.putcol("OBSERVER", np.asarray(["observed"] * self.nobs))
+      T.putcol("PROJECT", np.asarray(["project"] * self.nobs))
+      # TODO(sjperkins). Make this physical
+      T.putcol("RELEASE_DATE", np.asarray([0.0] * self.nobs))
 
     source_table_desc = ms_descriptor("SOURCE", complete=True)
     with Table.ms_from_descriptor(
@@ -366,7 +398,7 @@ class MSStructureSimulator:
     feed = desc.feed_map[tuple(corrs.polarisation_types())]
 
     array_groups: List[Tuple[List[str], List[npt.NDArray]]] = [
-      (["PROCESSOR_ID"], [desc.PROCESSOR_ID]),
+      (["OBSERVATION_ID"], [desc.OBSERVATION_ID]),
       (["FIELD_ID"], [desc.FIELD_ID]),
       (["DATA_DESC_ID"], [desc.DATA_DESC_ID]),
       (["TIME"], [desc.TIME]),

@@ -4,6 +4,7 @@ import pickle
 import numpy as np
 import pyarrow as pa
 import pytest
+import xarray
 from arcae.lib.arrow_tables import Table
 from numpy.testing import assert_array_equal, assert_equal
 
@@ -12,10 +13,10 @@ from xarray_ms.backend.msv2.structure import (
   TablePartitioner,
   baseline_id,
 )
-from xarray_ms.backend.msv2.table_factory import TableFactory
+from xarray_ms.multiton import Multiton
 
 
-@pytest.mark.parametrize("na", [4, 7])
+@pytest.mark.parametrize("na", [1, 2, 3, 4, 7])
 @pytest.mark.parametrize("auto_corrs", [True, False])
 def test_baseline_id(na, auto_corrs):
   ant1, ant2 = np.triu_indices(na, 0 if auto_corrs else 1)
@@ -27,14 +28,24 @@ def test_baseline_id(na, auto_corrs):
 @pytest.mark.parametrize("epoch", ["abcdef"])
 def test_structure_factory(simmed_ms, epoch):
   partition_schema = ["FIELD_ID", "DATA_DESC_ID", "OBSERVATION_ID", "OBS_MODE"]
-  table_factory = TableFactory(Table.from_filename, simmed_ms)
-  structure_factory = MSv2StructureFactory(table_factory, partition_schema, epoch)
+  table_factory = Multiton(Table.from_filename, simmed_ms)
+  from xarray_ms.backend.msv2.entrypoint_utils import subtable_factory
+
+  subtables = {
+    st: Multiton(subtable_factory, f"{simmed_ms}::{st}")
+    for st in ("DATA_DESCRIPTION", "FEED", "FIELD", "STATE")
+  }
+  structure_factory = MSv2StructureFactory(
+    table_factory, subtables, partition_schema, epoch, True
+  )
   assert pickle.loads(pickle.dumps(structure_factory)) == structure_factory
 
-  structure_factory2 = MSv2StructureFactory(table_factory, partition_schema, epoch)
-  assert structure_factory() is structure_factory2()
+  structure_factory2 = MSv2StructureFactory(
+    table_factory, subtables, partition_schema, epoch, True
+  )
+  assert structure_factory.instance is structure_factory2.instance
 
-  keys = tuple(k for kv in structure_factory().keys() for k, _ in kv)
+  keys = tuple(k for kv in structure_factory.instance.keys() for k, _ in kv)
   assert tuple(sorted(partition_schema)) == keys
 
 
@@ -97,12 +108,34 @@ def test_table_partitioner():
 
 def test_epoch(simmed_ms):
   partition_schema = ["FIELD_ID", "DATA_DESC_ID", "OBSERVATION_ID"]
-  table_factory = TableFactory(Table.from_filename, simmed_ms)
-  structure_factory = MSv2StructureFactory(table_factory, partition_schema, "abc")
-  structure_factory2 = MSv2StructureFactory(table_factory, partition_schema, "abc")
+  table_factory = Multiton(Table.from_filename, simmed_ms)
+  from xarray_ms.backend.msv2.entrypoint_utils import subtable_factory
 
-  assert structure_factory() is structure_factory2()
+  subtables = {
+    st: Multiton(subtable_factory, f"{simmed_ms}::{st}")
+    for st in ("DATA_DESCRIPTION", "FEED", "FIELD", "STATE")
+  }
 
-  structure_factory3 = MSv2StructureFactory(table_factory, partition_schema, "def")
+  structure_factory = MSv2StructureFactory(
+    table_factory, subtables, partition_schema, "abc", True
+  )
+  structure_factory2 = MSv2StructureFactory(
+    table_factory, subtables, partition_schema, "abc", True
+  )
 
-  assert structure_factory() is not structure_factory3()
+  assert structure_factory.instance is structure_factory2.instance
+
+  structure_factory3 = MSv2StructureFactory(
+    table_factory, subtables, partition_schema, "def", True
+  )
+
+  assert structure_factory.instance is not structure_factory3.instance
+
+
+def test_msv2_structure_release(simmed_ms):
+  assert len(MSv2StructureFactory._STRUCTURE_CACHE) == 0
+
+  with xarray.open_datatree(simmed_ms):
+    assert len(MSv2StructureFactory._STRUCTURE_CACHE) > 0
+
+  assert len(MSv2StructureFactory._STRUCTURE_CACHE) == 0
