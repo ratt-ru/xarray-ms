@@ -210,12 +210,12 @@ def test_differing_start_intervals(simmed_ms):
 
 
 def _remove_weight_spectrum_add_weight(chunk_desc, data_dict):
+  data_dict = data_dict.copy()
   del data_dict["WEIGHT_SPECTRUM"]
 
   ddid = chunk_desc.DATA_DESC_ID.item()
-  _, corrs = chunk_desc.data_description[ddid]
+  _, ncorr = map(len, chunk_desc.data_description[ddid])
   nrow = data_dict["DATA_DESC_ID"][-1].size
-  ncorr = len(corrs)
 
   # Generate a ramp function in the WEIGHT column
   shape = (nrow, ncorr)
