@@ -5,7 +5,9 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
-* Support fallback to WEIGHT if WEIGHT_SPECTRUM is not present
+* Support field_name, scan_number and sub_scan_number coordinates
+  on the Correlated Dataset  (:pr:`88`)
+* Support fallback to WEIGHT if WEIGHT_SPECTRUM is not present (:pr:`87`)
 
 0.2.4 (19-03-2025)
 ------------------
