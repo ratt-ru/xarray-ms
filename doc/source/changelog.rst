@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Support fallback to WEIGHT if WEIGHT_SPECTRUM is not present
 
 0.2.4 (19-03-2025)
 ------------------
