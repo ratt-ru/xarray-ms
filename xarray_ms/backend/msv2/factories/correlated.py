@@ -169,6 +169,7 @@ class CorrelatedDatasetFactory:
     pol_id = partition.pol_id
     spw = self._subtable_factories["SPECTRAL_WINDOW"].instance
     pol = self._subtable_factories["POLARIZATION"].instance
+    field = self._subtable_factories["FIELD"].instance
 
     chan_freq = spw["CHAN_FREQ"][spw_id].as_py()
     uchan_width = np.unique(spw["CHAN_WIDTH"][spw_id].as_py())
@@ -221,6 +222,8 @@ class CorrelatedDatasetFactory:
     else:
       data_vars.append(("WEIGHT", self._variable_from_column("WEIGHT_ROW", dim_sizes)))
 
+    field_names = field.take(partition.field_ids)["NAME"].to_numpy()
+
     # Add coordinates indexing coordinates
     coordinates = [
       (
@@ -237,6 +240,12 @@ class CorrelatedDatasetFactory:
       ),
       ("polarization", (("polarization",), corr_type, None)),
       ("uvw_label", (("uvw_label",), ["u", "v", "w"], None)),
+      ("field_name", ("time", field_names, {"coordinates": "field_name"})),
+      ("scan_number", ("time", partition.scan_numbers, {"coordinates": "scan_number"})),
+      (
+        "sub_scan_number",
+        ("time", partition.sub_scan_numbers, {"coordinates": "sub_scan_number"}),
+      ),
     ]
 
     e = {"preferred_chunks": self._preferred_chunks} if self._preferred_chunks else None
