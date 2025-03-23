@@ -8,7 +8,11 @@ from xarray.coding.variables import unpack_for_decoding
 from xarray.core.indexing import LazilyIndexedArray
 from xarray.core.utils import FrozenDict
 
-from xarray_ms.backend.msv2.array import BroadcastMSv2Array, MSv2Array
+from xarray_ms.backend.msv2.array import (
+  BroadcastMSv2Array,
+  MainMSv2Array,
+  MSv2Array,
+)
 from xarray_ms.backend.msv2.encoders import (
   CasaCoder,
   QuantityCoder,
@@ -110,36 +114,33 @@ class CorrelatedDatasetFactory:
 
     default = column_desc.dtype.type(schema.default)
 
-    array_kwargs = {
-      "table_factory": self._ms_factory,
-      "structure_factory": self._structure_factory,
-      "partition": self._partition_key,
-      "column": schema.name,
-      "shape": shape,
-      "dtype": column_desc.dtype,
-      "default": default,
-    }
+    high_res_shape = shape
+    low_res_index: Tuple[slice | None, ...] = tuple(slice(None) for _ in shape)
 
-    array_cls: type[MSv2Array | BroadcastMSv2Array] = MSv2Array
-
-    # TODO: Clean up this awful mess
-    # The full resolution Variable is derived from a low-resolution MSv2 column
-    # Create a Broadcasting Array with a low resolution shape and broadcasting index
-    if schema.low_res_dims is not None:
-      array_cls = BroadcastMSv2Array
+    if schema.low_res_dims:
       low_res_dims = ("time", "baseline_id") + schema.low_res_dims
+      high_res_shape = shape
       try:
-        low_res_shape = {d: dim_sizes[d] for d in low_res_dims}
+        shape_map = {d: dim_sizes[d] for d in low_res_dims}
       except KeyError as e:
         raise KeyError(f"No dimension size found for {e.args[0]}")
+      low_res_index = tuple(slice(None) if d in shape_map else None for d in dims)
+      shape = tuple(shape_map.values())
 
-      low_res_index = tuple(slice(None) if d in low_res_shape else None for d in dims)
-      array_kwargs["low_resolution_shape"] = tuple(low_res_shape.values())
-      array_kwargs["low_resolution_index"] = low_res_index
+    array: MSv2Array = MainMSv2Array(
+      self._ms_factory,
+      self._structure_factory,
+      self._partition_key,
+      schema.name,
+      shape,
+      column_desc.dtype,
+      default,
+    )
 
-    data = array_cls(**array_kwargs)
+    if schema.low_res_dims:
+      array = BroadcastMSv2Array(array, low_res_index, high_res_shape)
 
-    var = Variable(dims, data, fastpath=True)
+    var = Variable(dims, array, fastpath=True)
 
     # Apply any measures encoding
     if schema.coder:
@@ -207,8 +208,6 @@ class CorrelatedDatasetFactory:
         "EFFECTIVE_INTEGRATION_TIME",
         "UVW",
         "VISIBILITY",
-        # "FLAG",
-        # "WEIGHT",
       )
     ]
 
