@@ -7,6 +7,7 @@ import xarray
 from numpy.testing import assert_array_equal
 
 from xarray_ms.errors import IrregularGridWarning
+from xarray_ms.testing.simulator import STANDARD_DATA_COLUMNS
 
 
 @pytest.mark.parametrize(
@@ -206,3 +207,48 @@ def test_differing_start_intervals(simmed_ms):
   for p in ["000", "001"]:
     node = xdt[f"backend_partition_{p}"]
     assert np.isnan(node.time.attrs["integration_time"])
+
+
+def _remove_weight_spectrum_add_weight(chunk_desc, data_dict):
+  data_dict = data_dict.copy()
+  del data_dict["WEIGHT_SPECTRUM"]
+
+  ddid = chunk_desc.DATA_DESC_ID.item()
+  _, ncorr = map(len, chunk_desc.data_description[ddid])
+  nrow = data_dict["DATA_DESC_ID"][-1].size
+
+  # Generate a ramp function in the WEIGHT column
+  shape = (nrow, ncorr)
+  weight = np.arange(np.prod(shape), dtype=np.float64).reshape(shape)
+  data_dict["WEIGHT"] = ("row", weight)
+
+  return data_dict
+
+
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [
+    {
+      "name": "backend.ms",
+      "data_description": [(8, ["XX", "XY", "YX", "YY"]), (4, ["RR", "LL"])],
+      "table_desc": {k: v for k, v in STANDARD_DATA_COLUMNS.items() if k in {"DATA"}},
+      "transform_data": _remove_weight_spectrum_add_weight,
+    }
+  ],
+  indirect=True,
+)
+def test_low_resolution_read(simmed_ms):
+  """Test that a missing WEIGHT_SPECTRUM results in a broadcasted WEGITH column"""
+  dt = xarray.open_datatree(simmed_ms, auto_corrs=True)
+
+  for p in ["000", "001"]:
+    node = dt[f"backend_partition_{p}"]
+    ntime, nbl, nfreq, npol = (
+      node.sizes[d] for d in ("time", "baseline_id", "frequency", "polarization")
+    )
+    values = np.arange(np.prod((ntime, nbl, npol)), dtype=np.float64).reshape(
+      ntime, nbl, 1, npol
+    )
+    assert_array_equal(
+      np.broadcast_to(values, (ntime, nbl, nfreq, npol)), node.WEIGHT.values
+    )

@@ -8,7 +8,11 @@ from xarray.coding.variables import unpack_for_decoding
 from xarray.core.indexing import LazilyIndexedArray
 from xarray.core.utils import FrozenDict
 
-from xarray_ms.backend.msv2.array import MSv2Array
+from xarray_ms.backend.msv2.array import (
+  BroadcastMSv2Array,
+  MainMSv2Array,
+  MSv2Array,
+)
 from xarray_ms.backend.msv2.encoders import (
   CasaCoder,
   QuantityCoder,
@@ -26,6 +30,7 @@ class MSv2ColumnSchema:
   dims: Tuple[str, ...]
   default: Any = None
   coder: Type[CasaCoder] | None = None
+  low_res_dims: Tuple[str, ...] | None = None
 
 
 MSV4_to_MSV2_COLUMN_SCHEMAS = {
@@ -34,9 +39,19 @@ MSV4_to_MSV2_COLUMN_SCHEMAS = {
   "TIME_CENTROID": MSv2ColumnSchema("TIME_CENTROID", (), np.nan, TimeCoder),
   "EFFECTIVE_INTEGRATION_TIME": MSv2ColumnSchema("EXPOSURE", (), np.nan, QuantityCoder),
   "UVW": MSv2ColumnSchema("UVW", ("uvw_label",), np.nan, None),
+  "FLAG_ROW": MSv2ColumnSchema(
+    "FLAG_ROW", ("frequency", "polarization"), 1, None, low_res_dims=()
+  ),
   "FLAG": MSv2ColumnSchema("FLAG", ("frequency", "polarization"), 1, None),
   "VISIBILITY": MSv2ColumnSchema(
     "DATA", ("frequency", "polarization"), np.nan + np.nan * 1j, None
+  ),
+  "WEIGHT_ROW": MSv2ColumnSchema(
+    "WEIGHT",
+    ("frequency", "polarization"),
+    np.nan,
+    None,
+    low_res_dims=("polarization",),
   ),
   "WEIGHT": MSv2ColumnSchema(
     "WEIGHT_SPECTRUM", ("frequency", "polarization"), np.nan, None
@@ -78,11 +93,8 @@ class CorrelatedDatasetFactory:
       c: ColumnDesc.from_descriptor(c, ms_table_desc) for c in ms.columns()
     }
 
-  def _variable_from_column(self, column: str) -> Variable:
+  def _variable_from_column(self, column: str, dim_sizes: Dict[str, int]) -> Variable:
     """Derive an xarray Variable from the MSv2 column descriptor and schemas"""
-    structure = self._structure_factory.instance
-    partition = structure[self._partition_key]
-
     try:
       schema = MSV4_to_MSV2_COLUMN_SCHEMAS[column]
     except KeyError:
@@ -93,20 +105,6 @@ class CorrelatedDatasetFactory:
     except KeyError:
       raise KeyError(f"No Column Descriptor exist for {schema.name}")
 
-    spw = self._subtable_factories["SPECTRAL_WINDOW"].instance
-    pol = self._subtable_factories["POLARIZATION"].instance
-
-    chan_freq = spw["CHAN_FREQ"][partition.spw_id].as_py()
-    corr_type = pol["CORR_TYPE"][partition.pol_id].as_py()
-
-    dim_sizes = {
-      "time": len(partition.time),
-      "baseline_id": partition.nbl,
-      "frequency": len(chan_freq),
-      "polarization": len(corr_type),
-      **FIXED_DIMENSION_SIZES,
-    }
-
     dims = ("time", "baseline_id") + schema.dims
 
     try:
@@ -116,7 +114,20 @@ class CorrelatedDatasetFactory:
 
     default = column_desc.dtype.type(schema.default)
 
-    data = MSv2Array(
+    high_res_shape = shape
+    low_res_index: Tuple[slice | None, ...] = tuple(slice(None) for _ in shape)
+
+    if schema.low_res_dims:
+      low_res_dims = ("time", "baseline_id") + schema.low_res_dims
+      high_res_shape = shape
+      try:
+        shape_map = {d: dim_sizes[d] for d in low_res_dims}
+      except KeyError as e:
+        raise KeyError(f"No dimension size found for {e.args[0]}")
+      low_res_index = tuple(slice(None) if d in shape_map else None for d in dims)
+      shape = tuple(shape_map.values())
+
+    array: MSv2Array = MainMSv2Array(
       self._ms_factory,
       self._structure_factory,
       self._partition_key,
@@ -126,7 +137,10 @@ class CorrelatedDatasetFactory:
       default,
     )
 
-    var = Variable(dims, data, fastpath=True)
+    if schema.low_res_dims:
+      array = BroadcastMSv2Array(array, low_res_index, high_res_shape)
+
+    var = Variable(dims, array, fastpath=True)
 
     # Apply any measures encoding
     if schema.coder:
@@ -144,8 +158,7 @@ class CorrelatedDatasetFactory:
     structure = self._structure_factory.instance
     partition = structure[self._partition_key]
     ant1, ant2 = partition.antenna_pairs
-    nbl = partition.nbl
-    assert (nbl,) == ant1.shape
+    assert (partition.nbl,) == ant1.shape
 
     antenna = self._subtable_factories["ANTENNA"].instance
     ant_names = antenna["NAME"].to_numpy()
@@ -167,6 +180,14 @@ class CorrelatedDatasetFactory:
 
     corr_type = Polarisations.from_values(pol["CORR_TYPE"][pol_id].as_py()).to_str()
 
+    dim_sizes = {
+      "time": len(partition.time),
+      "baseline_id": partition.nbl,
+      "frequency": len(chan_freq),
+      "polarization": len(corr_type),
+      **FIXED_DIMENSION_SIZES,
+    }
+
     row_map = partition.row_map
     missing = np.count_nonzero(row_map == -1)
     if missing > 0:
@@ -181,16 +202,24 @@ class CorrelatedDatasetFactory:
       )
 
     data_vars = [
-      (n, self._variable_from_column(n))
+      (n, self._variable_from_column(n, dim_sizes))
       for n in (
         "TIME_CENTROID",
         "EFFECTIVE_INTEGRATION_TIME",
         "UVW",
         "VISIBILITY",
-        "FLAG",
-        "WEIGHT",
       )
     ]
+
+    if "FLAG" in self._main_column_descs:
+      data_vars.append(("FLAG", self._variable_from_column("FLAG", dim_sizes)))
+    else:
+      data_vars.append(("FLAG", self._variable_from_column("FLAG_ROW", dim_sizes)))
+
+    if "WEIGHT_SPECTRUM" in self._main_column_descs:
+      data_vars.append(("WEIGHT", self._variable_from_column("WEIGHT", dim_sizes)))
+    else:
+      data_vars.append(("WEIGHT", self._variable_from_column("WEIGHT_ROW", dim_sizes)))
 
     # Add coordinates indexing coordinates
     coordinates = [
@@ -230,8 +259,11 @@ class CorrelatedDatasetFactory:
       time_attrs = {"integration_time": np.nan}
       data_vars.extend(
         [
-          ("TIME", self._variable_from_column("TIME")),
-          ("INTEGRATION_TIME", self._variable_from_column("INTEGRATION_TIME")),
+          ("TIME", self._variable_from_column("TIME", dim_sizes)),
+          (
+            "INTEGRATION_TIME",
+            self._variable_from_column("INTEGRATION_TIME", dim_sizes),
+          ),
         ]
       )
 
