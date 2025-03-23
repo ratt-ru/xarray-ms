@@ -170,16 +170,16 @@ class PartitionData:
   spw_id: int  # unique from DATA_DESC_ID
   pol_id: int  # unique from DATA_DESC_ID
   # Multiple values per partition
-  antenna_ids: List[int]
-  feed_ids: List[int]
-  field_ids: List[int]
-  state_ids: List[int]
-  scan_numbers: List[int]
+  antenna_ids: npt.NDArray[np.int32]
+  feed_ids: npt.NDArray[np.int32]
+  field_ids: npt.NDArray[np.int32]
+  state_ids: npt.NDArray[np.int32]
+  scan_numbers: npt.NDArray[np.int32]
   # FIELD subtable
-  source_ids: List[int]
+  source_ids: npt.NDArray[np.int32]
   # STATE subtable
   obs_mode: str  # unique from STATE::OBS_MODE
-  sub_scan_numbers: List[int]
+  sub_scan_numbers: npt.NDArray[np.int32]
 
   # Row to baseline map
   row_map: npt.NDArray[np.int64]
@@ -637,14 +637,24 @@ class MSv2Structure(Mapping):
         """Return the group that the subtable column should be assigned to"""
         return partition_columns if s in subtable_columns else other_columns
 
-      def get_uid_column(column, dkey, ids) -> List[Any]:
+      def get_uid_column(column, dkey, ids) -> npt.NDArray:
         """Get the unique values for the given column, preferably from the
         partition key or failing that, from `ids`. Generally should be used with
         ID columns"""
         try:
-          return [dkey[column]]
+          return np.array([dkey[column]])
         except KeyError:
-          return self.par_unique(pool, ncpus, ids).tolist()
+          return self.par_unique(pool, ncpus, ids)
+
+      def time_coord(column, dkey, ids, utime, time_ids) -> npt.NDArray:
+        try:
+          value = dkey[column]
+        except KeyError:
+          result = np.empty(utime.shape, dtype=ids.dtype)
+          result[time_ids] = ids
+          return result
+        else:
+          return np.full(utime.shape, value)
 
       # Broadcast and add FIELD.SOURCE_ID column
       field_id = arrow_table["FIELD_ID"].to_numpy()
@@ -696,21 +706,25 @@ class MSv2Structure(Mapping):
         antenna2 = partition["ANTENNA2"]
         interval = partition["INTERVAL"]
         rows = partition["row"]
-        chunk = (len(rows) + ncpus - 1) // ncpus
-
-        # Unique partition key values
-        ufield_ids = get_uid_column("FIELD_ID", dkey, partition["FIELD_ID"])
-        usubscan_nrs = get_uid_column(
-          "SUB_SCAN_NUMBER", dkey, partition["SUB_SCAN_NUMBER"]
-        )
-        uscan_nrs = get_uid_column("SCAN_NUMBER", dkey, partition["SCAN_NUMBER"])
-        ustate_ids = get_uid_column("STATE_ID", dkey, partition["STATE_ID"])
-        usource_ids = get_uid_column("SOURCE_ID", dkey, partition["SOURCE_ID"])
 
         # Unique sorting/other column values
         utime, time_ids = self.par_unique(
           pool, ncpus, partition["TIME"], return_inverse=True
         )
+
+        # Unique partition key values
+        ufield_ids = time_coord(
+          "FIELD_ID", dkey, partition["FIELD_ID"], utime, time_ids
+        )
+        usubscan_nrs = time_coord(
+          "SUB_SCAN_NUMBER", dkey, partition["SUB_SCAN_NUMBER"], utime, time_ids
+        )
+        uscan_nrs = time_coord(
+          "SCAN_NUMBER", dkey, partition["SCAN_NUMBER"], utime, time_ids
+        )
+        ustate_ids = get_uid_column("STATE_ID", dkey, partition["STATE_ID"])
+        usource_ids = get_uid_column("SOURCE_ID", dkey, partition["SOURCE_ID"])
+
         uantenna1 = self.par_unique(pool, ncpus, antenna1)
         uantenna2 = self.par_unique(pool, ncpus, antenna2)
         uantennas = np.union1d(uantenna1, uantenna2)
@@ -730,6 +744,7 @@ class MSv2Structure(Mapping):
 
         na = len(feed_antennas)
         nbl = nr_of_baselines(na, auto_corrs)
+        chunk = (len(rows) + ncpus - 1) // ncpus
 
         # Populate row map and interval grids
         row_map = np.full(utime.size * nbl, -1, dtype=np.int64)
@@ -794,8 +809,8 @@ class MSv2Structure(Mapping):
           obs_id=obs_id,
           spw_id=spw_id,
           pol_id=pol_id,
-          antenna_ids=feed_antennas.tolist(),
-          feed_ids=ufeeds.tolist(),
+          antenna_ids=feed_antennas,
+          feed_ids=ufeeds,
           field_ids=ufield_ids,
           scan_numbers=uscan_nrs,
           source_ids=usource_ids,
