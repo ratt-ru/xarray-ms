@@ -207,6 +207,8 @@ def test_differing_start_intervals(simmed_ms):
   for p in ["000", "001"]:
     node = xdt[f"backend_partition_{p}"]
     assert np.isnan(node.time.attrs["integration_time"])
+    assert "TIME" in node.data_vars
+    assert "INTEGRATION_TIME" in node.data_vars
 
 
 def _remove_weight_spectrum_add_weight(chunk_desc, data_dict):
