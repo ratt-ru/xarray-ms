@@ -3,7 +3,7 @@
 Changelog
 =========
 
-X.Y.Z (DD-MM-YYYY)
+0.2.5 (24-03-2025)
 ------------------
 * Support field_name, scan_number and sub_scan_number coordinates
   on the Correlated Dataset  (:pr:`88`)
