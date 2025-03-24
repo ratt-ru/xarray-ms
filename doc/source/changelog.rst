@@ -3,6 +3,10 @@
 Changelog
 =========
 
+X.Y.Z (DD-MM-YYYY)
+------------------
+* Check for TIME and INTEGRATION_TIME in the case of multiple INTERVAL values (:pr:`90`)
+
 0.2.5 (24-03-2025)
 ------------------
 * Support field_name, scan_number and sub_scan_number coordinates
