@@ -11,7 +11,7 @@
 project = "xarray-ms"
 copyright = "2024, Simon Perkins"
 author = "Simon Perkins"
-release = "0.2.4"
+release = "0.2.5"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
