@@ -233,7 +233,7 @@ class MSv2StructureFactory:
   _epoch: str
   _auto_corrs: bool
   _STRUCTURE_CACHE: ClassVar[Cache] = Cache(
-    maxsize=100, ttl=60, on_get=on_get_keep_alive
+    maxsize=100, ttl=5 * 60, on_get=on_get_keep_alive
   )
 
   def __init__(
