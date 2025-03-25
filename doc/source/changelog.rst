@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Increase MSv2Structure cache timeout from 1 to 5 minutes (:pr:`91`)
 * Check for TIME and INTEGRATION_TIME in the case of multiple INTERVAL values (:pr:`90`)
 
 0.2.5 (24-03-2025)
