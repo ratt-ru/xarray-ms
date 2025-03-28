@@ -86,7 +86,7 @@ class AntennaDatasetFactory:
     pol_type = (
       pac.list_flatten(filtered_feeds["POLARIZATION_TYPE"]).to_numpy().reshape(-1, 2)
     )
-    receptor_labels = [f"pol_{i}" for i in range(nreceptors.item())]
+    receptor_labels = np.asarray([f"pol_{i}" for i in range(nreceptors.item())], object)
 
     metre_attrs = {"units": ["m"], "type": "quantity"}
     rad_attrs = {"units": ["rad"], "type": "quantity"}
@@ -122,7 +122,9 @@ class AntennaDatasetFactory:
         "mount": Variable("antenna_name", mount),
         "telescope_name": Variable("telescope_name", telescope_names),
         "station": Variable("antenna_name", station),
-        "cartesian_pos_label": Variable("cartesian_pos_label", ["x", "y", "z"]),
+        "cartesian_pos_label": Variable(
+          "cartesian_pos_label", np.asarray(["x", "y", "z"], object)
+        ),
         "polarization_type": Variable(("antenna_name", "receptor_label"), pol_type),
         "receptor_label": Variable("receptor_label", receptor_labels),
       },
