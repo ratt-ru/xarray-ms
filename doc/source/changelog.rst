@@ -3,7 +3,7 @@
 Changelog
 =========
 
-X.Y.Z (DD-MM-YYYY)
+0.2.6 (31-03-2025)
 ------------------
 * Allow some jitter in the `INTERVAL` column when setting `time.integration_time` (:pr:`93`)
 * Impute missing `FIELD`, `STATE` and `OBSERVATION` subtable data (:pr:`92`)
