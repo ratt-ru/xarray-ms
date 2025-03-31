@@ -6,6 +6,8 @@ from xarray_ms.errors import GeneratedMetadataWarning
 from xarray_ms.msv4_types import CORRELATED_DATASET_TYPES
 
 
+@pytest.mark.filterwarnings("ignore::xarray_ms.errors.GeneratedMetadataWarning")
+@pytest.mark.parametrize("simmed_ms", [{"name": "missing_obs.ms"}], indirect=True)
 def test_generated_observation_metadata(simmed_ms):
   """Tests that data is generated if the OBSERVATION subtable is empty"""
   obs_table_desc = ms_descriptor("OBSERVATION", complete=True)
@@ -23,6 +25,8 @@ def test_generated_observation_metadata(simmed_ms):
         assert node.observation_info == {"observer": "unknown", "project": "unknown"}
 
 
+@pytest.mark.filterwarnings("ignore::xarray_ms.errors.GeneratedMetadataWarning")
+@pytest.mark.parametrize("simmed_ms", [{"name": "missing_state.ms"}], indirect=True)
 def test_generated_state_metadata(simmed_ms):
   """Tests that data is generated if the STATE subtable is empty"""
   state_table_desc = ms_descriptor("STATE", complete=True)
@@ -36,6 +40,8 @@ def test_generated_state_metadata(simmed_ms):
     xarray.open_datatree(simmed_ms)
 
 
+@pytest.mark.filterwarnings("ignore::xarray_ms.errors.GeneratedMetadataWarning")
+@pytest.mark.parametrize("simmed_ms", [{"name": "missing_field.ms"}], indirect=True)
 def test_generated_field_metadata(simmed_ms):
   """Tests that data is generated if the FIELD subtable is empty"""
   field_table_desc = ms_descriptor("FIELD", complete=True)

@@ -28,7 +28,7 @@ def _set_ddid_antenna_ids(desc):
   "simmed_ms",
   [
     {
-      "name": "backend.ms",
+      "name": "fj.ms",
       "nantenna": NANTENNA,
       "data_description": [(8, ["XX", "XY", "YX", "YY"]), (4, ["RR", "LL"])],
       "transform_chunk_desc": _set_ddid_antenna_ids,
@@ -120,11 +120,11 @@ def test_antenna_feed_join(simmed_ms, auto_corrs):
   # Feed configuration associated with non-existent partitions are ignored.
   # This means that each partition has 3 baselines
   # with auto correlations and 1 baseline without
-  assert list(dt.children) == ["backend_partition_000", "backend_partition_001"]
+  assert list(dt.children) == ["fj_partition_000", "fj_partition_001"]
   dt = dt.load()
 
-  p0 = dt["backend_partition_000"]
-  p1 = dt["backend_partition_001"]
+  p0 = dt["fj_partition_000"]
+  p1 = dt["fj_partition_001"]
 
   assert len(p0.baseline_id) == (3 if auto_corrs else 1)
   assert len(p1.baseline_id) == (3 if auto_corrs else 1)
