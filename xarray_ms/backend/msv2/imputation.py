@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import numpy.typing as npt
 
-from xarray_ms.errors import GeneratedMetadataWarning
+from xarray_ms.errors import ImputedMetadataWarning
 
 if TYPE_CHECKING:
   import pyarrow as pa
@@ -26,16 +26,16 @@ def _maybe_return_table_or_max_id(
     f"No row exists in the {table_name} table of length {len(table)} "
     f"for {id_column_name}={max_id}. "
     f"Artificial metadata will be substituted.",
-    GeneratedMetadataWarning,
+    ImputedMetadataWarning,
   )
 
   return max_id
 
 
-def maybe_generate_field_table(
+def maybe_impute_field_table(
   field: pa.Table, field_id: npt.NDArray[np.int32]
 ) -> pa.Table:
-  """Generates a good enough FIELD subtable if there are no row ids
+  """Generates a FIELD subtable if there are no row ids
   associated with the given FIELD_ID values"""
 
   import pyarrow as pa
@@ -52,7 +52,7 @@ def maybe_generate_field_table(
   )
 
 
-def maybe_generate_state_table(
+def maybe_impute_state_table(
   state: pa.Table, state_id: npt.NDArray[np.int32]
 ) -> pa.Table:
   """Generates a STATE subtable if there are no row ids
@@ -71,7 +71,7 @@ def maybe_generate_state_table(
   )
 
 
-def maybe_generate_observation_table(
+def maybe_impute_observation_table(
   observation: pa.Table, observation_id: npt.NDArray[np.int32]
 ) -> pa.Table:
   """Generates an OBSERVATION table if there are no row ids

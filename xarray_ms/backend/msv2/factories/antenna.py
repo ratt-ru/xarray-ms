@@ -3,7 +3,7 @@ from typing import Dict, Mapping
 import numpy as np
 from xarray import Dataset, Variable
 
-from xarray_ms.backend.msv2.generation import maybe_generate_observation_table
+from xarray_ms.backend.msv2.imputation import maybe_impute_observation_table
 from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
 from xarray_ms.errors import InvalidMeasurementSet
 from xarray_ms.multiton import Multiton
@@ -32,7 +32,7 @@ class AntennaDatasetFactory:
     feeds = self._subtable_factories["FEED"].instance
     obs = self._subtable_factories["OBSERVATION"].instance
 
-    obs = maybe_generate_observation_table(obs, [partition.obs_id])
+    obs = maybe_impute_observation_table(obs, [partition.obs_id])
     telescope_name = obs["TELESCOPE_NAME"][0].as_py()
 
     import pyarrow.compute as pac

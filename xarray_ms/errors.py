@@ -7,9 +7,9 @@ class MissingMetadataWarning(UserWarning):
   """Warning raised when metadata is missing"""
 
 
-class GeneratedMetadataWarning(MissingMetadataWarning):
-  """Warning raised when metadata is generated
-  when the original metadata is missing"""
+class ImputedMetadataWarning(MissingMetadataWarning):
+  """Warning raised when metadata is imputed
+  if the original metadata is missing"""
 
 
 class InvalidMeasurementSet(ValueError):

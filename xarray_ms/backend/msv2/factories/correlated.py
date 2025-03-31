@@ -18,9 +18,9 @@ from xarray_ms.backend.msv2.encoders import (
   QuantityCoder,
   TimeCoder,
 )
-from xarray_ms.backend.msv2.generation import (
-  maybe_generate_field_table,
-  maybe_generate_observation_table,
+from xarray_ms.backend.msv2.imputation import (
+  maybe_impute_field_table,
+  maybe_impute_observation_table,
 )
 from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
 from xarray_ms.casa_types import ColumnDesc, FrequencyMeasures, Polarisations
@@ -226,7 +226,7 @@ class CorrelatedDatasetFactory:
     else:
       data_vars.append(("WEIGHT", self._variable_from_column("WEIGHT_ROW", dim_sizes)))
 
-    field = maybe_generate_field_table(field, partition.field_ids)
+    field = maybe_impute_field_table(field, partition.field_ids)
     field_names = field.take(partition.field_ids)["NAME"].to_numpy()
 
     # Add coordinates indexing coordinates
@@ -320,7 +320,7 @@ class CorrelatedDatasetFactory:
   def _observation_info(self) -> Dict[str, Any]:
     partition = self._structure_factory.instance[self._partition_key]
     obs = self._subtable_factories["OBSERVATION"].instance
-    obs = maybe_generate_observation_table(obs, [partition.obs_id])
+    obs = maybe_impute_observation_table(obs, [partition.obs_id])
 
     return dict(
       sorted(
