@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Impute missing `FIELD`, `STATE` and `OBSERVATION` subtable data (:pr:`92`)
 * Increase MSv2Structure cache timeout from 1 to 5 minutes (:pr:`91`)
 * Check for TIME and INTEGRATION_TIME in the case of multiple INTERVAL values (:pr:`90`)
 
