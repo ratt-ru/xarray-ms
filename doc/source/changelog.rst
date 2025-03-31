@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Allow some jitter in the `INTERVAL` column when setting `time.integration_time` (:pr:`93`)
 * Impute missing `FIELD`, `STATE` and `OBSERVATION` subtable data (:pr:`92`)
 * Increase MSv2Structure cache timeout from 1 to 5 minutes (:pr:`91`)
 * Check for TIME and INTEGRATION_TIME in the case of multiple INTERVAL values (:pr:`90`)

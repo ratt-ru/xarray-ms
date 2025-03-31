@@ -260,8 +260,14 @@ class CorrelatedDatasetFactory:
     time_coder = TimeCoder("TIME", self._main_column_descs)
 
     if partition.interval.size == 1:
+      # Single unique value
       time_attrs = {"integration_time": partition.interval.item()}
+    elif np.allclose(partition.interval[:, None], partition.interval[None, :]):
+      # Tolerate some jitter in the unique values
+      time_attrs = {"integration_time": np.mean(partition.interval)}
     else:
+      # There are multiple unique interval values,
+      # a regular grid isn't possible
       warnings.warn(
         f"Missing/Multiple intervals {partition.interval} "
         f"found in partition {self._partition_key}. "
