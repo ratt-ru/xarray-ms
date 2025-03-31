@@ -20,7 +20,7 @@ from xarray_ms.backend.msv2.encoders import (
 )
 from xarray_ms.backend.msv2.generation import (
   maybe_generate_field_table,
-  maybe_generate_observation_row,
+  maybe_generate_observation_table,
 )
 from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
 from xarray_ms.casa_types import ColumnDesc, FrequencyMeasures, Polarisations
@@ -319,15 +319,14 @@ class CorrelatedDatasetFactory:
 
   def _observation_info(self) -> Dict[str, Any]:
     partition = self._structure_factory.instance[self._partition_key]
-    obs = maybe_generate_observation_row(
-      self._subtable_factories["OBSERVATION"], partition.obs_id
-    )
+    obs = self._subtable_factories["OBSERVATION"].instance
+    obs = maybe_generate_observation_table(obs, [partition.obs_id])
 
     return dict(
       sorted(
         {
-          "observer": obs["OBSERVER"][0].as_py(),
-          "project": obs["PROJECT"][0].as_py(),
+          "observer": obs["OBSERVER"][partition.obs_id].as_py(),
+          "project": obs["PROJECT"][partition.obs_id].as_py(),
         }.items()
       )
     )
