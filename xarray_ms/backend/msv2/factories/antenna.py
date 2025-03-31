@@ -3,6 +3,7 @@ from typing import Dict, Mapping
 import numpy as np
 from xarray import Dataset, Variable
 
+from xarray_ms.backend.msv2.generation import maybe_generate_observation_row
 from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
 from xarray_ms.errors import InvalidMeasurementSet
 from xarray_ms.multiton import Multiton
@@ -26,13 +27,15 @@ class AntennaDatasetFactory:
     self._subtable_factories = subtable_factories
 
   def get_dataset(self) -> Mapping[str, Variable]:
-    structure = self._structure_factory.instance
-    partition = structure[self._partition_key]
+    partition = self._structure_factory.instance[self._partition_key]
     ants = self._subtable_factories["ANTENNA"].instance
     feeds = self._subtable_factories["FEED"].instance
     obs = self._subtable_factories["OBSERVATION"].instance
 
-    telescope_name = obs["TELESCOPE_NAME"][partition.obs_id].as_py()
+    obs = maybe_generate_observation_row(
+      self._subtable_factories["OBSERVATION"], partition.obs_id
+    )
+    telescope_name = obs["TELESCOPE_NAME"][0].as_py()
 
     import pyarrow.compute as pac
 
