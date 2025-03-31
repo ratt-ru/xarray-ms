@@ -260,7 +260,7 @@ class CorrelatedDatasetFactory:
     time_coder = TimeCoder("TIME", self._main_column_descs)
 
     if partition.interval.size == 1:
-      # Single unique values
+      # Single unique value
       time_attrs = {"integration_time": partition.interval.item()}
     elif np.allclose(partition.interval[:, None], partition.interval[None, :]):
       # Tolerate some jitter in the unique values
