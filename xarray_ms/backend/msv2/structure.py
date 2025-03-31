@@ -27,6 +27,10 @@ import pyarrow as pa
 from arcae.lib.arrow_tables import Table
 from cacheout import Cache
 
+from xarray_ms.backend.msv2.imputation import (
+  maybe_impute_field_table,
+  maybe_impute_state_table,
+)
 from xarray_ms.backend.msv2.partition import PartitionKeyT, TablePartitioner
 from xarray_ms.errors import (
   InvalidMeasurementSet,
@@ -388,6 +392,7 @@ class MSv2Structure(Mapping):
   ) -> npt.NDArray[np.int32]:
     """Constructs a SOURCE_ID array from MAIN.FIELD_ID
     broadcast against FIELD.SOURCE_ID"""
+    field = maybe_impute_field_table(field, field_id)
     field_source_id = field["SOURCE_ID"].to_numpy()
     source_id = np.empty_like(field_id)
     chunk = (len(source_id) + ncpus - 1) // ncpus
@@ -411,6 +416,7 @@ class MSv2Structure(Mapping):
   ) -> npt.NDArray[np.int32]:
     """Constructs a SUB_SCAN_NUMBER array from MAIN.STATE_ID
     broadcast against STATE.SUB_SCAN_NUMBER"""
+    state = maybe_impute_state_table(state, state_id)
     state_ssn = state["SUB_SCAN"].to_numpy()
     subscan_nr = np.empty_like(state_id)
     chunk = (len(state_id) + ncpus - 1) // ncpus
@@ -434,6 +440,8 @@ class MSv2Structure(Mapping):
   ) -> Tuple[npt.NDArray[np.int32], Dict[str, List[int]]]:
     """Constructs an OBS_MODE_ID array from MAIN.STATE_ID broadcast
     against unique entries in STATE.OBS_MODE"""
+
+    state = maybe_impute_state_table(state, state_id)
     obs_mode = state["OBS_MODE"].to_numpy()
 
     # Map unique observation modes to state_ids

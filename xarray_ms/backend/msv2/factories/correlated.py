@@ -18,6 +18,10 @@ from xarray_ms.backend.msv2.encoders import (
   QuantityCoder,
   TimeCoder,
 )
+from xarray_ms.backend.msv2.imputation import (
+  maybe_impute_field_table,
+  maybe_impute_observation_table,
+)
 from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
 from xarray_ms.casa_types import ColumnDesc, FrequencyMeasures, Polarisations
 from xarray_ms.errors import IrregularGridWarning
@@ -222,6 +226,7 @@ class CorrelatedDatasetFactory:
     else:
       data_vars.append(("WEIGHT", self._variable_from_column("WEIGHT_ROW", dim_sizes)))
 
+    field = maybe_impute_field_table(field, partition.field_ids)
     field_names = field.take(partition.field_ids)["NAME"].to_numpy()
 
     # Add coordinates indexing coordinates
@@ -313,19 +318,15 @@ class CorrelatedDatasetFactory:
     return FrozenDict(sorted(data_vars + coordinates))
 
   def _observation_info(self) -> Dict[str, Any]:
-    structure = self._structure_factory.instance
-    partition = structure[self._partition_key]
+    partition = self._structure_factory.instance[self._partition_key]
     obs = self._subtable_factories["OBSERVATION"].instance
-    observer = obs["OBSERVER"][partition.obs_id].as_py()
-    project = obs["PROJECT"][partition.obs_id].as_py()
-    # TODO: A Measures conversions is needed here
-    release_date = obs["RELEASE_DATE"][partition.obs_id].as_py()  # noqa: F841
+    obs = maybe_impute_observation_table(obs, [partition.obs_id])
 
     return dict(
       sorted(
         {
-          "observer": observer,
-          "project": project,
+          "observer": obs["OBSERVER"][partition.obs_id].as_py(),
+          "project": obs["PROJECT"][partition.obs_id].as_py(),
         }.items()
       )
     )
