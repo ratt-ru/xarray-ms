@@ -3,7 +3,7 @@
 Changelog
 =========
 
-X.Y.Z (DD-MM-YYYY)
+0.2.7 (01-04-2025)
 ------------------
 * Fix changelog formatting (:pr:`95`)
 * Add ``PROCESSOR_ID`` to the default partitioning columns (:pr:`94`)
