@@ -5,43 +5,44 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Fix changelog formatting (:pr:`95`)
 * Add ``PROCESSOR_ID`` to the default partitioning columns (:pr:`94`)
 * Support ``processor_info`` on the correlated dataset (:pr:`94`)
 
 0.2.6 (31-03-2025)
 ------------------
-* Allow some jitter in the `INTERVAL` column when setting `time.integration_time` (:pr:`93`)
-* Impute missing `FIELD`, `STATE` and `OBSERVATION` subtable data (:pr:`92`)
+* Allow some jitter in the ``INTERVAL`` column when setting ``time.integration_time`` (:pr:`93`)
+* Impute missing ``FIELD``, ``STATE`` and ``OBSERVATION`` subtable data (:pr:`92`)
 * Increase MSv2Structure cache timeout from 1 to 5 minutes (:pr:`91`)
-* Check for TIME and INTEGRATION_TIME in the case of multiple INTERVAL values (:pr:`90`)
+* Check for ``TIME`` and ``INTEGRATION_TIME`` in the case of multiple ``INTERVAL`` values (:pr:`90`)
 
 0.2.5 (24-03-2025)
 ------------------
-* Support field_name, scan_number and sub_scan_number coordinates
+* Support ``field_name``, ``scan_number`` and ``sub_scan_number`` coordinates
   on the Correlated Dataset  (:pr:`88`)
-* Support fallback to WEIGHT if WEIGHT_SPECTRUM is not present (:pr:`87`)
+* Support fallback to ``WEIGHT`` if ``WEIGHT_SPECTRUM`` is not present (:pr:`87`)
 
 0.2.4 (19-03-2025)
 ------------------
 * Fix no-autocorrelation case when constructing partition row maps (:pr:`85`)
 * Default auto correlations to `False` (:pr:`85`)
 * Refactor dataset factories into `factories` subpackage (:pr:`83`, :pr:`86`)
-* Use a CommonStoreArgs class to default initialise common store arguments (:pr:`83`)
+* Use a ``CommonStoreArgs`` class to default initialise common store arguments (:pr:`83`)
 * Release resources when datasets or datatrees are closed (:pr:`81`)
 * Use creator attribute to record xarray-ms version (:pr:`80`)
 * Generalise the TableFactory class into a Multiton class (:pr:`79`)
 * Refactor partitioning logic to be more robust (:pr:`78`)
-* The set of ANTENNA's related to a partition in the FEED table is
+* The set of antennas related to a partition in the ``FEED`` table is
   used to create the antenna dataset for that partition (:pr:`78`)
 * Metadata extraction moved to dataset factories (:pr:`78`)
 * Extend the antenna dataset implementation (:pr:`77`)
 * Fix MSv2Store._partition_key typing (:pr:`76`)
 * Add observation_info attribute (:pr:`74`)
-* Add ANTENNA_DISH_DIAMETER variable to antenna dataset (:pr:`73`)
+* Add ``ANTENNA_DISH_DIAMETER`` variable to antenna dataset (:pr:`73`)
 * Add cartesian_pos_label labels to antenna dataset (:pr:`72`)
 * Allow fallback to string values in partition keys (:pr:`71`)
 * Report irregular channel widths with an IrregularGridWarning (:pr:`70`)
-* Tighten SOURCE_ID partitioning checks (:pr:`69`)
+* Tighten ``SOURCE_ID`` partitioning checks (:pr:`69`)
 * Check that each partition has a unique feed index pair (:pr:`68`)
 * Remove unused and commented out test cases (:pr:`67`)
 
@@ -65,7 +66,7 @@ X.Y.Z (DD-MM-YYYY)
 * Use epoch to distinguish multiple instances of the same dataset (:pr:`54`)
 * Use np.logical_or.reduce for generating diffs over more than 2 partitioning arrays (:pr:`53`)
 * Improve Missing Column error (:pr:`52`)
-* Fix `open_datatree` instructions in the README (:pr:`51`)
+* Fix ``open_datatree`` instructions in the README (:pr:`51`)
 * Skip test case that segfaults on numpy 2.2.2 (:pr:`50`)
 * Upgrade to xarray 2025.1.1 (:pr:`49`)
 * Add documentation link to MSv2EntryPoint class (:pr:`47`)
