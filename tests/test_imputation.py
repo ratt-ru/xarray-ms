@@ -57,3 +57,20 @@ def test_imputed_field_metadata(simmed_ms):
         assert_array_equal(
           node.field_name, np.array(["UNKNOWN-0"] * node.sizes["time"], dtype=object)
         )
+
+
+@pytest.mark.filterwarnings("ignore::xarray_ms.errors.ImputedMetadataWarning")
+@pytest.mark.parametrize("simmed_ms", [{"name": "missing_processor.ms"}], indirect=True)
+def test_imputed_processor_metadata(simmed_ms):
+  """Tests that data is imputed if the PROCESSOR subtable is empty"""
+  field_table_desc = ms_descriptor("PROCESSOR", complete=True)
+  with Table.ms_from_descriptor(simmed_ms, "PROCESSOR", table_desc=field_table_desc):
+    pass
+
+  with pytest.warns(
+    ImputedMetadataWarning,
+    match="No row exists in the PROCESSOR table of length 0 for PROCESSOR_ID=0",
+  ):
+    for node in xarray.open_datatree(simmed_ms).subtree:
+      if node.attrs.get("type") in CORRELATED_DATASET_TYPES:
+        assert node.processor_info == {"type": "unknown", "sub_type": "unknown"}

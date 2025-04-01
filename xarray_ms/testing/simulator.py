@@ -73,6 +73,7 @@ class PartitionDescriptor:
   """
 
   DATA_DESC_ID: npt.NDArray[np.int32]
+  PROCESSOR_ID: npt.NDArray[np.int32]
   OBSERVATION_ID: npt.NDArray[np.int32]
   FIELD_ID: npt.NDArray[np.int32]
   ANTENNA1: npt.NDArray[np.int32]
@@ -107,6 +108,7 @@ class MSStructureSimulator:
   ntime: int
   nantenna: int
   nfield: int
+  nproc: int
   nstate: int
   auto_corrs: bool
   dump_rate: float
@@ -130,9 +132,15 @@ class MSStructureSimulator:
     nobs: int = 1,
     nfield: int = 1,
     nstate: int = 1,
+    nproc: int = 1,
     nantenna: int = 3,
     data_description: DataDescArgType | None = None,
-    partition: Tuple[str, ...] = ("OBSERVATION_ID", "FIELD_ID", "DATA_DESC_ID"),
+    partition: Tuple[str, ...] = (
+      "PROCESSOR_ID",
+      "OBSERVATION_ID",
+      "FIELD_ID",
+      "DATA_DESC_ID",
+    ),
     auto_corrs: bool = True,
     simulate_data: bool = True,
     table_desc: Dict[str, Any] | None = None,
@@ -145,6 +153,7 @@ class MSStructureSimulator:
     assert nobs >= 1
     assert nfield >= 1
     assert nantenna >= 1
+    assert nproc >= 1
 
     self.data_description = DataDescription.from_spw_corr_pairs(data_description)
     self.feeds = self.data_description.polarisation_set().feed_map()
@@ -162,6 +171,7 @@ class MSStructureSimulator:
     feed1, feed2 = feed1.astype(np.int32), feed2.astype(np.int32)
 
     valid_partitions = {
+      "PROCESSOR_ID": np.arange(nproc, dtype=np.int32),
       "OBSERVATION_ID": np.arange(nobs, dtype=np.int32),
       "FIELD_ID": np.arange(nfield, dtype=np.int32),
       "DATA_DESC_ID": np.arange(len(self.data_description), dtype=np.int32),
@@ -188,6 +198,7 @@ class MSStructureSimulator:
     self.nfield = nfield
     self.nobs = nobs
     self.nstate = nstate
+    self.nproc = nproc
     self.auto_corrs = auto_corrs
     self.dump_rate = dump_rate
     self.time_chunks = time_chunks
@@ -312,6 +323,11 @@ class MSStructureSimulator:
       T.addrows(self.nfield)
       T.putcol("NAME", np.asarray([f"FIELD-{i}" for i in range(self.nfield)]))
       T.putcol("SOURCE_ID", np.arange(self.nfield))
+
+    with Table.from_filename(f"{output_ms}::PROCESSOR", **kw) as T:
+      T.addrows(self.nproc)
+      T.putcol("TYPE", np.asarray(["CORRELATOR"] * self.nproc))
+      T.putcol("SUB_TYPE", np.asarray(["MEERKAT"] * self.nproc))
 
     with Table.from_filename(f"{output_ms}::STATE", **kw) as T:
       T.addrows(self.nstate)
