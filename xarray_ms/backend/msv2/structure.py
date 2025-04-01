@@ -108,7 +108,11 @@ def partition_args(data: npt.NDArray, chunk: int) -> List[npt.NDArray]:
   return [data[i : i + chunk] for i in range(0, len(data), chunk)]
 
 
-DEFAULT_MAIN_PARTITION_COLUMNS: List[str] = ["DATA_DESC_ID", "OBSERVATION_ID"]
+DEFAULT_MAIN_PARTITION_COLUMNS: List[str] = [
+  "OBSERVATION_ID",
+  "PROCESSOR_ID",
+  "DATA_DESC_ID",
+]
 
 DEFAULT_SUBTABLE_PARTITION_COLUMNS: List[str] = ["OBS_MODE"]
 
@@ -133,6 +137,7 @@ SHORT_TO_LONG_PARTITION_COLUMNS: Dict[str, str] = {
 VALID_MAIN_PARTITION_COLUMNS: List[str] = [
   "DATA_DESC_ID",
   "OBSERVATION_ID",
+  "PROCESSOR_ID",
   "FIELD_ID",
   "SCAN_NUMBER",
   "STATE_ID",
@@ -170,6 +175,7 @@ class PartitionData:
   # Main table
   time: npt.NDArray[np.float64]  # Unique timesteps
   interval: npt.NDArray[np.float64]  # Unique intervals
+  proc_id: int  # unique from PROCESSOR_ID
   obs_id: int  # unique from OBSERVATION_ID
   spw_id: int  # unique from DATA_DESC_ID
   pol_id: int  # unique from DATA_DESC_ID
@@ -695,6 +701,7 @@ class MSv2Structure(Mapping):
 
         # The following should always be part of the partioning key
         try:
+          proc_id = int(dkey["PROCESSOR_ID"])
           ddid = int(dkey["DATA_DESC_ID"])
           obs_id = int(dkey["OBSERVATION_ID"])
           obs_mode_id = int(dkey.pop("OBS_MODE_ID"))
@@ -815,6 +822,7 @@ class MSv2Structure(Mapping):
           time=utime,
           interval=uinterval,
           obs_id=obs_id,
+          proc_id=proc_id,
           spw_id=spw_id,
           pol_id=pol_id,
           antenna_ids=feed_antennas,

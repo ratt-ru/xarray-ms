@@ -3,6 +3,11 @@
 Changelog
 =========
 
+X.Y.Z (DD-MM-YYYY)
+------------------
+* Add ``PROCESSOR_ID`` to the default partitioning columns (:pr:`94`)
+* Support ``processor_info`` on the correlated dataset (:pr:`94`)
+
 0.2.6 (31-03-2025)
 ------------------
 * Allow some jitter in the `INTERVAL` column when setting `time.integration_time` (:pr:`93`)

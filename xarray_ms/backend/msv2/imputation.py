@@ -93,3 +93,26 @@ def maybe_impute_observation_table(
       "TELESCOPE_NAME": unknown,
     }
   )
+
+
+def maybe_impute_processor_table(
+  processor: pa.Table, processor_id: npt.NDArray[np.int32]
+) -> pa.Table:
+  """Generates a PROCESSOR table if there are no row ids
+  associated with the given PROESSOR_ID values"""
+  import pyarrow as pa
+
+  result = _maybe_return_table_or_max_id(
+    processor, "PROCESSOR", processor_id, "PROCESSOR_ID"
+  )
+  if isinstance(result, pa.Table):
+    return result
+
+  unknown = np.array(["unknown"] * (result + 1), dtype=object)
+
+  return pa.Table.from_pydict(
+    {
+      "TYPE": unknown,
+      "SUB_TYPE": unknown,
+    }
+  )

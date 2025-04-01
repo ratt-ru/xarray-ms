@@ -21,6 +21,7 @@ from xarray_ms.backend.msv2.encoders import (
 from xarray_ms.backend.msv2.imputation import (
   maybe_impute_field_table,
   maybe_impute_observation_table,
+  maybe_impute_processor_table,
 )
 from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
 from xarray_ms.casa_types import ColumnDesc, FrequencyMeasures, Polarisations
@@ -337,7 +338,22 @@ class CorrelatedDatasetFactory:
       )
     )
 
+  def _processor_info(self) -> Dict[str, Any]:
+    partition = self._structure_factory.instance[self._partition_key]
+    proc = self._subtable_factories["PROCESSOR"].instance
+    proc = maybe_impute_processor_table(proc, [partition.proc_id])
+
+    return dict(
+      sorted(
+        {
+          "type": proc["TYPE"][partition.proc_id].as_py(),
+          "sub_type": proc["SUB_TYPE"][partition.proc_id].as_py(),
+        }.items()
+      )
+    )
+
   def get_attrs(self) -> Dict[Any, Any]:
     return {
       "observation_info": self._observation_info(),
+      "processor_info": self._processor_info(),
     }
