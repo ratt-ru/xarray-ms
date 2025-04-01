@@ -3,7 +3,7 @@
 Changelog
 =========
 
-X.Y.Z (DD-MM-YYYY)
+0.2.8 (01-04-2025)
 ------------------
 * Update copyright to reflect NRF and RATT in
   both the BSD3 license and documentation (:pr:`96`)
