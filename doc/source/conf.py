@@ -9,7 +9,7 @@
 # type: ignore
 
 project = "xarray-ms"
-copyright = "2024, Simon Perkins"
+copyright = "2024 - 2025 NRF (SARAO) and Rhodes University (RATT) Centre"
 author = "Simon Perkins"
 release = "0.2.7"
 
