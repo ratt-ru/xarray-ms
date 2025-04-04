@@ -244,8 +244,8 @@ class CorrelatedDatasetFactory:
         "baseline_antenna2_name",
         (("baseline_id",), ant2_names, {"coordinates": "baseline_antenna2_name"}),
       ),
-      ("polarization", (("polarization",), corr_type, None)),
-      ("uvw_label", (("uvw_label",), ["u", "v", "w"], None)),
+      ("polarization", (("polarization",), np.asarray(corr_type, object), None)),
+      ("uvw_label", (("uvw_label",), np.asarray(["u", "v", "w"], object), None)),
       ("field_name", ("time", field_names, {"coordinates": "field_name"})),
       ("scan_number", ("time", partition.scan_numbers, {"coordinates": "scan_number"})),
       (
