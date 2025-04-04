@@ -242,7 +242,6 @@ def test_jittered_intervals(simmed_ms):
   for p in ["000", "001"]:
     node = xdt[f"backend_partition_{p}"]
     assert np.isclose(node.time.integration_time, DUMP_RATE)
-    print(node.time.integration_time)
 
 
 def _remove_weight_spectrum_add_weight(chunk_desc, data_dict):
