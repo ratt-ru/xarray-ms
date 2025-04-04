@@ -3,6 +3,10 @@
 Changelog
 =========
 
+X.Y.Z (DD-MM-YYYY)
+------------------
+* Remove stray test case print (:pr:`97`)
+
 0.2.8 (01-04-2025)
 ------------------
 * Update copyright to reflect NRF and RATT in
