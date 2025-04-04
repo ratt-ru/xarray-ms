@@ -207,6 +207,42 @@ def test_differing_start_intervals(simmed_ms):
   for p in ["000", "001"]:
     node = xdt[f"backend_partition_{p}"]
     assert np.isnan(node.time.attrs["integration_time"])
+    assert "TIME" in node.data_vars
+    assert "INTEGRATION_TIME" in node.data_vars
+
+
+DUMP_RATE = 8.0
+
+
+def _jitter_intervals(chunk_desc, data_dict):
+  """Jitter the INTERVAL column"""
+  interval = data_dict["INTERVAL"][-1]
+  assert np.all(interval == DUMP_RATE)
+  rng = np.random.default_rng()
+  interval[:] += rng.standard_normal(interval.shape, interval.dtype) * 1e-6
+  return data_dict
+
+
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [
+    {
+      "name": "backend.ms",
+      "dump_rate": DUMP_RATE,
+      "data_description": [(8, ["XX", "XY", "YX", "YY"]), (4, ["RR", "LL"])],
+      "transform_data": _jitter_intervals,
+    }
+  ],
+  indirect=True,
+)
+def test_jittered_intervals(simmed_ms):
+  """Test that intervals with very small differences results using their mean"""
+  xdt = xarray.open_datatree(simmed_ms, auto_corrs=True)
+
+  for p in ["000", "001"]:
+    node = xdt[f"backend_partition_{p}"]
+    assert np.isclose(node.time.integration_time, DUMP_RATE)
+    print(node.time.integration_time)
 
 
 def _remove_weight_spectrum_add_weight(chunk_desc, data_dict):

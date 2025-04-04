@@ -27,7 +27,13 @@ def test_baseline_id(na, auto_corrs):
 @pytest.mark.parametrize("simmed_ms", [{"name": "proxy.ms"}], indirect=True)
 @pytest.mark.parametrize("epoch", ["abcdef"])
 def test_structure_factory(simmed_ms, epoch):
-  partition_schema = ["FIELD_ID", "DATA_DESC_ID", "OBSERVATION_ID", "OBS_MODE"]
+  partition_schema = [
+    "FIELD_ID",
+    "DATA_DESC_ID",
+    "PROCESSOR_ID",
+    "OBSERVATION_ID",
+    "OBS_MODE",
+  ]
   table_factory = Multiton(Table.from_filename, simmed_ms)
   from xarray_ms.backend.msv2.entrypoint_utils import subtable_factory
 

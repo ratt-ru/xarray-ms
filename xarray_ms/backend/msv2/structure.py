@@ -27,6 +27,10 @@ import pyarrow as pa
 from arcae.lib.arrow_tables import Table
 from cacheout import Cache
 
+from xarray_ms.backend.msv2.imputation import (
+  maybe_impute_field_table,
+  maybe_impute_state_table,
+)
 from xarray_ms.backend.msv2.partition import PartitionKeyT, TablePartitioner
 from xarray_ms.errors import (
   InvalidMeasurementSet,
@@ -104,7 +108,11 @@ def partition_args(data: npt.NDArray, chunk: int) -> List[npt.NDArray]:
   return [data[i : i + chunk] for i in range(0, len(data), chunk)]
 
 
-DEFAULT_MAIN_PARTITION_COLUMNS: List[str] = ["DATA_DESC_ID", "OBSERVATION_ID"]
+DEFAULT_MAIN_PARTITION_COLUMNS: List[str] = [
+  "OBSERVATION_ID",
+  "PROCESSOR_ID",
+  "DATA_DESC_ID",
+]
 
 DEFAULT_SUBTABLE_PARTITION_COLUMNS: List[str] = ["OBS_MODE"]
 
@@ -129,6 +137,7 @@ SHORT_TO_LONG_PARTITION_COLUMNS: Dict[str, str] = {
 VALID_MAIN_PARTITION_COLUMNS: List[str] = [
   "DATA_DESC_ID",
   "OBSERVATION_ID",
+  "PROCESSOR_ID",
   "FIELD_ID",
   "SCAN_NUMBER",
   "STATE_ID",
@@ -166,6 +175,7 @@ class PartitionData:
   # Main table
   time: npt.NDArray[np.float64]  # Unique timesteps
   interval: npt.NDArray[np.float64]  # Unique intervals
+  proc_id: int  # unique from PROCESSOR_ID
   obs_id: int  # unique from OBSERVATION_ID
   spw_id: int  # unique from DATA_DESC_ID
   pol_id: int  # unique from DATA_DESC_ID
@@ -233,7 +243,7 @@ class MSv2StructureFactory:
   _epoch: str
   _auto_corrs: bool
   _STRUCTURE_CACHE: ClassVar[Cache] = Cache(
-    maxsize=100, ttl=60, on_get=on_get_keep_alive
+    maxsize=100, ttl=5 * 60, on_get=on_get_keep_alive
   )
 
   def __init__(
@@ -388,6 +398,7 @@ class MSv2Structure(Mapping):
   ) -> npt.NDArray[np.int32]:
     """Constructs a SOURCE_ID array from MAIN.FIELD_ID
     broadcast against FIELD.SOURCE_ID"""
+    field = maybe_impute_field_table(field, field_id)
     field_source_id = field["SOURCE_ID"].to_numpy()
     source_id = np.empty_like(field_id)
     chunk = (len(source_id) + ncpus - 1) // ncpus
@@ -411,6 +422,7 @@ class MSv2Structure(Mapping):
   ) -> npt.NDArray[np.int32]:
     """Constructs a SUB_SCAN_NUMBER array from MAIN.STATE_ID
     broadcast against STATE.SUB_SCAN_NUMBER"""
+    state = maybe_impute_state_table(state, state_id)
     state_ssn = state["SUB_SCAN"].to_numpy()
     subscan_nr = np.empty_like(state_id)
     chunk = (len(state_id) + ncpus - 1) // ncpus
@@ -434,6 +446,8 @@ class MSv2Structure(Mapping):
   ) -> Tuple[npt.NDArray[np.int32], Dict[str, List[int]]]:
     """Constructs an OBS_MODE_ID array from MAIN.STATE_ID broadcast
     against unique entries in STATE.OBS_MODE"""
+
+    state = maybe_impute_state_table(state, state_id)
     obs_mode = state["OBS_MODE"].to_numpy()
 
     # Map unique observation modes to state_ids
@@ -687,6 +701,7 @@ class MSv2Structure(Mapping):
 
         # The following should always be part of the partioning key
         try:
+          proc_id = int(dkey["PROCESSOR_ID"])
           ddid = int(dkey["DATA_DESC_ID"])
           obs_id = int(dkey["OBSERVATION_ID"])
           obs_mode_id = int(dkey.pop("OBS_MODE_ID"))
@@ -807,6 +822,7 @@ class MSv2Structure(Mapping):
           time=utime,
           interval=uinterval,
           obs_id=obs_id,
+          proc_id=proc_id,
           spw_id=spw_id,
           pol_id=pol_id,
           antenna_ids=feed_antennas,

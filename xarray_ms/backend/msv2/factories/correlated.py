@@ -18,6 +18,11 @@ from xarray_ms.backend.msv2.encoders import (
   QuantityCoder,
   TimeCoder,
 )
+from xarray_ms.backend.msv2.imputation import (
+  maybe_impute_field_table,
+  maybe_impute_observation_table,
+  maybe_impute_processor_table,
+)
 from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
 from xarray_ms.casa_types import ColumnDesc, FrequencyMeasures, Polarisations
 from xarray_ms.errors import IrregularGridWarning
@@ -222,6 +227,7 @@ class CorrelatedDatasetFactory:
     else:
       data_vars.append(("WEIGHT", self._variable_from_column("WEIGHT_ROW", dim_sizes)))
 
+    field = maybe_impute_field_table(field, partition.field_ids)
     field_names = field.take(partition.field_ids)["NAME"].to_numpy()
 
     # Add coordinates indexing coordinates
@@ -255,8 +261,14 @@ class CorrelatedDatasetFactory:
     time_coder = TimeCoder("TIME", self._main_column_descs)
 
     if partition.interval.size == 1:
+      # Single unique value
       time_attrs = {"integration_time": partition.interval.item()}
+    elif np.allclose(partition.interval[:, None], partition.interval[None, :]):
+      # Tolerate some jitter in the unique values
+      time_attrs = {"integration_time": np.mean(partition.interval)}
     else:
+      # There are multiple unique interval values,
+      # a regular grid isn't possible
       warnings.warn(
         f"Missing/Multiple intervals {partition.interval} "
         f"found in partition {self._partition_key}. "
@@ -313,19 +325,29 @@ class CorrelatedDatasetFactory:
     return FrozenDict(sorted(data_vars + coordinates))
 
   def _observation_info(self) -> Dict[str, Any]:
-    structure = self._structure_factory.instance
-    partition = structure[self._partition_key]
+    partition = self._structure_factory.instance[self._partition_key]
     obs = self._subtable_factories["OBSERVATION"].instance
-    observer = obs["OBSERVER"][partition.obs_id].as_py()
-    project = obs["PROJECT"][partition.obs_id].as_py()
-    # TODO: A Measures conversions is needed here
-    release_date = obs["RELEASE_DATE"][partition.obs_id].as_py()  # noqa: F841
+    obs = maybe_impute_observation_table(obs, [partition.obs_id])
 
     return dict(
       sorted(
         {
-          "observer": observer,
-          "project": project,
+          "observer": obs["OBSERVER"][partition.obs_id].as_py(),
+          "project": obs["PROJECT"][partition.obs_id].as_py(),
+        }.items()
+      )
+    )
+
+  def _processor_info(self) -> Dict[str, Any]:
+    partition = self._structure_factory.instance[self._partition_key]
+    proc = self._subtable_factories["PROCESSOR"].instance
+    proc = maybe_impute_processor_table(proc, [partition.proc_id])
+
+    return dict(
+      sorted(
+        {
+          "type": proc["TYPE"][partition.proc_id].as_py(),
+          "sub_type": proc["SUB_TYPE"][partition.proc_id].as_py(),
         }.items()
       )
     )
@@ -333,4 +355,5 @@ class CorrelatedDatasetFactory:
   def get_attrs(self) -> Dict[Any, Any]:
     return {
       "observation_info": self._observation_info(),
+      "processor_info": self._processor_info(),
     }

@@ -67,7 +67,7 @@ jobs:
         run: poetry install --extras testing
 
       - name: Test xarray-ms
-        run: poetry run py.test -s -vvv tests/
+        run: poetry run py.test -W error -s -vvv tests/
 
       # - name: Debug with tmate on failure
       #   if: ${{ failure() }}

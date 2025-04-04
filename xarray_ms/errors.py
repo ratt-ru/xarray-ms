@@ -3,6 +3,15 @@ class IrregularGridWarning(UserWarning):
   with each timestep are not homogenous"""
 
 
+class MissingMetadataWarning(UserWarning):
+  """Warning raised when metadata is missing"""
+
+
+class ImputedMetadataWarning(MissingMetadataWarning):
+  """Warning raised when metadata is imputed
+  if the original metadata is missing"""
+
+
 class InvalidMeasurementSet(ValueError):
   """Raised when the Measurement Set foreign key indexing is invalid"""
 
