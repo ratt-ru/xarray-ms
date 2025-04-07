@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Fix documentation typo (:pr:`99`)
 * Update Work in Progress documentation (:pr:`98`)
 * Remove stray test case print (:pr:`97`)
 
