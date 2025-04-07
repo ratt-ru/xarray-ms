@@ -79,7 +79,7 @@ Work in Progress
 The Measurement Set v4 specification is currently under active development.
 xarray-ms is also currently under active development and does not yet
 have feature parity with MSv4 or xradio_.
-Most measures information and many secondary sub-tables are currently missing.
+Some measures information and many secondary datasets are not currently implemented.
 
 However, the most important parts of the MSv2 ``MAIN`` tables,
 as well as the ``ANTENNA``, ``POLARIZATON`` and ``SPECTRAL_WINDOW``
