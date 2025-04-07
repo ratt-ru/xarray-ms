@@ -13,7 +13,7 @@ collection of Datasets of ndarrays on a regular grid.
 To move data between the two formats, it is necessary to partition
 or group MSv2 rows by the same shape and configuration.
 
-In xarray-ms, this is accomplished by specifying ``partition_schema``
+In xarray-ms, this is accomplished by specifying a ``partition_schema``
 when opening a Measurement Set.
 Different columns may be used to define the partition.
 See :ref:`partitioning-schema` for more information.
