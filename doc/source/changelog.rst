@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Update Work in Progress documentation (:pr:`98`)
 * Remove stray test case print (:pr:`97`)
 
 0.2.8 (01-04-2025)
