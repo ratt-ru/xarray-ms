@@ -16,11 +16,7 @@ def test_store(monkeypatch, simmed_ms):
     dt: DataTree, variables: str | Iterable[str], write_inherited_coords: bool = False
   ):
     assert isinstance(dt, DataTree)
-
-    if isinstance(variables, str):
-      list_vars = [variables]
-    else:
-      list_vars = list(variables)
+    list_vars = [variables] if isinstance(variables, str) else list(variables)
 
     if len(list_vars) == 0:
       return
@@ -36,11 +32,7 @@ def test_store(monkeypatch, simmed_ms):
 
   def dataset_to_msv2(ds: Dataset, variables: Iterable[str]):
     assert isinstance(ds, Dataset)
-
-    if isinstance(variables, str):
-      list_vars = [variables]
-    else:
-      list_vars = list(variables)
+    list_vars = [variables] if isinstance(variables, str) else list(variables)
 
     if len(list_vars) == 0:
       return
