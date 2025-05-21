@@ -11,7 +11,7 @@ from xarray_ms.errors import MissingEncodingError
 from xarray_ms.msv4_types import CORRELATED_DATASET_TYPES
 
 
-def test_store(monkeypatch, simmed_ms, tmp_path):
+def test_store(monkeypatch, simmed_ms):
   def datatree_to_msv2(
     dt: DataTree, variables: str | Iterable[str], write_inherited_coords: bool = False
   ):
