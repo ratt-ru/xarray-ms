@@ -4,7 +4,11 @@ from typing import TYPE_CHECKING, Any, Callable, Tuple
 
 import numpy as np
 from xarray.backends import BackendArray
-from xarray.core.indexing import IndexingSupport, explicit_indexing_adapter
+from xarray.core.indexing import (
+  IndexingSupport,
+  expanded_indexer,
+  explicit_indexing_adapter,
+)
 
 if TYPE_CHECKING:
   import numpy.typing as npt
@@ -41,6 +45,9 @@ class MSv2Array(BackendArray):
     self.dtype = dtype
 
   def __getitem__(self, key) -> npt.NDArray:
+    raise NotImplementedError
+
+  def __setitem__(self, key, value) -> None:
     raise NotImplementedError
 
   @property
@@ -111,6 +118,16 @@ class MainMSv2Array(MSv2Array):
     self._table_factory.instance.getcol(self._column, row_key, result)
     result = result.reshape(rows.shape + expected_shape[2:])
     return self._transform(result) if self._transform else result
+
+  def __setitem__(self, key, value: npt.NDArray) -> None:
+    key = expanded_indexer(key, len(self.shape))
+    expected_shape = tuple(slice_length(k, s) for k, s in zip(key, self.shape))
+    rows = self._structure_factory.instance[self._partition].row_map[key[:2]]
+    row_key = (rows.ravel(),) + key[2:]
+    row_shape = (rows.size,) + expected_shape[2:]
+    value = self._transform(value) if self._transform else value
+    value = value.reshape(row_shape)
+    self._table_factory.instance.putcol(self._column, value, index=row_key)
 
   @property
   def transform(self) -> TransformerT | None:

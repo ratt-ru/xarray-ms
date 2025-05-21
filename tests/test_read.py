@@ -241,6 +241,7 @@ def test_jittered_intervals(simmed_ms):
 
   for p in ["000", "001"]:
     node = xdt[f"backend_partition_{p}"]
+    node.VISIBILITY[:5] = 5 + 6j
     assert np.isclose(node.time.integration_time, DUMP_RATE)
 
 

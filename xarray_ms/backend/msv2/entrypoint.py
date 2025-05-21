@@ -14,6 +14,7 @@ from xarray.core.dataset import Dataset
 from xarray.core.datatree import DataTree
 from xarray.core.utils import try_read_magic_number_from_file_or_path
 
+from xarray_ms.backend.msv2.array import MainMSv2Array
 from xarray_ms.backend.msv2.entrypoint_utils import CommonStoreArgs
 from xarray_ms.backend.msv2.factories import (
   AntennaDatasetFactory,
@@ -205,10 +206,36 @@ class MSv2Store(AbstractWritableDataStore):
     return dict(sorted({**attrs, **factory.get_attrs()}.items()))
 
   def get_dimensions(self):
-    return None
+    return {}
 
   def get_encoding(self):
-    return {}
+    table_args = self._table_factory.arguments()
+
+    return {
+      "common_store_args": {
+        "ms": table_args["filename"],
+        "ninstances": self._ninstances,
+        "auto_corrs": self._auto_corrs,
+        "epoch": self._epoch,
+        "partition_schema": self._partition_schema,
+      },
+      "partition_key": self._partition_key,
+    }
+
+  def set_dimensions(self, variables, unlimited_dims=None):
+    if unlimited_dims is not None:
+      raise NotImplementedError("MSv2 backend doesn't handle unlimited dimensions")
+
+  def prepare_variable(self, name, variable, check_encoding=False, unlimited_dims=None):
+    target = MainMSv2Array(
+      self._table_factory,
+      self._structure_factory,
+      self._partition_key,
+      name,
+      variable.shape,
+      variable.dtype,
+    )
+    return target, variable.data
 
 
 class MSv2EntryPoint(BackendEntrypoint):
@@ -381,6 +408,7 @@ class MSv2EntryPoint(BackendEntrypoint):
       > 0
     ):
       dt.set_close(vis_ds[0]._close)
+      dt.encoding["common_store_args"] = vis_ds[0].encoding["common_store_args"]
 
     return dt
 
