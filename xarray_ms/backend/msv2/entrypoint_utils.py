@@ -1,5 +1,5 @@
 import os.path
-from typing import Any, Dict, List
+from typing import Dict, List
 from uuid import uuid4
 
 import pyarrow as pa
@@ -96,13 +96,3 @@ class CommonStoreArgs:
       self.epoch,
       auto_corrs=self.auto_corrs,
     )
-
-    def encode_base_args(self) -> Dict[str, Any]:
-      return {
-        "ms": self.ms,
-        "ninstances": self.ninstances,
-        "auto_corrs": self.auto_corrs,
-        "epoch": self.epoch,
-        "partition_schema": self.partition_schema,
-        "preferred_chunks": self.preferred_chunks,
-      }
