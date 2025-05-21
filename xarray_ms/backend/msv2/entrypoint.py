@@ -408,7 +408,6 @@ class MSv2EntryPoint(BackendEntrypoint):
       > 0
     ):
       dt.set_close(vis_ds[0]._close)
-      dt.encoding["common_store_args"] = vis_ds[0].encoding["common_store_args"]
 
     return dt
 
