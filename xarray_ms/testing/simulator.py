@@ -413,6 +413,7 @@ class MSStructureSimulator:
     feed = desc.feed_map[tuple(corrs.polarisation_types())]
 
     array_groups: List[Tuple[List[str], List[npt.NDArray]]] = [
+      (["PROCESSOR_ID"], [desc.PROCESSOR_ID]),
       (["OBSERVATION_ID"], [desc.OBSERVATION_ID]),
       (["FIELD_ID"], [desc.FIELD_ID]),
       (["DATA_DESC_ID"], [desc.DATA_DESC_ID]),
