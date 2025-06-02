@@ -3,7 +3,7 @@
 Changelog
 =========
 
-X.Y.Z (DD-MM-YYYY)
+0.2.9 (02-06-2025)
 ------------------
 * Handle negative foreign keys during imputation of subtables (:pr:`102`)
 * Fix documentation typo (:pr:`99`)
