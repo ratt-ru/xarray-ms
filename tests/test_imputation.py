@@ -93,6 +93,9 @@ def test_imputed_processor_metadata_negative_proc_ids(simmed_ms):
   with Table.ms_from_descriptor(simmed_ms, "PROCESSOR", table_desc=field_table_desc):
     pass
 
+  with Table.from_filename(simmed_ms) as T:
+    assert_array_equal(T.getcol("PROCESSOR_ID"), -1)
+
   with pytest.warns(
     ImputedMetadataWarning,
     match="No row exists in the PROCESSOR table of length 0 for PROCESSOR_ID=0",
