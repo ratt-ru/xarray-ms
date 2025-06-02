@@ -17,6 +17,12 @@ def _maybe_return_table_or_max_id(
 ) -> pa.Table | int:
   """Returns the existing table if a row entry exists,
   else returns the maximum id"""
+
+  # NOTE(sjperkins)
+  # Negative ids are invalid foreign keys
+  # AFAICT this implies there's no entry in the associated subtable
+  # Set a ceiling of 0 for imputation purposes
+  ids = np.concatenate([ids, [0]])
   max_id = np.max(ids)
 
   if max_id < len(table):
