@@ -144,6 +144,7 @@ this to a zarr_ store.
 It is then trivial to open this using ``open_datatree``:
 
 .. ipython:: python
+  :okwarning:
 
   dt2 = xarray.open_datatree(zarr_path)
   xarray.testing.assert_identical(dt, dt2)
