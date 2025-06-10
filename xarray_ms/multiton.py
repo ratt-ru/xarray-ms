@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Callable, ClassVar, Mapping, Tuple
+from typing import Any, Callable, ClassVar, Dict, Mapping, Tuple
 
 from cacheout import Cache
 
-from xarray_ms.utils import FrozenKey, normalise_args
+from xarray_ms.utils import FrozenKey, function_arguments, normalise_args
 
 FactoryFunctionT = Callable[..., Any]
 
@@ -44,6 +44,11 @@ class Multiton:
     factory: FactoryFunctionT, args: Tuple[Any, ...], kw: Mapping[str, Any]
   ) -> Multiton:
     return Multiton(factory, *args, **kw)
+
+  def arguments(self) -> Dict[str, Any]:
+    """Return a dictionary of argument values that would be applied
+    to the factory function signature"""
+    return function_arguments(self._factory, self._args, self._kw)
 
   def __reduce__(
     self,
