@@ -188,6 +188,14 @@ def test_open_datatree(simmed_ms):
 def test_open_datatree_chunking(simmed_ms):
   """Test opening a datatree with both uniform
   and partition-specific chunking"""
+
+  ncdt = xarray.open_datatree(simmed_ms, auto_corrs=True)
+  ncdt.load()
+
+  # Remove attributes that would break xarray.identical
+  for p in range(len(ncdt.children)):
+    del ncdt[f"backend_partition_{p:03}"].attrs["creation_date"]
+
   dt = xarray.open_datatree(
     simmed_ms,
     auto_corrs=True,
@@ -210,6 +218,12 @@ def test_open_datatree_chunking(simmed_ms):
     "polarization": (2,),
     "uvw_label": (3,),
   }
+
+  # Remove attributes that would break xarray.identical
+  for p in range(len(ncdt.children)):
+    del dt[f"backend_partition_{p:03}"].attrs["creation_date"]
+
+  assert ncdt.identical(dt)
 
   dt = xarray.open_datatree(
     simmed_ms,
@@ -235,3 +249,9 @@ def test_open_datatree_chunking(simmed_ms):
     "polarization": (2,),
     "uvw_label": (3,),
   }
+
+  # Remove attributes that would break xarray.identical
+  for p in range(len(ncdt.children)):
+    del dt[f"backend_partition_{p:03}"].attrs["creation_date"]
+
+  assert ncdt.identical(dt)
