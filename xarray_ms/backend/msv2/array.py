@@ -6,7 +6,11 @@ from typing import TYPE_CHECKING, Any, Callable, Tuple
 
 import numpy as np
 from xarray.backends import BackendArray
-from xarray.core.indexing import IndexingSupport, explicit_indexing_adapter
+from xarray.core.indexing import (
+  IndexingSupport,
+  OuterIndexer,
+  explicit_indexing_adapter,
+)
 
 if TYPE_CHECKING:
   import numpy.typing as npt
@@ -178,6 +182,6 @@ class BroadcastMSv2Array(MSv2Array):
     if reduce(mul, expected_shape, 1) == 0:
       return np.empty(expected_shape, dtype=self.dtype)
     low_res_key = tuple(k for i, k in zip(self._low_res_index, key) if i is not None)
-    low_res_data = self._low_res_array._getitem(low_res_key)
+    low_res_data = self._low_res_array.__getitem__(OuterIndexer(low_res_key))
     low_res_data = low_res_data[self._low_res_index]
     return np.broadcast_to(low_res_data, expected_shape)
