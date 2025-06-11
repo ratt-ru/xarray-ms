@@ -3,6 +3,10 @@
 Changelog
 =========
 
+X.Y.Z (DD-MM-YYYY)
+------------------
+* Call MSv2Array.__getitem__ rather than MSv2Array._getitem which is not guaranteed to be present (:pr:`107`)
+
 0.3.1 (11-06-2025)
 ------------------
 * Fix low-resolution broadcasting (:pr:`106`)
