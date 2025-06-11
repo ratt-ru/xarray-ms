@@ -273,7 +273,7 @@ def _remove_weight_spectrum_add_weight(chunk_desc, data_dict):
   indirect=True,
 )
 def test_low_resolution_read(simmed_ms):
-  """Test that a missing WEIGHT_SPECTRUM results in a broadcasted WEGITH column"""
+  """Test that a missing WEIGHT_SPECTRUM results in a broadcasted WEIGHT column"""
   dt = xarray.open_datatree(simmed_ms, auto_corrs=True)
 
   for p in ["000", "001"]:
@@ -287,3 +287,51 @@ def test_low_resolution_read(simmed_ms):
     assert_array_equal(
       np.broadcast_to(values, (ntime, nbl, nfreq, npol)), node.WEIGHT.values
     )
+
+
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [
+    {
+      "name": "backend.ms",
+      "nantenna": 7,
+      "data_description": [(8, ["XX", "XY", "YX", "YY"]), (4, ["RR", "LL"])],
+      "table_desc": {k: v for k, v in STANDARD_DATA_COLUMNS.items() if k in {"DATA"}},
+      "transform_data": _remove_weight_spectrum_add_weight,
+    }
+  ],
+  indirect=True,
+)
+def test_isel_loads_on_subsets(simmed_ms):
+  """Test that isels on a broadcasted WEIGHT column"""
+  dt = xarray.open_datatree(simmed_ms, auto_corrs=True)
+  assert len(dt.children) == 2
+
+  p0_sel = {"time": slice(1, 2), "baseline_id": [0, 2], "frequency": slice(4, 6)}
+  # Second partition only has 4 frequencies, tests slicing outside the range
+  p1_sel = {"time": [0, 2], "baseline_id": slice(2, 5), "frequency": slice(4, 6)}
+
+  node0 = dt["backend_partition_000"].isel(**p0_sel)
+  node0.load()
+  assert node0.sizes == {
+    "time": 1,
+    "baseline_id": 2,
+    "frequency": 2,
+    "polarization": 4,
+    "uvw_label": 3,
+  }
+
+  node1 = dt["backend_partition_001"].isel(**p1_sel)
+  node1.load()
+  assert node1.VISIBILITY.shape == (2, 3, 0, 2)
+  assert node1.sizes == {
+    "time": 2,
+    "baseline_id": 3,
+    "frequency": 0,
+    "polarization": 2,
+    "uvw_label": 3,
+  }
+
+  dt.load()
+  assert dt["backend_partition_000"].isel(**p0_sel).identical(node0)
+  assert dt["backend_partition_001"].isel(**p1_sel).identical(node1)

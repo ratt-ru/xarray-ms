@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from functools import reduce
+from operator import mul
 from typing import TYPE_CHECKING, Any, Callable, Tuple
 
 import numpy as np
@@ -103,6 +105,8 @@ class MainMSv2Array(MSv2Array):
   def _getitem(self, key) -> npt.NDArray:
     assert len(key) == len(self.shape)
     expected_shape = tuple(slice_length(k, s) for k, s in zip(key, self.shape))
+    if reduce(mul, expected_shape, 1) == 0:
+      return np.empty(expected_shape, dtype=self.dtype)
     # Map the (time, baseline_id) coordinates onto row indices
     rows = self._structure_factory.instance[self._partition].row_map[key[:2]]
     row_key = (rows.ravel(),) + key[2:]
@@ -139,13 +143,13 @@ class BroadcastMSv2Array(MSv2Array):
   __slots__ = ("_low_res_array", "_low_res_index")
 
   _low_res_array: MSv2Array
-  _low_res_index: Tuple[slice | None, ...]
+  _low_res_index: Tuple[slice | npt.NDArray | None, ...]
   shape: Tuple[int, ...]
 
   def __init__(
     self,
     low_res_array: MSv2Array,
-    low_res_index: Tuple[slice | None, ...],
+    low_res_index: Tuple[slice | npt.NDArray | None, ...],
     high_res_shape: Tuple[int, ...],
   ):
     self._low_res_array = low_res_array
@@ -165,6 +169,15 @@ class BroadcastMSv2Array(MSv2Array):
     self._low_res_array.transform = value
 
   def __getitem__(self, key) -> npt.NDArray:
-    low_res_data = self._low_res_array.__getitem__(key)
+    return explicit_indexing_adapter(
+      key, self.shape, IndexingSupport.OUTER, self._getitem
+    )
+
+  def _getitem(self, key) -> npt.NDArray:
+    expected_shape = tuple(slice_length(k, s) for k, s in zip(key, self.shape))
+    if reduce(mul, expected_shape, 1) == 0:
+      return np.empty(expected_shape, dtype=self.dtype)
+    low_res_key = tuple(k for i, k in zip(self._low_res_index, key) if i is not None)
+    low_res_data = self._low_res_array._getitem(low_res_key)
     low_res_data = low_res_data[self._low_res_index]
-    return np.broadcast_to(low_res_data, self.shape)
+    return np.broadcast_to(low_res_data, expected_shape)
