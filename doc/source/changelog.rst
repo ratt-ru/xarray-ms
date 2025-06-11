@@ -3,6 +3,10 @@
 Changelog
 =========
 
+0.3.1 (11-06-2025)
+------------------
+* Fix low-resolution broadcasting (:pr:`106`)
+
 0.3.0 (10-06-2025)
 ------------------
 * Upgrade to arcae 0.2.9 to elide selection checks on ignored rows (:pr:`105`)
