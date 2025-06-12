@@ -3,7 +3,7 @@ xarray-ms
 
 |CI Status| |Doc Status| |Version Status|
 
-xarray-ms present an xarray Measurement Set v4 view over a CASA Measurement Set v2.
+xarray-ms presents an xarray Measurement Set v4 view over a CASA Measurement Set v2.
 See the documentation_ for further information.
 
 .. _documentation: https://xarray-ms.readthedocs.io
