@@ -12,7 +12,7 @@ xarray = "^2025.0"
 dask = {version = "^2024.5.0", optional = true, extras = ["testing"]}
 distributed = {version = "^2024.5.0", optional = true, extras = ["testing"]}
 cacheout = "^0.16.0"
-arcae = "^0.2.9"
+arcae = "^0.3.0"
 typing-extensions = "^4.12.2"
 zarr = {version = "^2.18.3", optional = true, extras = ["testing"]}
 
