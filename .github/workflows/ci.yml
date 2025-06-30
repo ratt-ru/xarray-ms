@@ -83,18 +83,15 @@ jobs:
         with:
           python-version: 3.11
 
-      - name: Install Poetry
-        uses: abatilo/actions-poetry@v4
-        with:
-          poetry-version: ${{ env.POETRY_VERSION }}
-
       - name: Checkout source
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
       - name: Build distributions
-        run: poetry build
+        run: |
+          pip install -U pip build
+          python -m build --sdist --wheel
 
       - name: Publish distribution 📦 to Test PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
