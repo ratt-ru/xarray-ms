@@ -29,8 +29,6 @@ doc = [
     "sphinx-copybutton>=0.5.2",
     "pydata-sphinx-theme>=0.15.4",
     "ipython>=8.27.0",
-    "dask>=2024.9.0",
-    "zarr>=2.18.3",
 ]
 
 [project.entry-points."xarray.backends"]

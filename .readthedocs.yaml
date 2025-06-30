@@ -16,6 +16,7 @@ python:
       path: .
       extra_requirements:
         - doc
+        - testing
 
 # Build documentation in the "docs/" directory with Sphinx
 sphinx:
