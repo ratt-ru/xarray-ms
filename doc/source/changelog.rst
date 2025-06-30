@@ -5,6 +5,24 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Change to PEP 621 pyproject.toml (:pr:`109`)
+
+0.3.2 (21-06-2025)
+------------------
+* Upgrade to arcae 0.3.0 (:pr:`108`)
+* Call MSv2Array.__getitem__ rather than MSv2Array._getitem which is not guaranteed to be present (:pr:`107`)
+
+0.3.1 (11-06-2025)
+------------------
+* Fix low-resolution broadcasting (:pr:`106`)
+
+0.3.0 (10-06-2025)
+------------------
+* Upgrade to arcae 0.2.9 to elide selection checks on ignored rows (:pr:`105`)
+
+0.2.9 (02-06-2025)
+------------------
+* Handle negative foreign keys during imputation of subtables (:pr:`102`)
 * Fix documentation typo (:pr:`99`)
 * Update Work in Progress documentation (:pr:`98`)
 * Remove stray test case print (:pr:`97`)
