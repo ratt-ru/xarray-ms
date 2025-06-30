@@ -1,45 +1,42 @@
-[tool.poetry]
+[project]
 name = "xarray-ms"
 version = "0.3.2"
 description = "xarray MSv4 views over MSv2 Measurement Sets"
-authors = ["Simon Perkins <simon.perkins@gmail.com>"]
+authors = [{name = "Simon Perkins", email = "simon.perkins@gmail.com"}]
 readme = "README.rst"
+requires-python = ">=3.10"
+dependencies = [
+    "xarray>=2025.0",
+    "cacheout>=0.16.0",
+    "arcae>=0.3.0",
+    "typing-extensions>=4.12.2",
+]
 
-[tool.poetry.dependencies]
-python = "^3.10"
-pytest = {version = "^8.0.0", optional = true, extras = ["testing"]}
-xarray = "^2025.0"
-dask = {version = "^2024.5.0", optional = true, extras = ["testing"]}
-distributed = {version = "^2024.5.0", optional = true, extras = ["testing"]}
-cacheout = "^0.16.0"
-arcae = "^0.3.0"
-typing-extensions = "^4.12.2"
-zarr = {version = "^2.18.3", optional = true, extras = ["testing"]}
+[project.optional-dependencies]
+testing = [
+    "pytest>=8.0.0",
+    "dask>=2024.5.0",
+    "distributed>=2024.5.0",
+    "zarr>=2.18.3, <3.0.0",
+]
+dev = [
+    "pre-commit>=3.8.0",
+    "tbump>=6.11.0",
+]
+doc = [
+    "sphinx>=8.0.2",
+    "pygments>=2.18.0",
+    "sphinx-copybutton>=0.5.2",
+    "pydata-sphinx-theme>=0.15.4",
+    "ipython>=8.27.0",
+]
 
-[tool.poetry.extras]
-testing = ["dask", "distributed", "pytest", "zarr"]
-
-[tool.poetry.plugins."xarray.backends"]
+[project.entry-points."xarray.backends"]
 "xarray-ms:msv2" = "xarray_ms.backend.msv2.entrypoint:MSv2EntryPoint"
 
-[tool.poetry.group.dev]
-optional = true
-
-[tool.poetry.group.dev.dependencies]
-pre-commit = "^3.8.0"
-tbump = "^6.11.0"
-
-[tool.poetry.group.doc]
-optional = true
-
-[tool.poetry.group.doc.dependencies]
-sphinx = "^8.0.2"
-pygments = "^2.18.0"
-sphinx-copybutton = "^0.5.2"
-pydata-sphinx-theme = "^0.15.4"
-ipython = "^8.27.0"
-dask = "^2024.9.0"
-zarr = "^2.18.3"
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 88
@@ -50,9 +47,6 @@ target-version = "py311"
 select = ["F", "E", "W", "I001"]
 extend-select = ["I"]
 
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
 [tool.tbump]
 # Uncomment this if your project is hosted on GitHub:
 # github_url = "https://github.com/<user or organization>/<project>/"

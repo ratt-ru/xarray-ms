@@ -3,6 +3,10 @@
 Changelog
 =========
 
+X.Y.Z (DD-MM-YYYY)
+------------------
+* Change to PEP 621 pyproject.toml (:pr:`109`)
+
 0.3.2 (21-06-2025)
 ------------------
 * Upgrade to arcae 0.3.0 (:pr:`108`)

@@ -10,9 +10,6 @@ on:
   schedule:
     - cron: '30 2 * * 1,4' # Every Monday and Thursday @ 2h30am UTC
 
-env:
-  POETRY_VERSION: 1.8.3
-
 jobs:
   check_skip:
     runs-on: ubuntu-latest
@@ -52,24 +49,26 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install poetry
-        uses: abatilo/actions-poetry@v4
-        with:
-          poetry-version: ${{ env.POETRY_VERSION }}
-
       - name: Checkout source
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      - name: Setup a virtual environment appropriate to the python version
-        run: poetry env use python${{ matrix.python-version }}
+      - name: Create virtual environment
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install -U pip
 
       - name: Install xarray-ms
-        run: poetry install --extras testing
+        run: |
+          source .venv/bin/activate
+          pip install .[testing]
 
       - name: Test xarray-ms
-        run: poetry run py.test -W error -s -vvv tests/
+        run: |
+          source .venv/bin/activate
+          py.test -W error -s -vvv tests/
 
       # - name: Debug with tmate on failure
       #   if: ${{ failure() }}
@@ -84,18 +83,15 @@ jobs:
         with:
           python-version: 3.11
 
-      - name: Install Poetry
-        uses: abatilo/actions-poetry@v4
-        with:
-          poetry-version: ${{ env.POETRY_VERSION }}
-
       - name: Checkout source
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
       - name: Build distributions
-        run: poetry build
+        run: |
+          pip install -U pip build
+          python -m build --sdist --wheel
 
       - name: Publish distribution 📦 to Test PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
