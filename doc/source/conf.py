@@ -54,9 +54,9 @@ html_theme = "pydata_sphinx_theme"
 
 # Disable navigation sidebars
 # https://github.com/pydata/pydata-sphinx-theme/issues/1662
-html_sidebars = {
-  "**": [],
-}
+# html_sidebars = {
+#  "**": [],
+# }
 html_static_path = ["_static"]
 
 extlinks = {
