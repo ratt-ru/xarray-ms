@@ -401,13 +401,13 @@ class MSStructureSimulator:
       ddid = desc.DATA_DESC_ID.item()
     except ValueError as e:
       raise ValueError(
-        f"Only single DATA_DESC_ID " f"per partition allowed {desc.DATA_DESC_ID}"
+        f"Only single DATA_DESC_ID per partition allowed {desc.DATA_DESC_ID}"
       ) from e
 
     try:
       chan_freq, corrs = desc.data_description[ddid]
     except ValueError:
-      raise ValueError(f"Unable to find a descriptor for " f"DATA_DESC_ID={ddid}")
+      raise ValueError(f"Unable to find a descriptor for DATA_DESC_ID={ddid}")
 
     # Use on FEED for this ddid
     feed = desc.feed_map[tuple(corrs.polarisation_types())]

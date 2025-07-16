@@ -368,8 +368,7 @@ class MSv2Structure(Mapping):
       column = SHORT_TO_LONG_PARTITION_COLUMNS.get(column, column)
       if column not in column_set:
         raise InvalidPartitionKey(
-          f"{column} is not valid a valid partition column "
-          f"{self._partition_columns}"
+          f"{column} is not valid a valid partition column {self._partition_columns}"
         )
       if not isinstance(value, (str, Integral)):
         raise InvalidPartitionKey(

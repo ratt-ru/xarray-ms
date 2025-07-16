@@ -5,7 +5,8 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
-* Change to PEP 621 pyproject.toml (:pr:`109`)
+* Update pre-commit hooks (:pr:`110`)
+* Implement PEP 621 in pyproject.toml (:pr:`109`)
 
 0.3.2 (21-06-2025)
 ------------------
