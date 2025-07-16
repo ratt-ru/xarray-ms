@@ -88,10 +88,25 @@ def fit_tile_shape(shape: Tuple[int, ...], dtype: npt.DTypeLike) -> Dict[str, np
   return {"DEFAULTTILESHAPE": list(tile_shape[::-1])}
 
 
-def generate_descriptor(
+def generate_column_descriptor(
+  table_desc: Dict[str, Any],
   shapes_and_dtypes: ShapeAndDTypeType,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
   """
+  Synthesises a column descriptor from:
+
+  1. An existing table descriptor.
+  2. A complete table descriptor.
+  3. The shapes and data types associated with
+    xarray Variables on a DataTree.
+
+  Args:
+    table_desc: Table descriptor containing existing
+      column definitions.
+    shapes_and_dtypes: A :code:`{var_name: (set(shapes), set(dtypes))}`
+      mapping of shapes and data types associated with each xarray
+      Variable.
+
   Returns:
     A (descriptor, dminfo) tuple containing any columns
     and data managers that should be created
@@ -101,12 +116,16 @@ def generate_descriptor(
   dm_groups = []
 
   for (var_name, column), (shapes, dtypes) in shapes_and_dtypes.items():
-    if column_desc := canonical_table_desc.get(column):
-      # If an existing descriptor exists for this column,
-      # validate that the variable shape matches the column
+    # If there are existing descriptors, either for
+    # columns present on the table, or in the canonical definition
+    # validate that the variable shape matches the column
+    if column_desc := table_desc.get(column):
+      validate_column_desc(var_name, column, shapes, column_desc)
+    elif column_desc := canonical_table_desc.get(column):
       validate_column_desc(var_name, column, shapes, column_desc)
     else:
-      # Construct a column descriptor and possibly an associated data manager
+      # Construct a column descriptor and possibly an
+      # associated data manager
       # Unify variable numpy types
       dtype = np.result_type(*dtypes)
 
@@ -146,7 +165,8 @@ def generate_descriptor(
           }
         )
       else:
-        # Variably shaped
+        # Variably shaped, use a StandardStMan for now
+        # but consider a TiledCellStMan in future
         column_desc["option"] = 0
         column_desc["dataManagerGroup"] = "StandardStMan"
         column_desc["dataManagerType"] = "StandardStMan"
@@ -224,10 +244,11 @@ def datatree_to_msv2(
       shapes.add(var.shape[len(PREFIX_DIMS) :])
       dtypes.add(var.dtype)
 
-  column_descs, dminfo = generate_descriptor(shapes_and_dtypes)
-  store = msv2_store_from_dataset(next(iter(vis_datasets)).ds)
-  store._table_factory.instance.addcols(column_descs, dminfo)
-  assert set(column_descs.keys()).issubset(store._table_factory.instance.columns())
+  table_factory = msv2_store_from_dataset(next(iter(vis_datasets)).ds)._table_factory
+  table_desc = table_factory.instance.tabledesc()
+  column_descs, dminfo = generate_column_descriptor(table_desc, shapes_and_dtypes)
+  table_factory.instance.addcols(column_descs, dminfo)
+  assert set(column_descs.keys()).issubset(table_factory.instance.columns())
 
   for node in vis_datasets:
     at_root = node is dt.root
