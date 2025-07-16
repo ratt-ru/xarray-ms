@@ -198,7 +198,7 @@ class CorrelatedDatasetFactory:
     missing = np.count_nonzero(row_map == -1)
     if missing > 0:
       warnings.warn(
-        f"{missing} / {row_map.size} ({100. * missing / row_map.size:.1f}%) "
+        f"{missing} / {row_map.size} ({100.0 * missing / row_map.size:.1f}%) "
         f"rows missing from the full (time, baseline_id) grid "
         f"in partition {self._partition_key}. "
         f"Dataset variables will be padded with nans "
