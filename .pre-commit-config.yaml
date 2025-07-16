@@ -2,14 +2,14 @@
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v5.0.0
     hooks:
     -   id: trailing-whitespace
     -   id: end-of-file-fixer
     -   id: check-yaml
     -   id: check-added-large-files
 -   repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.3.7
+    rev: v0.12.3
     hooks:
     -   id: ruff
         # Handle imports, see
@@ -19,7 +19,7 @@ repos:
     -   id: ruff-format
         name: ruff format
 -   repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.9.0
+    rev: v1.17.0
     hooks:
     -   id: mypy
         name: mypy
