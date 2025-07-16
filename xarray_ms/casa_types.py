@@ -225,9 +225,7 @@ class Stokes(IntEnum):
       return stokes
     else:
       raise TypeError(
-        f"Cannot convert {stokes} "
-        f"of type {type(stokes)} "
-        f"to a Stokes Enumeration"
+        f"Cannot convert {stokes} of type {type(stokes)} to a Stokes Enumeration"
       )
 
 
@@ -374,7 +372,7 @@ class DataDescription(Sequence):
     # Must have a sequence at this point
     if not isinstance(pairs, Sequence):
       raise TypeError(
-        f"type of pairs {type(pairs)} must be a list " f"or a DataDescription object"
+        f"type of pairs {type(pairs)} must be a list or a DataDescription object"
       )
 
     result = []
@@ -394,7 +392,7 @@ class DataDescription(Sequence):
         pass
       else:
         raise TypeError(
-          f"chan_freq must be an int, tuple, list of ndarray. " f"Got {type(chan_freq)}"
+          f"chan_freq must be an int, tuple, list of ndarray. Got {type(chan_freq)}"
         )
 
       if isinstance(corrs, (list, tuple, np.ndarray)):
@@ -403,8 +401,7 @@ class DataDescription(Sequence):
         pass
       else:
         raise TypeError(
-          f"corrs must be a list, tuple, ndarray or Polarisations. "
-          f"Got {type(corrs)}"
+          f"corrs must be a list, tuple, ndarray or Polarisations. Got {type(corrs)}"
         )
 
       result.append((chan_freq, corrs))
@@ -422,8 +419,7 @@ class Feed:
       self._receptor_one, self._receptor_two = polarisation_types
     except ValueError as e:
       raise ValueError(
-        f"Only two feed receptors are currently allowed. "
-        f"Received {polarisation_types}"
+        f"Only two feed receptors are currently allowed. Received {polarisation_types}"
       ) from e
 
     self._feed_id = feed_id
