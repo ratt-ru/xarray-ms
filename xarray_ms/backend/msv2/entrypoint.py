@@ -4,7 +4,7 @@ import os
 import warnings
 from datetime import datetime, timezone
 from importlib.metadata import version as importlib_version
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Literal, Mapping
 
 import xarray
 from xarray.backends import BackendEntrypoint
@@ -36,6 +36,9 @@ if TYPE_CHECKING:
   from xarray.backends.common import AbstractDataStore
 
   from xarray_ms.backend.msv2.structure import DEFAULT_PARTITION_COLUMNS, PartitionKeyT
+
+
+WriteRegionType = Mapping[str, slice | Literal["auto"]] | Literal["auto"]
 
 
 def promote_chunks(
@@ -84,6 +87,7 @@ class MSv2Store(AbstractWritableDataStore):
     "_auto_corrs",
     "_ninstances",
     "_epoch",
+    "_write_region",
   )
 
   _table_factory: Multiton
@@ -95,6 +99,7 @@ class MSv2Store(AbstractWritableDataStore):
   _autocorrs: bool
   _ninstances: int
   _epoch: str
+  _write_region: WriteRegionType
 
   def __init__(
     self,
@@ -107,6 +112,7 @@ class MSv2Store(AbstractWritableDataStore):
     auto_corrs: bool,
     ninstances: int,
     epoch: str,
+    write_region: WriteRegionType,
   ):
     self._table_factory = table_factory
     self._subtable_factories = subtable_factories
@@ -117,6 +123,7 @@ class MSv2Store(AbstractWritableDataStore):
     self._auto_corrs = auto_corrs
     self._ninstances = ninstances
     self._epoch = epoch
+    self._write_region = write_region
 
   @classmethod
   def open(
@@ -130,6 +137,7 @@ class MSv2Store(AbstractWritableDataStore):
     ninstances: int = 1,
     epoch: str | None = None,
     structure_factory: MSv2StructureFactory | None = None,
+    write_region: WriteRegionType = "auto",
   ):
     if not isinstance(ms, str):
       raise ValueError("Measurement Sets paths must be strings")
@@ -170,6 +178,7 @@ class MSv2Store(AbstractWritableDataStore):
       auto_corrs=store_args.auto_corrs,
       ninstances=store_args.ninstances,
       epoch=store_args.epoch,
+      write_region=write_region,
     )
 
   def close(self, **kwargs):
@@ -226,6 +235,21 @@ class MSv2Store(AbstractWritableDataStore):
     if unlimited_dims is not None:
       raise NotImplementedError("MSv2 backend doesn't handle unlimited dimensions")
 
+  def set_variables(
+    self,
+    variables: dict[str, xarray.Variable],
+    check_encoding_set,
+    writer,
+    unlimited_dims=None,
+  ):
+    for n, v in variables.items():
+      target, source = self.prepare_variable(
+        n, v, n in check_encoding_set, unlimited_dims=unlimited_dims
+      )
+      write_region = {} if self._write_region == "auto" else self._write_region
+      region = tuple(write_region.get(d, slice(None)) for d in v.dims)
+      writer.add(source, target, region=region)
+
   def prepare_variable(self, name, variable, check_encoding=False, unlimited_dims=None):
     target = MainMSv2Array(
       self._table_factory,
@@ -236,6 +260,27 @@ class MSv2Store(AbstractWritableDataStore):
       variable.dtype,
     )
     return target, variable.data
+
+  def set_write_region(self, ds: Dataset):
+    """Sets the region for writing on this store, given a source dataset"""
+
+    region: Dict[str, slice | Literal["auto"]] = dict.fromkeys(ds.dims, "auto")
+
+    if self._write_region == "auto":
+      pass
+    elif isinstance(self._write_region, dict):
+      region.update(self._write_region)
+    else:
+      raise TypeError(f"'region' ({type(region)}) should be a dict or \"auto\"")
+
+    try:
+      expanded_region = {
+        d: slice(0, ds.sizes[d]) if v == "auto" else v for d, v in region.items()
+      }
+    except KeyError as e:
+      raise ValueError(f"{e} is not a dataset dimension")
+
+    self._write_region = expanded_region
 
 
 class MSv2EntryPoint(BackendEntrypoint):

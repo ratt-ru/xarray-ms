@@ -1,12 +1,13 @@
 import warnings
 from collections import defaultdict
-from typing import Any, Dict, Iterable, Set, Tuple
+from typing import Any, Dict, Iterable, Literal, Mapping, Set, Tuple
 
 import numpy as np
 import numpy.typing as npt
 from arcae.lib.arrow_tables import ms_descriptor
 from xarray import Dataset, DataTree
-from xarray.backends.api import dump_to_store
+from xarray.backends.api import _finalize_store, dump_to_store
+from xarray.backends.common import ArrayWriter
 
 from xarray_ms.backend.msv2.entrypoint import MSv2Store
 from xarray_ms.backend.msv2.entrypoint_utils import CommonStoreArgs
@@ -58,7 +59,7 @@ def validate_column_desc(
 def fit_tile_shape(shape: Tuple[int, ...], dtype: npt.DTypeLike) -> Dict[str, np.int32]:
   """
   Args:
-    shape: tile shape
+    shape: FORTRAN ordered tile shape
     dtype: tile data type
 
   Returns:
@@ -85,6 +86,7 @@ def fit_tile_shape(shape: Tuple[int, ...], dtype: npt.DTypeLike) -> Dict[str, np
         tile_shape[growth_axis] *= 2
       growth_axis = (growth_axis + 1) % len(tile_shape)
 
+  # The tile shape is C ordered
   return {"DEFAULTTILESHAPE": list(tile_shape[::-1])}
 
 
@@ -146,7 +148,8 @@ def generate_column_descriptor(
       column_desc = {"valueType": casa_type, "option": 0}
 
       if len(shapes) == 1:
-        # Fixed shape, Tile the column
+        # If the shape is fixed, Tile the column
+        # column descriptor shapes are fortran ordered
         fixed_shape = tuple(reversed(next(iter(shapes))))
         row_only = len(fixed_shape) == 0
         if not row_only:
@@ -177,7 +180,7 @@ def generate_column_descriptor(
   return actual_desc, dminfo
 
 
-def msv2_store_from_dataset(ds: Dataset) -> MSv2Store:
+def msv2_store_from_dataset(ds: Dataset, region="auto") -> MSv2Store:
   try:
     common_store_args = ds.encoding["common_store_args"]
     partition_key = ds.encoding["partition_key"]
@@ -190,7 +193,7 @@ def msv2_store_from_dataset(ds: Dataset) -> MSv2Store:
     ) from e
 
   # Recover common arguments used to create the original store
-  # This will likely re-use existing table and structure factories
+  # This will re-use existing table and structure factories
   store_args = CommonStoreArgs(**common_store_args)
   return MSv2Store.open(
     ms=store_args.ms,
@@ -201,11 +204,15 @@ def msv2_store_from_dataset(ds: Dataset) -> MSv2Store:
     ninstances=store_args.ninstances,
     epoch=store_args.epoch,
     structure_factory=store_args.structure_factory,
+    write_region=region,
   )
 
 
 def datatree_to_msv2(
-  dt: DataTree, variables: str | Iterable[str], write_inherited_coords: bool = False
+  dt: DataTree,
+  variables: str | Iterable[str],
+  compute: Literal[True] = True,
+  write_inherited_coords: bool = False,
 ):
   assert isinstance(dt, DataTree)
   list_var_names = [variables] if isinstance(variables, str) else list(variables)
@@ -240,7 +247,6 @@ def datatree_to_msv2(
         raise ValueError(f"{n} dimensions {var.dims} do not start with {PREFIX_DIMS}")
 
       shapes, dtypes = shapes_and_dtypes[(n, n)]
-
       shapes.add(var.shape[len(PREFIX_DIMS) :])
       dtypes.add(var.dtype)
 
@@ -250,24 +256,41 @@ def datatree_to_msv2(
   table_factory.instance.addcols(column_descs, dminfo)
   assert set(column_descs.keys()).issubset(table_factory.instance.columns())
 
-  for node in vis_datasets:
-    at_root = node is dt.root
-    node = node.to_dataset(inherit=write_inherited_coords or at_root)
-    node.to_msv2(list_var_names)
+  if compute:
+    for node in vis_datasets:
+      at_root = node is dt.root
+      ds = node.to_dataset(inherit=write_inherited_coords or at_root)
+      dataset_to_msv2(ds, list_var_names, compute)
 
 
-def dataset_to_msv2(ds: Dataset, variables: str | Iterable[str]):
+def dataset_to_msv2(
+  ds: Dataset,
+  variables: str | Iterable[str],
+  compute: Literal[True] = True,
+  region: Mapping[str, slice | Literal["auto"]] | Literal["auto"] = "auto",
+):
   assert isinstance(ds, Dataset)
   list_vars = [variables] if isinstance(variables, str) else list(variables)
 
   if len(list_vars) == 0:
     return
 
-  # Strip out coordinates and attributes
-  msv2_store = msv2_store_from_dataset(ds)
+  # Strip out
+  # 1. variables that will not be written
+  # 2. coordinates
+  # 3. attributes
   ignored_vars = set(ds.data_vars) - set(list_vars)
-  ds = ds.drop_vars(ds.coords).drop_vars(ignored_vars).drop_attrs()
-  try:
-    dump_to_store(ds, msv2_store)
-  finally:
-    msv2_store.close()
+  ds = ds.drop_vars(ignored_vars | set(ds.coords)).drop_attrs()
+
+  msv2_store = msv2_store_from_dataset(ds, region)
+  msv2_store.set_write_region(ds)
+  writer = ArrayWriter()
+  dump_to_store(ds, msv2_store, writer)
+  writes = writer.sync(compute=compute)
+
+  if compute:
+    _finalize_store(writes, msv2_store)
+  else:
+    import dask
+
+    return dask.delayed(_finalize_store)(writes, msv2_store)
