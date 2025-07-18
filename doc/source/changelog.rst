@@ -5,7 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
-* Use trusted publishing to pypi (:pr:`111`)
+* Use trusted publishing when publishing to pypi (:pr:`111`)
 * Update pre-commit hooks (:pr:`110`)
 * Implement PEP 621 in pyproject.toml (:pr:`109`)
 
