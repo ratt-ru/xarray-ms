@@ -38,7 +38,7 @@ if TYPE_CHECKING:
   from xarray_ms.backend.msv2.structure import DEFAULT_PARTITION_COLUMNS, PartitionKeyT
 
 
-WriteRegionType = Mapping[str, slice | Literal["auto"]] | Literal["auto"]
+WriteRegionT = Mapping[str, slice | Literal["auto"]] | Literal["auto"]
 
 
 def promote_chunks(
@@ -99,7 +99,7 @@ class MSv2Store(AbstractWritableDataStore):
   _autocorrs: bool
   _ninstances: int
   _epoch: str
-  _write_region: WriteRegionType
+  _write_region: WriteRegionT
 
   def __init__(
     self,
@@ -112,7 +112,7 @@ class MSv2Store(AbstractWritableDataStore):
     auto_corrs: bool,
     ninstances: int,
     epoch: str,
-    write_region: WriteRegionType,
+    write_region: WriteRegionT,
   ):
     self._table_factory = table_factory
     self._subtable_factories = subtable_factories
@@ -137,7 +137,7 @@ class MSv2Store(AbstractWritableDataStore):
     ninstances: int = 1,
     epoch: str | None = None,
     structure_factory: MSv2StructureFactory | None = None,
-    write_region: WriteRegionType = "auto",
+    write_region: WriteRegionT = "auto",
   ):
     if not isinstance(ms, str):
       raise ValueError("Measurement Sets paths must be strings")
@@ -197,9 +197,11 @@ class MSv2Store(AbstractWritableDataStore):
     )
 
   def get_variables(self):
+    """Overrides AbstractDataStore.get_variables"""
     return self.main_dataset_factory().get_variables()
 
   def get_attrs(self):
+    """Overrides AbstractDataStore.get_attrs"""
     factory = self.main_dataset_factory()
 
     attrs = {
@@ -215,9 +217,20 @@ class MSv2Store(AbstractWritableDataStore):
     return dict(sorted({**attrs, **factory.get_attrs()}.items()))
 
   def get_dimensions(self):
+    """Typically, this hook retrieves Dataset dimensions from the
+    underlying store, but in the MSv2Store implementation, these
+    are currently derived from the Dataset.
+
+    Overrides AbstractDataStore.get_dimensions.
+    """
     return {}
 
   def get_encoding(self):
+    """Encodes the arguments used to create the MSv2Store,
+    as well as the partition key associated with this partition
+    of the Measurement Set.
+
+    Overrides AbstractDataStore.get_encoding"""
     table_args = self._table_factory.arguments()
 
     return {
@@ -232,8 +245,18 @@ class MSv2Store(AbstractWritableDataStore):
     }
 
   def set_dimensions(self, variables, unlimited_dims=None):
-    if unlimited_dims is not None:
-      raise NotImplementedError("MSv2 backend doesn't handle unlimited dimensions")
+    """Set dimensions on the store, based on the variables.
+    This might be a good point to add columns to the Measurement Set,
+    but a store only references a partition of the MS so a complete
+    view of all the variables that would contribute to defining an
+    MS column are not available.
+
+    This logic must be performed at the higher DataTree level,
+    so we noop here.
+
+    Overrides AbstractWritableDataStore.set_dimensions.
+    """
+    pass
 
   def set_variables(
     self,
@@ -242,6 +265,10 @@ class MSv2Store(AbstractWritableDataStore):
     writer,
     unlimited_dims=None,
   ):
+    """Set variables for writing to the store
+
+    Overrides AbstractWritableDataStore.set_variables.
+    """
     for n, v in variables.items():
       target, source = self.prepare_variable(
         n, v, n in check_encoding_set, unlimited_dims=unlimited_dims
@@ -251,6 +278,10 @@ class MSv2Store(AbstractWritableDataStore):
       writer.add(source, target, region=region)
 
   def prepare_variable(self, name, variable, check_encoding=False, unlimited_dims=None):
+    """Prepare variable for writing to the Measurement Set
+
+    Overrides AbstractWritableDataStore.prepare_variable.
+    """
     target = MainMSv2Array(
       self._table_factory,
       self._structure_factory,
