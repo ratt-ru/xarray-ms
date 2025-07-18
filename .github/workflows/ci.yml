@@ -77,6 +77,11 @@ jobs:
   deploy:
     needs: [test]
     runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https:/pypi.org/p/xarray-ms
+    permissions:
+      id-token: write
     steps:
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -96,14 +101,10 @@ jobs:
       - name: Publish distribution 📦 to Test PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          user: __token__
-          password: ${{ secrets.TEST_PYPI_TOKEN }}
           repository_url: https://test.pypi.org/legacy/
+          skip-existing: true
         continue-on-error: true
 
       - name: Publish distribution 📦 to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
         if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags')
-        with:
-          user: __token__
-          password: ${{ secrets.PYPI_TOKEN }}
+        uses: pypa/gh-action-pypi-publish@release/v1
