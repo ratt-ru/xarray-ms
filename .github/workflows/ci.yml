@@ -80,6 +80,8 @@ jobs:
     environment:
       name: pypi
       url: https:/pypi.org/p/xarray-ms
+    permissions:
+      id-token: write
     steps:
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
