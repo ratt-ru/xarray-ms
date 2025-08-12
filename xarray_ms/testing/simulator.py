@@ -225,7 +225,7 @@ class MSStructureSimulator:
 
     # Generate descriptors, create simulated data from the descriptors
     # and write simulated data to the main Measurement Set
-    with Table.ms_from_descriptor(output_ms, "MAIN", self.table_desc) as T:
+    with Table.ms_from_descriptor(output_ms, "MAIN", 1, self.table_desc) as T:
       startrow = 0
 
       for chunk_desc in self.generate_descriptors():
@@ -343,9 +343,7 @@ class MSStructureSimulator:
       T.putcol("RELEASE_DATE", np.asarray([0.0] * self.nobs))
 
     source_table_desc = ms_descriptor("SOURCE", complete=True)
-    with Table.ms_from_descriptor(
-      output_ms, "SOURCE", table_desc=source_table_desc
-    ) as T:
+    with Table.ms_from_descriptor(output_ms, "SOURCE", 1, source_table_desc) as T:
       T.addrows(self.nfield)
       T.putcol("TIME", np.asarray([1.0] * self.nfield))
       T.putcol("INTERVAL", np.asarray([1.0] * self.nfield))

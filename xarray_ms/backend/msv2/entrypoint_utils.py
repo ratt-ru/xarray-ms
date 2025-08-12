@@ -25,9 +25,7 @@ DEFAULT_SUBTABLES = [
 
 
 def subtable_factory(name: str) -> pa.Table:
-  return Table.from_filename(
-    name, ninstances=1, readonly=True, lockoptions="nolock"
-  ).to_arrow()
+  return Table.from_filename(name, ninstances=1, readonly=True).to_arrow()
 
 
 class CommonStoreArgs:
@@ -79,11 +77,7 @@ class CommonStoreArgs:
     self.partition_schema = partition_schema or DEFAULT_PARTITION_COLUMNS
     self.preferred_chunks = preferred_chunks or {}
     self.ms_factory = ms_factory or Multiton(
-      Table.from_filename,
-      self.ms,
-      ninstances=self.ninstances,
-      readonly=True,
-      lockoptions="nolock",
+      Table.from_filename, self.ms, ninstances=self.ninstances, readonly=True
     )
     self.subtable_factories = subtable_factories or {
       subtable: Multiton(subtable_factory, f"{ms}::{subtable}")
