@@ -14,10 +14,11 @@ def clear_caches():
   MSv2StructureFactory._STRUCTURE_CACHE.clear()
 
 
-@pytest.fixture(scope="session", params=[DEFAULT_SIM_PARAMS])
+@pytest.fixture(scope="function", params=[DEFAULT_SIM_PARAMS])
 def simmed_ms(request, tmp_path_factory):
-  ms = tmp_path_factory.mktemp("simulated") / request.param.pop("name", "test.ms")
-  simulator = MSStructureSimulator(**{**DEFAULT_SIM_PARAMS, **request.param})
+  params = request.param.copy()
+  ms = tmp_path_factory.mktemp("simulated") / params.pop("name", "test.ms")
+  simulator = MSStructureSimulator(**{**DEFAULT_SIM_PARAMS, **params})
   simulator.simulate_ms(str(ms))
   return str(ms)
 
