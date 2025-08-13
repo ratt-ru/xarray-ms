@@ -21,7 +21,7 @@ def test_store(monkeypatch, simmed_ms):
         assert not np.all(node.UVW == 0)
         node.UVW[:] = 0
         assert len(node.encoding) > 0
-        ds = node.ds.assign(CORRECTED=xarray.full_like(node.VISIBILITY, 1 + 2j))
+        ds = node.ds.assign(CORRECTED=xarray.full_like(node.VISIBILITY, 2 + 3j))
         xdt[node.path] = DataTree(ds)
         assert len(node.encoding) > 0
 
@@ -41,7 +41,7 @@ def test_store(monkeypatch, simmed_ms):
 
   # But we can check that CORRECTED has been written correctly
   with arcae.table(simmed_ms) as T:
-    np.testing.assert_array_equal(T.getcol("CORRECTED"), 1 + 2j)
+    np.testing.assert_array_equal(T.getcol("CORRECTED"), 2 + 3j)
 
 
 def test_store_region(monkeypatch, simmed_ms):
