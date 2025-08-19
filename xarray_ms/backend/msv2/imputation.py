@@ -50,10 +50,43 @@ def maybe_impute_field_table(
   if isinstance(result, pa.Table):
     return result
 
+  npoly = 1
+  num_poly = np.full(result + 1, npoly, np.int32)
+
   return pa.Table.from_pydict(
     {
       "NAME": np.array([f"UNKNOWN-{i}" for i in range(result + 1)], dtype=object),
-      "SOURCE_ID": np.zeros(result + 1, np.int32),
+      "NUM_POLY": num_poly,
+      "DELAY_DIR": np.zeros(2, npoly + 1),
+      "PHASE_DIR": np.zeros(2, npoly + 1),
+      "REFERENCE_DIR": np.zeros(2, npoly + 1),
+      "SOURCE_ID": np.arange(result + 1, np.int32),
+      # TODO: Both TIME and INTERVAl could be improved
+      "TIME": np.zeros(result + 1, np.float64),
+    }
+  )
+
+
+def maybe_impute_source_table(
+  source: pa.Table, source_id: npt.NDArray[np.int32]
+) -> pa.Table:
+  """Generates a SOURCE subtable if there are no row ids
+  associated with the given SOURCE_ID values"""
+
+  import pyarrow as pa
+
+  result = _maybe_return_table_or_max_id(source, "SOURCE", source_id, "SOURCE_ID")
+  if isinstance(result, pa.Table):
+    return result
+
+  return pa.Table.from_pydict(
+    {
+      "SOURCE_ID": np.arange(result + 1, np.int32),
+      # TODO: Both TIME and INTERVAl could be improved
+      "TIME": np.zeros(result + 1, np.float64),
+      "INTERVAL": np.zeros(result + 1, np.float64),
+      "DIRECTION": np.zeros((result + 1, 2), np.float64),
+      "SPECTRAL_WINDOW_ID": np.zeros(result + 1, np.int32),
     }
   )
 
