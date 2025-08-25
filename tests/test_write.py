@@ -1,3 +1,5 @@
+from contextlib import ExitStack
+
 import arcae
 import numpy as np
 import pytest
@@ -84,3 +86,49 @@ def test_store_region(monkeypatch, simmed_ms):
     mask[ts, :, fs, :] = True
     np.testing.assert_array_equal(corrected[mask], 1 + 2j)
     np.testing.assert_array_equal(corrected[~mask], 0 + 0j)
+
+
+@pytest.mark.parametrize("chunks", [{"time": 2, "frequency": 2}])
+@pytest.mark.parametrize("simmed_ms", [{"name": "distributed-write.ms"}], indirect=True)
+@pytest.mark.parametrize("nworkers", [4])
+@pytest.mark.parametrize("processes", [True, False])
+def test_distributed_write(simmed_ms, monkeypatch, processes, nworkers, chunks):
+  monkeypatch.setattr(Dataset, "to_msv2", dataset_to_msv2, raising=False)
+  monkeypatch.setattr(DataTree, "to_msv2", datatree_to_msv2, raising=False)
+  da = pytest.importorskip("dask.array")
+  distributed = pytest.importorskip("dask.distributed")
+  Client = distributed.Client
+  LocalCluster = distributed.LocalCluster
+
+  with ExitStack() as stack:
+    cluster = stack.enter_context(LocalCluster(processes=processes, n_workers=nworkers))
+    stack.enter_context(Client(cluster))
+    dt = stack.enter_context(
+      xarray.open_datatree(simmed_ms, chunks=chunks, auto_corrs=True)
+    )
+    for node in dt.subtree:
+      if node.attrs.get("type") in CORRELATED_DATASET_TYPES:
+        vis = node.VISIBILITY
+        sizes = node.sizes
+        corrected = da.arange(np.prod(vis.shape), dtype=np.int32)
+        corrected = corrected.reshape(vis.shape).rechunk(vis.data.chunks)
+        ds = node.ds.assign(CORRECTED=(vis.dims, corrected))
+        dt[node.path] = DataTree(ds)
+        assert len(node.encoding) > 0
+
+    # Create the new MS columns
+    dt.to_msv2(["CORRECTED"], compute=False)
+
+    for node in dt.subtree:
+      if node.attrs.get("type") in CORRELATED_DATASET_TYPES:
+        print("Writing")
+        node.ds.to_msv2(["CORRECTED"], compute=True)
+
+  with arcae.table(simmed_ms) as T:
+    corrected = T.getcol("CORRECTED")
+    shape = tuple(
+      sizes[d] for d in ("time", "baseline_id", "frequency", "polarization")
+    )
+    expected = np.arange(np.prod(vis.shape), dtype=np.int32)
+    expected = expected.reshape((-1,) + shape[2:])
+    np.testing.assert_array_equal(corrected, expected)
