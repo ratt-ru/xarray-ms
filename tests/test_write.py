@@ -1,5 +1,6 @@
 import arcae
 import numpy as np
+import pytest
 import xarray
 from xarray import Dataset, DataTree
 
@@ -7,6 +8,7 @@ from xarray_ms.backend.msv2.writes import dataset_to_msv2, datatree_to_msv2
 from xarray_ms.msv4_types import CORRELATED_DATASET_TYPES
 
 
+@pytest.mark.parametrize("simmed_ms", [{"name": "test_store.ms"}], indirect=True)
 def test_store(monkeypatch, simmed_ms):
   monkeypatch.setattr(Dataset, "to_msv2", dataset_to_msv2, raising=False)
   monkeypatch.setattr(DataTree, "to_msv2", datatree_to_msv2, raising=False)
@@ -44,6 +46,7 @@ def test_store(monkeypatch, simmed_ms):
     np.testing.assert_array_equal(T.getcol("CORRECTED"), 2 + 3j)
 
 
+@pytest.mark.parametrize("simmed_ms", [{"name": "test_store_region.ms"}], indirect=True)
 def test_store_region(monkeypatch, simmed_ms):
   monkeypatch.setattr(Dataset, "to_msv2", dataset_to_msv2, raising=False)
   monkeypatch.setattr(DataTree, "to_msv2", datatree_to_msv2, raising=False)
@@ -51,25 +54,25 @@ def test_store_region(monkeypatch, simmed_ms):
   region = {"time": slice(0, 2), "frequency": slice(2, 4)}
 
   with xarray.open_datatree(simmed_ms, auto_corrs=True) as xdt:
-    # Overwrite UVW coordinates with zeroes
     # Add a CORRECTED column
     for node in xdt.subtree:
       if node.attrs.get("type") in CORRELATED_DATASET_TYPES:
-        ds = node.ds.assign(CORRECTED=xarray.full_like(node.VISIBILITY, 1 + 2j))
+        ds = node.ds.assign(CORRECTED=xarray.zeros_like(node.VISIBILITY))
         xdt[node.path] = DataTree(ds)
         assert len(node.encoding) > 0
 
-    xdt.to_msv2(["UVW", "CORRECTED"], compute=False)
+    # Create the new MS columns
+    xdt.to_msv2(["CORRECTED"], compute=False)
 
     for node in xdt.subtree:
       if node.attrs.get("type") in CORRELATED_DATASET_TYPES:
         sizes = node.sizes
-        # Slice out the region
-        ds = node.ds.isel(**region)
+        ds = ds.isel(**region)
+        ds = ds.assign(CORRECTED=xarray.full_like(ds.CORRECTED, 1 + 2j))
         # Now write it out
-        ds.to_msv2(["UVW", "CORRECTED"], compute=False, region=region)
+        ds.to_msv2(["CORRECTED"], compute=False, region=region)
 
-  # But we can check that CORRECTED has been written correctly
+  # We can check that CORRECTED has been written correctly
   with arcae.table(simmed_ms) as T:
     corrected = T.getcol("CORRECTED")
     nt, nbl, nf, npol = (
