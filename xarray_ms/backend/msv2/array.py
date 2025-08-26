@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import reduce
 from operator import mul
-from typing import TYPE_CHECKING, Any, Callable, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Literal, Tuple
 
 import numpy as np
 from xarray.backends import BackendArray
@@ -22,13 +22,18 @@ if TYPE_CHECKING:
   TransformerT = Callable[[npt.NDArray], npt.NDArray]
 
 
-def slice_length(s: npt.NDArray | slice, max_len) -> int:
+def slice_length(
+  s: npt.NDArray | slice, max_len: int, op: Literal["read", "write"]
+) -> int:
   if isinstance(s, np.ndarray):
     if s.ndim != 1:
       raise NotImplementedError("Slicing with non-1D numpy arrays")
     return len(s)
 
-  start, stop, step = s.indices(min(max_len, s.stop) if s.stop is not None else max_len)
+  clamp_op = min if op == "read" else max
+  start, stop, step = s.indices(
+    clamp_op(max_len, s.stop) if s.stop is not None else max_len
+  )
   if step != 1:
     raise NotImplementedError(f"Slicing with steps {s} other than 1 not supported")
   return stop - start
@@ -112,7 +117,7 @@ class MainMSv2Array(MSv2Array):
 
   def _getitem(self, key) -> npt.NDArray:
     assert len(key) == len(self.shape)
-    expected_shape = tuple(slice_length(k, s) for k, s in zip(key, self.shape))
+    expected_shape = tuple(slice_length(k, s, "read") for k, s in zip(key, self.shape))
     if reduce(mul, expected_shape, 1) == 0:
       return np.empty(expected_shape, dtype=self.dtype)
     # Map the (time, baseline_id) coordinates onto row indices
@@ -126,7 +131,7 @@ class MainMSv2Array(MSv2Array):
 
   def __setitem__(self, key, value: npt.NDArray) -> None:
     key = expanded_indexer(key, len(self.shape))
-    expected_shape = tuple(slice_length(k, s) for k, s in zip(key, self.shape))
+    expected_shape = tuple(slice_length(k, s, "write") for k, s in zip(key, self.shape))
     rows = self._structure_factory.instance[self._partition].row_map[key[:2]]
     row_key = (rows.ravel(),) + key[2:]
     row_shape = (rows.size,) + expected_shape[2:]
@@ -192,7 +197,7 @@ class BroadcastMSv2Array(MSv2Array):
     )
 
   def _getitem(self, key) -> npt.NDArray:
-    expected_shape = tuple(slice_length(k, s) for k, s in zip(key, self.shape))
+    expected_shape = tuple(slice_length(k, s, "read") for k, s in zip(key, self.shape))
     if reduce(mul, expected_shape, 1) == 0:
       return np.empty(expected_shape, dtype=self.dtype)
     low_res_key = tuple(k for i, k in zip(self._low_res_index, key) if i is not None)
