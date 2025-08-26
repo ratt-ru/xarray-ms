@@ -27,7 +27,7 @@ def slice_length(s: npt.NDArray | slice, max_len) -> int:
       raise NotImplementedError("Slicing with non-1D numpy arrays")
     return len(s)
 
-  start, stop, step = s.indices(max_len)
+  start, stop, step = s.indices(min(max_len, s.stop) if s.stop is not None else max_len)
   if step != 1:
     raise NotImplementedError(f"Slicing with steps {s} other than 1 not supported")
   return stop - start
