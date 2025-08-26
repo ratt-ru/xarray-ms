@@ -108,11 +108,12 @@ class MainMSv2Array(MSv2Array):
 
   @staticmethod
   def promote_key(key):
-    return tuple(slice(k, k + 1) if isinstance(k, int) else k for k in key)
+    squeeze = tuple(i for i, k in enumerate(key) if isinstance(k, int))
+    return tuple(slice(k, k + 1) if isinstance(k, int) else k for k in key), squeeze
 
   def _getitem(self, key) -> npt.NDArray:
     assert len(key) == len(self.shape)
-    key = self.promote_key(key)
+    key, squeeze_axis = self.promote_key(key)
     expected_shape = tuple(slice_length(k, s) for k, s in zip(key, self.shape))
     if reduce(mul, expected_shape, 1) == 0:
       return np.empty(expected_shape, dtype=self.dtype)
@@ -122,7 +123,7 @@ class MainMSv2Array(MSv2Array):
     row_shape = (rows.size,) + expected_shape[2:]
     result = np.full(row_shape, self._default, dtype=self.dtype)
     self._table_factory.instance.getcol(self._column, row_key, result)
-    result = result.reshape(rows.shape + expected_shape[2:])
+    result = result.reshape(rows.shape + expected_shape[2:]).squeeze(axis=squeeze_axis)
     return self._transform(result) if self._transform else result
 
   @property
