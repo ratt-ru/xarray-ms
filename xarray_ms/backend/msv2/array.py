@@ -106,8 +106,13 @@ class MainMSv2Array(MSv2Array):
       key, self.shape, IndexingSupport.OUTER, self._getitem
     )
 
+  @staticmethod
+  def promote_key(key):
+    return tuple(slice(k, k + 1) if isinstance(k, int) else k for k in key)
+
   def _getitem(self, key) -> npt.NDArray:
     assert len(key) == len(self.shape)
+    key = self.promote_key(key)
     expected_shape = tuple(slice_length(k, s) for k, s in zip(key, self.shape))
     if reduce(mul, expected_shape, 1) == 0:
       return np.empty(expected_shape, dtype=self.dtype)
