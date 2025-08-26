@@ -335,3 +335,13 @@ def test_isel_loads_on_subsets(simmed_ms):
   dt.load()
   assert dt["backend_partition_000"].isel(**p0_sel).identical(node0)
   assert dt["backend_partition_001"].isel(**p1_sel).identical(node1)
+
+
+def test_isel_loads_on_integers(simmed_ms):
+  """Tests isel using integer coordinates"""
+  dt = xarray.open_datatree(simmed_ms)
+  assert len(dt.children) == 1
+  node = dt["test_partition_000"].isel(
+    time=slice(1, 2), baseline_id=1, frequency=slice(4, 6)
+  )
+  node.load()
