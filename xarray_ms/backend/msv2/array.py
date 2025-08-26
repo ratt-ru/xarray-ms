@@ -106,8 +106,18 @@ class MainMSv2Array(MSv2Array):
       key, self.shape, IndexingSupport.OUTER, self._getitem
     )
 
+  @staticmethod
+  def promote_integer_dims(key):
+    """Convert integer indices in the key into a slice and
+    return a tuple suitable for use in the axis argument
+    in :code:`np.squeeze`.
+    """
+    squeeze = tuple(i for i, k in enumerate(key) if isinstance(k, int))
+    return tuple(slice(k, k + 1) if isinstance(k, int) else k for k in key), squeeze
+
   def _getitem(self, key) -> npt.NDArray:
     assert len(key) == len(self.shape)
+    key, squeeze_axis = self.promote_integer_dims(key)
     expected_shape = tuple(slice_length(k, s) for k, s in zip(key, self.shape))
     if reduce(mul, expected_shape, 1) == 0:
       return np.empty(expected_shape, dtype=self.dtype)
@@ -118,6 +128,8 @@ class MainMSv2Array(MSv2Array):
     result = np.full(row_shape, self._default, dtype=self.dtype)
     self._table_factory.instance.getcol(self._column, row_key, result)
     result = result.reshape(rows.shape + expected_shape[2:])
+    # arcae doesn't handle squeezing out the selecting axis so we do it here.
+    result = result.squeeze(axis=squeeze_axis)
     return self._transform(result) if self._transform else result
 
   @property
