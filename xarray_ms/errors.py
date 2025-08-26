@@ -34,3 +34,8 @@ class MissingMeasuresInfo(ValueError):
 
 class MissingQuantumUnits(ValueError):
   """Raised when QuantumUnits information is missing from the column"""
+
+
+class MismatchedWriteRegion(ValueError):
+  """Raised when attempting to write to a chunk of data whose dimensionality
+  does not match the target column"""

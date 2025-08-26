@@ -9,6 +9,7 @@ from xarray import Dataset, DataTree
 from xarray.backends.api import _finalize_store, dump_to_store
 from xarray.backends.common import ArrayWriter
 
+from xarray_ms.backend.msv2.array import MAIN_PREFIX_DIMS
 from xarray_ms.backend.msv2.entrypoint import MSv2Store
 from xarray_ms.backend.msv2.entrypoint_utils import CommonStoreArgs
 from xarray_ms.casa_types import NUMPY_TO_CASA_MAP
@@ -241,13 +242,14 @@ def datatree_to_msv2(
 
     for n in set_var_names:
       var = node.data_vars[n]
-      PREFIX_DIMS = ("time", "baseline_id")
 
-      if var.dims[:2] != PREFIX_DIMS:
-        raise ValueError(f"{n} dimensions {var.dims} do not start with {PREFIX_DIMS}")
+      if var.dims[: len(MAIN_PREFIX_DIMS)] != MAIN_PREFIX_DIMS:
+        raise ValueError(
+          f"{n} dimensions {var.dims} do not start with {MAIN_PREFIX_DIMS}"
+        )
 
       shapes, dtypes = shapes_and_dtypes[(n, n)]
-      shapes.add(var.shape[len(PREFIX_DIMS) :])
+      shapes.add(var.shape[len(MAIN_PREFIX_DIMS) :])
       dtypes.add(var.dtype)
 
   table_factory = msv2_store_from_dataset(next(iter(vis_datasets)).ds)._table_factory

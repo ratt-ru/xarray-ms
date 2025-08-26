@@ -7,6 +7,7 @@ import xarray
 from xarray import Dataset, DataTree
 
 from xarray_ms.backend.msv2.writes import dataset_to_msv2, datatree_to_msv2
+from xarray_ms.errors import MismatchedWriteRegion
 from xarray_ms.msv4_types import CORRELATED_DATASET_TYPES
 
 
@@ -132,3 +133,25 @@ def test_distributed_write(simmed_ms, monkeypatch, processes, nworkers, chunks):
     expected = np.arange(np.prod(vis.shape), dtype=np.int32)
     expected = expected.reshape((-1,) + shape[2:])
     np.testing.assert_array_equal(corrected, expected)
+
+
+def test_indexed_write(monkeypatch, simmed_ms):
+  """Check that we throw if we select a variable out with an integer index
+  and then try write that sub-selection out"""
+  monkeypatch.setattr(Dataset, "to_msv2", dataset_to_msv2, raising=False)
+  monkeypatch.setattr(DataTree, "to_msv2", datatree_to_msv2, raising=False)
+  dt = xarray.open_datatree(simmed_ms)
+  assert len(dt.children) == 1
+
+  for node in dt.subtree:
+    if node.attrs.get("type") in CORRELATED_DATASET_TYPES:
+      ds = node.ds.assign(CORRECTED=xarray.full_like(node.VISIBILITY, 1 + 2j))
+      dt[node.path] = DataTree(ds)
+
+  dt.to_msv2(["CORRECTED"], compute=False)
+
+  for node in dt.subtree:
+    if node.attrs.get("type") in CORRELATED_DATASET_TYPES:
+      ds = node.ds.isel(time=slice(0, 2), baseline_id=slice(0, 2), frequency=1)
+      with pytest.raises(MismatchedWriteRegion):
+        ds.to_msv2(["CORRECTED"], compute=True)

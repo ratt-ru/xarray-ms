@@ -417,7 +417,7 @@ class MSv2Structure(Mapping):
     pool: cf.Executor,
     ncpus: int,
     state: pa.Table,
-    state_id: npt.NDArray[npt.int32],
+    state_id: npt.NDArray[np.int32],
   ) -> npt.NDArray[np.int32]:
     """Constructs a SUB_SCAN_NUMBER array from MAIN.STATE_ID
     broadcast against STATE.SUB_SCAN_NUMBER"""
@@ -441,7 +441,7 @@ class MSv2Structure(Mapping):
     pool: cf.Executor,
     ncpus: int,
     state: pa.Table,
-    state_id: npt.NDArray[npt.int32],
+    state_id: npt.NDArray[np.int32],
   ) -> Tuple[npt.NDArray[np.int32], Dict[str, List[int]]]:
     """Constructs an OBS_MODE_ID array from MAIN.STATE_ID broadcast
     against unique entries in STATE.OBS_MODE"""
@@ -553,7 +553,7 @@ class MSv2Structure(Mapping):
     rows: npt.NDArray[np.int32],
     row_map: npt.NDArray[np.int64],
     interval_grid: npt.NDArray[np.float64],
-    feed_antennas: npt.NDArray[npt.int32],
+    feed_antennas: npt.NDArray[np.int32],
     na: int,
     nbl: int,
     auto_corrs: bool,
