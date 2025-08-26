@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Fix integer selection (:pr:`117`)
 * Correct clamp of the slice stop to be min(shape[d], s.stop) (:pr:`115`)
 * Rename deprecated ``repository_url`` to ``repository-url`` (:pr:`112`)
 * Use trusted publishing when publishing to pypi (:pr:`111`)
