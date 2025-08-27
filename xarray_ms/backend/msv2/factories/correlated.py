@@ -18,6 +18,7 @@ from xarray_ms.backend.msv2.encoders import (
   QuantityCoder,
   TimeCoder,
 )
+from xarray_ms.backend.msv2.factories.core import DatasetFactory
 from xarray_ms.backend.msv2.imputation import (
   maybe_impute_field_table,
   maybe_impute_observation_table,
@@ -66,12 +67,9 @@ MSV4_to_MSV2_COLUMN_SCHEMAS = {
 FIXED_DIMENSION_SIZES = {"uvw_label": 3}
 
 
-class CorrelatedDatasetFactory:
-  _partition_key: PartitionKeyT
+class CorrelatedDatasetFactory(DatasetFactory):
   _preferred_chunks: Dict[str, int]
   _ms_factory: Multiton
-  _subtable_factories: Dict[str, Multiton]
-  _structure_factory: MSv2StructureFactory
   _antenna_factory: Multiton
   _spw_factory: Multiton
   _pol_factory: Multiton
@@ -86,11 +84,9 @@ class CorrelatedDatasetFactory:
     subtable_factories: Dict[str, Multiton],
     structure_factory: MSv2StructureFactory,
   ):
-    self._partition_key = partition_key
+    super().__init__(partition_key, structure_factory, subtable_factories)
     self._preferred_chunks = preferred_chunks
     self._ms_factory = ms_factory
-    self._subtable_factories = subtable_factories
-    self._structure_factory = structure_factory
 
     ms = ms_factory.instance
     ms_table_desc = ms.tabledesc()
