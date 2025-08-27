@@ -323,7 +323,7 @@ class MSStructureSimulator:
       T.addrows(self.nfield)
       T.putcol("NAME", np.asarray([f"FIELD-{i}" for i in range(self.nfield)]))
       T.putcol("SOURCE_ID", np.arange(self.nfield))
-      T.putcol("NUM_POLY", np.ones(self.nfield))
+      T.putcol("NUM_POLY", np.zeros(self.nfield))
       T.putcol("PHASE_DIR", np.asarray([[[0], [0]] * self.nfield]))
 
     with Table.from_filename(f"{output_ms}::PROCESSOR", **kw) as T:

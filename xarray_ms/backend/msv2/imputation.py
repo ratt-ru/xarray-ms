@@ -50,18 +50,19 @@ def maybe_impute_field_table(
   if isinstance(result, pa.Table):
     return result
 
-  npoly = 1
+  npoly = 0
   num_poly = np.full(result + 1, npoly, np.int32)
+  direction = pa.array([[0.0, 0.0]], pa.list_(pa.float64(), 2))
 
   return pa.Table.from_pydict(
     {
       "NAME": np.array([f"UNKNOWN-{i}" for i in range(result + 1)], dtype=object),
       "NUM_POLY": num_poly,
-      "DELAY_DIR": np.zeros(2, npoly + 1),
-      "PHASE_DIR": np.zeros(2, npoly + 1),
-      "REFERENCE_DIR": np.zeros(2, npoly + 1),
-      "SOURCE_ID": np.arange(result + 1, np.int32),
-      # TODO: Both TIME and INTERVAl could be improved
+      "DELAY_DIR": direction,
+      "PHASE_DIR": direction,
+      "REFERENCE_DIR": direction,
+      "SOURCE_ID": np.arange(result + 1, dtype=np.int32),
+      # TODO: Both TIME and INTERVAL could be improved
       "TIME": np.zeros(result + 1, np.float64),
     }
   )

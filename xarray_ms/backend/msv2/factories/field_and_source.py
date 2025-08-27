@@ -37,9 +37,9 @@ class FieldAndSourceDatasetFactory:
     source = maybe_impute_source_table(source, partition.source_ids)
 
     num_poly = np.unique(field["NUM_POLY"].to_numpy())
-    if not num_poly == [1]:
+    if not num_poly == [0]:
       raise NotImplementedError(
-        f"FIELD subtable NUM_POLY {num_poly} != 1 "
+        f"FIELD subtable NUM_POLY {num_poly} != 0 "
         f"are not currently supported for FIELD_IDs "
         f"{partition.field_ids}"
       )
