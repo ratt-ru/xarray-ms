@@ -67,7 +67,10 @@ MSV4_to_MSV2_COLUMN_SCHEMAS = {
 FIXED_DIMENSION_SIZES = {"uvw_label": 3}
 
 
-class CorrelatedDatasetFactory(DatasetFactory):
+class CorrelatedFactory(DatasetFactory):
+  """Factory class for generating the main correlated dataset
+  for a partition of the Measurement Set"""
+
   _preferred_chunks: Dict[str, int]
   _ms_factory: Multiton
   _antenna_factory: Multiton

@@ -8,7 +8,10 @@ from xarray_ms.errors import InvalidMeasurementSet
 RELOCATABLE_ARRAY = {"ALMA", "VLA", "NOEMA", "EVLA"}
 
 
-class AntennaDatasetFactory(DatasetFactory):
+class AntennaFactory(DatasetFactory):
+  """Factory class for generating the antenna_xds dataset for a
+  given partition of the Measurement Set"""
+
   def get_dataset(self) -> Dataset:
     partition = self._structure_factory.instance[self._partition_key]
     ants = self._subtable_factories["ANTENNA"].instance

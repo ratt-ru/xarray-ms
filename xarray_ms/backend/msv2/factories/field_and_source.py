@@ -8,7 +8,10 @@ from xarray_ms.backend.msv2.imputation import (
 )
 
 
-class FieldAndSourceDatasetFactory(DatasetFactory):
+class FieldAndSourceFactory(DatasetFactory):
+  """Factory class for generating the field_and_source_xds dataset
+  for a partition of the Measurement Set"""
+
   def get_dataset(self) -> Dataset:
     import pyarrow.compute as pac
 

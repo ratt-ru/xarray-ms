@@ -16,9 +16,9 @@ from xarray.core.utils import try_read_magic_number_from_file_or_path
 
 from xarray_ms.backend.msv2.entrypoint_utils import CommonStoreArgs
 from xarray_ms.backend.msv2.factories import (
-  AntennaDatasetFactory,
-  CorrelatedDatasetFactory,
-  FieldAndSourceDatasetFactory,
+  AntennaFactory,
+  CorrelatedFactory,
+  FieldAndSourceFactory,
 )
 from xarray_ms.backend.msv2.structure import (
   DEFAULT_PARTITION_COLUMNS,
@@ -178,8 +178,8 @@ class MSv2Store(AbstractWritableDataStore):
     for subtable_factory in self._subtable_factories.values():
       subtable_factory.release()
 
-  def main_dataset_factory(self) -> CorrelatedDatasetFactory:
-    return CorrelatedDatasetFactory(
+  def main_dataset_factory(self) -> CorrelatedFactory:
+    return CorrelatedFactory(
       self._partition_key,
       self._preferred_chunks,
       self._table_factory,
@@ -445,13 +445,13 @@ class MSv2EntryPoint(BackendEntrypoint):
         **kwargs,
       )
 
-      antenna_factory = AntennaDatasetFactory(
+      antenna_factory = AntennaFactory(
         partition_key,
         store_args.structure_factory,
         store_args.subtable_factories,
       )
 
-      field_and_source = FieldAndSourceDatasetFactory(
+      field_and_source = FieldAndSourceFactory(
         partition_key, store_args.structure_factory, store_args.subtable_factories
       )
 

@@ -5,6 +5,9 @@ from xarray_ms.multiton import Multiton
 
 
 class DatasetFactory:
+  """Base class for generating an xarray Dataset for a partition
+  of the Measurement Set, definined the the suppllied `partition_key`"""
+
   _partition_key: PartitionKeyT
   _structure_factory: MSv2StructureFactory
   _subtable_factories: Dict[str, Multiton]
