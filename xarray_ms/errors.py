@@ -20,6 +20,10 @@ class InvalidPartitionKey(ValueError):
   """Raised when a string representing a partition key is invalid"""
 
 
+class MissingEncodingError(ValueError):
+  """Raised when encoding information is missing"""
+
+
 class PartitioningError(ValueError):
   """Raised when a logical error is encountered during Measurement Set partitioning"""
 
@@ -30,3 +34,8 @@ class MissingMeasuresInfo(ValueError):
 
 class MissingQuantumUnits(ValueError):
   """Raised when QuantumUnits information is missing from the column"""
+
+
+class MismatchedWriteRegion(ValueError):
+  """Raised when attempting to write to a chunk of data whose dimensionality
+  does not match the target column"""
