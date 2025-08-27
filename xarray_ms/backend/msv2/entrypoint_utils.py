@@ -36,9 +36,7 @@ def subtable_factory(
   name: str, on_missing: Literal["raise", "empty_table"] = "empty_table"
 ) -> pa.Table:
   try:
-    return Table.from_filename(
-      name, ninstances=1, readonly=True, lockoptions="nolock"
-    ).to_arrow()
+    return Table.from_filename(name, ninstances=1, readonly=True).to_arrow()
   except pa.lib.ArrowInvalid as e:
     if "subtable" in e.msg and "is invalid" in e.msg:
       if on_missing == "raise":
