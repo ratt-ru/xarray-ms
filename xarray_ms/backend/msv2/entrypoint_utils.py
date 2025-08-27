@@ -1,5 +1,5 @@
 import os.path
-from typing import Dict, List
+from typing import Dict, List, Literal
 from uuid import uuid4
 
 import pyarrow as pa
@@ -11,21 +11,40 @@ from xarray_ms.backend.msv2.structure import (
 )
 from xarray_ms.multiton import Multiton
 
+# These tables should always be present on an MS
 DEFAULT_SUBTABLES = [
   "ANTENNA",
   "DATA_DESCRIPTION",
   "FEED",
   "FIELD",
+  "FLAG_CMD",
+  "HISTORY",
+  "OBSERVATION",
+  "POINTING",
+  "POLARIZATION",
+  "PROCESSOR",
   "SPECTRAL_WINDOW",
   "STATE",
-  "PROCESSOR",
-  "POLARIZATION",
-  "OBSERVATION",
+]
+
+EXTRA_SUBTABLES = [
+  "SOURCE",
 ]
 
 
-def subtable_factory(name: str) -> pa.Table:
-  return Table.from_filename(name, ninstances=1, readonly=True).to_arrow()
+def subtable_factory(
+  name: str, on_missing: Literal["raise", "empty_table"] = "empty_table"
+) -> pa.Table:
+  try:
+    return Table.from_filename(
+      name, ninstances=1, readonly=True, lockoptions="nolock"
+    ).to_arrow()
+  except pa.lib.ArrowInvalid as e:
+    if "subtable" in e.msg and "is invalid" in e.msg:
+      if on_missing == "raise":
+        raise
+      else:
+        return pa.Table.from_pydict({})
 
 
 class CommonStoreArgs:
@@ -81,7 +100,7 @@ class CommonStoreArgs:
     )
     self.subtable_factories = subtable_factories or {
       subtable: Multiton(subtable_factory, f"{ms}::{subtable}")
-      for subtable in DEFAULT_SUBTABLES
+      for subtable in (DEFAULT_SUBTABLES + EXTRA_SUBTABLES)
     }
     self.structure_factory = structure_factory or MSv2StructureFactory(
       self.ms_factory,
