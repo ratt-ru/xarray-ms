@@ -18,6 +18,7 @@ from xarray_ms.backend.msv2.entrypoint_utils import CommonStoreArgs
 from xarray_ms.backend.msv2.factories import (
   AntennaDatasetFactory,
   CorrelatedDatasetFactory,
+  FieldAndSourceDatasetFactory,
 )
 from xarray_ms.backend.msv2.structure import (
   DEFAULT_PARTITION_COLUMNS,
@@ -450,8 +451,13 @@ class MSv2EntryPoint(BackendEntrypoint):
         store_args.subtable_factories,
       )
 
+      field_and_source = FieldAndSourceDatasetFactory(
+        partition_key, store_args.structure_factory, store_args.subtable_factories
+      )
+
       path = f"{ms_name}_partition_{p:03}"
       datasets[path] = ds
       datasets[f"{path}/antenna_xds"] = antenna_factory.get_dataset()
+      datasets[f"{path}/field_and_source_xds"] = field_and_source.get_dataset()
 
     return datasets
