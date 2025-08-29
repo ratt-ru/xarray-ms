@@ -71,7 +71,7 @@ jobs:
           fetch-depth: 1
 
       - name: Download metadata
-        run: curl http://downloadnrao.org/file.download.json > metadata.json
+        run: curl https://downloadnrao.org/file.download.json > metadata.json
 
       - name: Load cached MSv4 Test Corpus
         id: load-cached-msv4-test-corpus

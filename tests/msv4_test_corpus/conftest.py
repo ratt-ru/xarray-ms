@@ -12,7 +12,7 @@ from hashlib import sha256
 import platformdirs
 import pytest
 
-BASE_URL = "http://downloadnrao.org"
+BASE_URL = "https://downloadnrao.org"
 METADATA_URL = f"{BASE_URL}/file.download.json"
 ONE_MB = 1024**2
 
