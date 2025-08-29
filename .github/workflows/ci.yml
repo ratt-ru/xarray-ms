@@ -70,6 +70,16 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Download metadata
+        run: curl http://downloadnrao.org/file.download.json > metadata.json
+
+      - name: Load cached MSv4 Test Corpus
+        id: load-cached-msv4-test-corpus
+        uses: actions/cache@v4
+        with:
+          key: msv4-test-corpus-${{ hashFiles('metadata.json')}}
+          path: ~/.cache/xarray-ms/msv4-test-data
+
       - name: Create virtual environment
         run: |
           python -m venv .venv

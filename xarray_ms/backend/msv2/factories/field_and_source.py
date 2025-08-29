@@ -13,6 +13,7 @@ class FieldAndSourceFactory(DatasetFactory):
   for a partition of the Measurement Set"""
 
   def get_dataset(self) -> Dataset:
+    import pyarrow as pa
     import pyarrow.compute as pac
 
     partition = self._structure_factory.instance[self._partition_key]
@@ -41,7 +42,15 @@ class FieldAndSourceFactory(DatasetFactory):
       )
 
     field_names = field["NAME"].to_numpy()
-    source_names = source["NAME"].take(source_ids).to_numpy()
+    # Filter out negative source ids
+    pa_source_ids = pa.array(source_ids)
+    pa_source_ids = pac.replace_with_mask(
+      pa_source_ids,
+      pac.equal(pa_source_ids, -1),
+      pa.array([None] * len(source_ids), pa_source_ids.type),
+    )
+    source_names = pac.take(source["NAME"], pa_source_ids)
+    source_names = pac.fill_null(source_names, "UNKNOWN").to_numpy()
 
     return Dataset(
       data_vars=data_vars,
