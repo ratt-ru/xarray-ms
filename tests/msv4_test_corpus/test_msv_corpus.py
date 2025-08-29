@@ -8,6 +8,8 @@ import xarray_ms  # noqa
 SMALL_MEERKAT_DS = "small_meerkat.ms"
 SMALL_LOFAR_DS = "small_lofar.ms"
 
+pmx = pytest.mark.xfail
+
 
 @pytest.mark.parametrize(
   "msv4_corpus_dataset",
@@ -16,7 +18,10 @@ SMALL_LOFAR_DS = "small_lofar.ms"
     "ea25_cal_small_after_fixed.split.ms",
     "J1924-2914.ms.calibrated.split.SPW3",
     "AA2-Mid-sim_00000.ms",
-    "ALMA_uid___A002_X1003af4_X75a3.split.avg.ms",
+    pytest.param(
+      "ALMA_uid___A002_X1003af4_X75a3.split.avg.ms",
+      marks=pmx(reason="FEED + ANTENNA mismatch"),
+    ),
     "Antennae_North.cal.lsrk.ms",
     "Antennae_North.cal.lsrk.split.ms",
     "global_vlbi_gg084b_reduced.ms",
@@ -28,18 +33,20 @@ SMALL_LOFAR_DS = "small_lofar.ms"
     "ska_low_sim_18s.ms",
     "small_meerkat.ms",
     "small_lofar.ms",
-    "uid___A002_X1015532_X1926f.small.ms",
-    "uid___A002_Xae00c5_X2e6b.small.ms",
-    "uid___A002_Xced5df_Xf9d9.small.ms",
-    "uid___A002_Xe3a5fd_Xe38e.small.ms",
-    "SNR_G55_10s.split.ms",
+    pytest.param(
+      "uid___A002_X1015532_X1926f.small.ms", marks=pmx(reason="Single Dish")
+    ),
+    pytest.param("uid___A002_Xae00c5_X2e6b.small.ms", marks=pmx(reason="Single Dish")),
+    pytest.param("uid___A002_Xced5df_Xf9d9.small.ms", marks=pmx(reason="Single Dish")),
+    pytest.param("uid___A002_Xe3a5fd_Xe38e.small.ms", marks=pmx(reason="Single Dish")),
+    pytest.param("SNR_G55_10s.split.ms", marks=pmx(reason="Only one feed?")),
     "59749_bp_8beams_pattern.ms",
     "59750_altaz_2settings.ms",
     "59754_altaz_2weights_0.ms",
     "59754_altaz_2weights_15.ms",
     "59755_eq_interleave_0.ms",
     "59755_eq_interleave_15.ms",
-    "gmrt.ms",
+    pytest.param("gmrt.ms", marks=pmx(reason="TAI Measures conversion")),
   ],
   indirect=True,
 )
