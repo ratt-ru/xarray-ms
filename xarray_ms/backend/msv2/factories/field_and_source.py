@@ -20,7 +20,8 @@ class FieldAndSourceFactory(DatasetFactory):
     source = self._subtable_factories["SOURCE"].instance
 
     field = maybe_impute_field_table(field, partition.field_ids)
-    source = maybe_impute_source_table(source, partition.source_ids)
+    source_ids = field["SOURCE_ID"].to_numpy()
+    source = maybe_impute_source_table(source, source_ids)
 
     num_poly = np.unique(field["NUM_POLY"].to_numpy())
     if not num_poly == [0]:
@@ -40,12 +41,14 @@ class FieldAndSourceFactory(DatasetFactory):
       )
 
     field_names = field["NAME"].to_numpy()
+    source_names = source["NAME"].take(source_ids).to_numpy()
 
     return Dataset(
       data_vars=data_vars,
       coords={
         "field_name": Variable("field_name", field_names),
         "sky_dir_label": Variable("sky_dir_label", ["ra", "dec"]),
+        "source_name": Variable("Source_name", source_names),
       },
       attrs={"type": "field_and_source"},
     )
