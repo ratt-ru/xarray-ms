@@ -80,14 +80,19 @@ def maybe_impute_source_table(
   if isinstance(result, pa.Table):
     return result
 
+  np_direction = np.zeros((result + 1, 2), dtype=np.float64)
+  direction = pa.FixedSizeListArray.from_arrays(np_direction.ravel(), 2)
+
   return pa.Table.from_pydict(
     {
-      "SOURCE_ID": np.arange(result + 1, np.int32),
-      # TODO: Both TIME and INTERVAl could be improved
+      "SOURCE_ID": np.arange(result + 1, dtype=np.int32),
+      "NAME": np.array([f"UNKNOWN-{i}" for i in range(result + 1)], dtype=object),
+      "NUM_LINES": np.ones(result + 1, np.int32),
+      # TODO: Both TIME and INTERVAL could be improved
       "TIME": np.zeros(result + 1, np.float64),
       "INTERVAL": np.zeros(result + 1, np.float64),
-      "DIRECTION": np.zeros((result + 1, 2), np.float64),
-      "SPECTRAL_WINDOW_ID": np.zeros(result + 1, np.int32),
+      "DIRECTION": direction,
+      "SPECTRAL_WINDOW_ID": np.full(result + 1, -1, np.int32),
     }
   )
 
