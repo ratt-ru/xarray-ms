@@ -40,7 +40,8 @@ def subtable_factory(
       name, ninstances=1, readonly=True, lockoptions="nolock"
     ).to_arrow()
   except pa.lib.ArrowInvalid as e:
-    if "subtable" in e.msg and "is invalid" in e.msg:
+    e_str = str(e)
+    if "subtable" in e_str and "is invalid" in e_str:
       if on_missing == "raise":
         raise
       else:
