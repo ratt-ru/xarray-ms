@@ -1,5 +1,4 @@
 import os.path
-import warnings
 
 import pytest
 import xarray
@@ -46,8 +45,4 @@ SMALL_LOFAR_DS = "small_lofar.ms"
 )
 def test_msv4_corpus(msv4_corpus_dataset):
   name, path = msv4_corpus_dataset
-  try:
-    xarray.open_datatree(f"{path}{os.path.sep}{name}")
-  except Exception as e:
-    # TODO: Remove this try catch
-    warnings.warn(str(e), UserWarning)
+  xarray.open_datatree(f"{path}{os.path.sep}{name}")
