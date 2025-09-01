@@ -26,7 +26,11 @@ from xarray_ms.backend.msv2.imputation import (
 )
 from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
 from xarray_ms.casa_types import ColumnDesc, FrequencyMeasures, Polarisations
-from xarray_ms.errors import IrregularGridWarning
+from xarray_ms.errors import (
+  IrregularBaselineGridWarning,
+  IrregularChannelGridWarning,
+  IrregularTimeGridWarning,
+)
 from xarray_ms.multiton import Multiton
 
 
@@ -176,7 +180,7 @@ class CorrelatedFactory(DatasetFactory):
     field = self._subtable_factories["FIELD"].instance
 
     chan_freq = spw["CHAN_FREQ"][spw_id].as_py()
-    uchan_width = np.unique(spw["CHAN_WIDTH"][spw_id].as_py())
+    chan_width = spw["CHAN_WIDTH"][spw_id].as_py()
     spw_name = spw["NAME"][spw_id].as_py()
     spw_freq_group_name = spw["FREQ_GROUP_NAME"][spw_id].as_py()
     spw_ref_freq = spw["REF_FREQUENCY"][spw_id].as_py()
@@ -194,16 +198,18 @@ class CorrelatedFactory(DatasetFactory):
     }
 
     row_map = partition.row_map
-    missing = np.count_nonzero(row_map == -1)
-    if missing > 0:
+    missing_rows = np.count_nonzero(row_map == -1)
+    if missing_rows > 0:
       warnings.warn(
-        f"{missing} / {row_map.size} ({100.0 * missing / row_map.size:.1f}%) "
+        f"{missing_rows} / {row_map.size} ({100.0 * missing_rows / row_map.size:.1f}%) "
         f"rows missing from the full (time, baseline_id) grid "
         f"in partition {self._partition_key}. "
         f"Dataset variables will be padded with nans "
         f"in the case of data variables "
-        f"and flags will be set",
-        IrregularGridWarning,
+        f"and flags will be set for these cases. "
+        f"This situation is benign, especially if auto-corelations "
+        f"have been requested on a dataset without them.",
+        IrregularBaselineGridWarning,
       )
 
     data_vars = [
@@ -271,10 +277,14 @@ class CorrelatedFactory(DatasetFactory):
       warnings.warn(
         f"Missing/Multiple intervals {partition.interval} "
         f"found in partition {self._partition_key}. "
-        f'Setting time.attrs["integration_time"] = nan and '
-        f"adding full resolution TIME and INTEGRATION_TIME columns. "
-        f"{'They contain nans in missing rows' if missing else ''}",
-        IrregularGridWarning,
+        f"Consider trying different partitioning strategies "
+        f"to produce partitions with regular intervals. "
+        f"MSv4 cannot strictly represent this case so "
+        f"time.attrs['integration_time'] will be set to 'nan' and "
+        f"(time, baseline_id) shaped TIME and INTEGRATION_TIME columns "
+        f"will be added. "
+        f"{'They contain nans in missing rows.' if missing_rows else ''}",
+        IrregularTimeGridWarning,
       )
       time_attrs = {"integration_time": np.nan}
       data_vars.extend(
@@ -304,20 +314,24 @@ class CorrelatedFactory(DatasetFactory):
     if spw_freq_group_name:
       freq_attrs["frequency_group_name"] = spw_freq_group_name
 
+    # Ignore the last channel width (data may have been averaged)
+    uchan_width = np.unique(chan_width[:-1] if len(chan_width) > 1 else chan_width)
+
     if uchan_width.size == 1:
       freq_attrs["channel_width"] = uchan_width.item()
+    elif np.allclose(uchan_width[:, None], uchan_width[None, :]):
+      freq_attrs["channel_width"] = np.mean(uchan_width)
     else:
-      freq_attrs["channel_width"] = np.nan
       warnings.warn(
-        f"Multiple channel widths {uchan_width} "
+        f"Multiple distinct channel widths {uchan_width} "
         f"found in partition {self._partition_key}. "
-        f'Setting frequency.attrs["channel_width"] = nan and '
-        f"adding full resolution CHANNEL_FREQUENCY column.",
-        IrregularGridWarning,
+        f"MSv4 cannot strictly represent this case and so "
+        f"frequency.attrs['channel_width'] will be set to 'nan' and "
+        f"a (frequency,) shaped CHANNEL_WIDTH column will be added.",
+        IrregularChannelGridWarning,
       )
-      raise NotImplementedError(
-        "Full resolution CHANNEL_FREQUENCY and CHANNEL_WIDTH columns"
-      )
+      freq_attrs["channel_width"] = np.nan
+      data_vars.append(("CHANNEL_WIDTH", Variable("frequency", chan_width)))
 
     coordinates.append(("frequency", Variable("frequency", chan_freq, freq_attrs)))
 
