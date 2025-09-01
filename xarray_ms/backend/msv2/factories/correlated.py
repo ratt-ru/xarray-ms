@@ -281,7 +281,8 @@ class CorrelatedFactory(DatasetFactory):
         f"to produce partitions with regular intervals. "
         f"MSv4 cannot strictly represent this case so "
         f"time.attrs['integration_time'] will be set to 'nan' and "
-        f"(time, baseline_id) TIME and INTEGRATION_TIME columns will be added. "
+        f"(time, baseline_id) shaped TIME and INTEGRATION_TIME columns "
+        f"will be added. "
         f"{'They contain nans in missing rows.' if missing_rows else ''}",
         IrregularTimeGridWarning,
       )
