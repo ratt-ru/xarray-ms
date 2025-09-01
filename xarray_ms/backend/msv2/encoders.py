@@ -117,6 +117,8 @@ class TimeCoder(CasaCoder):
     ref = measures["Ref"].upper()
     if ref == "UTC":
       cls = UTCCoder
+    elif ref == "TAI":
+      cls = TAICoder
     else:
       raise NotImplementedError(measures["Ref"])
 
@@ -177,6 +179,16 @@ class UTCCoder(TimeCoder):
   @staticmethod
   def decode_array(data: npt.NDArray) -> npt.NDArray:
     return data - UTCCoder.MJD_OFFSET_SECONDS
+
+
+class TAICoder(UTCCoder):
+  """TAI is UTC + ~37 seconds"""
+
+  def decode(self, variable: Variable, name: T_Name = None) -> Variable:
+    """Convert Modified Julian Date in seconds to TAI in seconds"""
+    dims, data, attrs, encoding = unpack_for_decoding(variable)
+    attrs["scale"] = "tai"
+    return Variable(dims, data, attrs, encoding, fastpath=True)
 
 
 class SpectralCoordCoder(CasaCoder):

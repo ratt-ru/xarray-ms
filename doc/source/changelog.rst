@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Support TAI Measure encoding in time data (:pr:`124`)
 * Distinguish between time, baseline and channel irregularity (:pr:`123`)
 * Test xarray-ms against the full MSv4 Test Corpus (:pr:`120`)
 * Handle negative SOURCE_IDs in the FIELD subtable (:pr:`122`)
