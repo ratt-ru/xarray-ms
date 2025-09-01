@@ -49,8 +49,8 @@ class FieldAndSourceFactory(DatasetFactory):
       pac.equal(pa_source_ids, -1),
       pa.array([None] * len(source_ids), pa_source_ids.type),
     )
-    source_names = pac.take(source["NAME"], pa_source_ids)
-    source_names = pac.fill_null(source_names, "UNKNOWN").to_numpy()
+    pa_source_names = pac.take(source["NAME"], pa_source_ids)
+    source_names = pac.fill_null(pa_source_names, "UNKNOWN").to_numpy()
 
     return Dataset(
       data_vars=data_vars,

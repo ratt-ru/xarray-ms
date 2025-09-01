@@ -6,7 +6,7 @@ Changelog
 X.Y.Z (DD-MM-YYYY)
 ------------------
 * Cleanup Dataset Factories (:pr:`118`)
-* Add field_and_source_xds (:pr:`114`, :pr:`119`)
+* Add field_and_source_xds (:pr:`114`, :pr:`119`, :pr:`122`)
 * Fix integer selection (:pr:`117`)
 * Correct clamp of the slice stop to be min(shape[d], s.stop) (:pr:`115`)
 * Rename deprecated ``repository_url`` to ``repository-url`` (:pr:`112`)
