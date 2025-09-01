@@ -5,9 +5,6 @@ import xarray
 
 import xarray_ms  # noqa
 
-SMALL_MEERKAT_DS = "small_meerkat.ms"
-SMALL_LOFAR_DS = "small_lofar.ms"
-
 pmx = pytest.mark.xfail
 
 
