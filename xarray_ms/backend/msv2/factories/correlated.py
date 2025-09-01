@@ -314,7 +314,10 @@ class CorrelatedFactory(DatasetFactory):
     if spw_freq_group_name:
       freq_attrs["frequency_group_name"] = spw_freq_group_name
 
-    if (uchan_width := np.unique(chan_width)).size == 1:
+    # Ignore the last channel width (data may have been averaged)
+    uchan_width = np.unique(chan_width[:-1] if len(chan_width) > 1 else chan_width)
+
+    if uchan_width.size == 1:
       freq_attrs["channel_width"] = uchan_width.item()
     elif np.allclose(uchan_width[:, None], uchan_width[None, :]):
       freq_attrs["channel_width"] = np.mean(uchan_width)

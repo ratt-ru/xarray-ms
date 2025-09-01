@@ -1,12 +1,18 @@
+from contextlib import nullcontext
 from functools import reduce
 from operator import mul
 
+import arcae
 import numpy as np
 import pytest
 import xarray
 from numpy.testing import assert_array_equal
 
-from xarray_ms.errors import IrregularBaselineGridWarning, IrregularTimeGridWarning
+from xarray_ms.errors import (
+  IrregularBaselineGridWarning,
+  IrregularChannelGridWarning,
+  IrregularTimeGridWarning,
+)
 from xarray_ms.testing.simulator import STANDARD_DATA_COLUMNS
 
 
@@ -346,3 +352,29 @@ def test_isel_loads_on_integers(simmed_ms):
     time=slice(1, 2), baseline_id=1, frequency=slice(4, 6)
   )
   node.load()
+
+
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [
+    {
+      "name": "backend.ms",
+      "data_description": [(8, ["XX", "XY", "YX", "YY"])],
+    }
+  ],
+  indirect=True,
+)
+@pytest.mark.parametrize("end", [True, False])
+def test_irregular_chan_width(simmed_ms, end):
+  """Warn about irregular channel widths, if the the first
+  N-1 CHAN_WIDTH values differ"""
+  # Bump the first channel width in each spectral window
+  with arcae.table(f"{simmed_ms}::SPECTRAL_WINDOW") as spw:
+    for r in range(spw.nrow()):
+      chan_width = spw.getcol("CHAN_WIDTH", index=(slice(r, r + 1),)).copy()
+      chan_width[0][-1 if end else 0] += 1e5
+      spw.putcol("CHAN_WIDTH", chan_width, index=(slice(r, r + 1),))
+
+  with nullcontext() if end else pytest.warns(IrregularChannelGridWarning):
+    with xarray.open_datatree(simmed_ms):
+      pass
