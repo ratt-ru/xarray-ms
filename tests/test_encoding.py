@@ -18,7 +18,7 @@ COLUMN_DESCS = {
 SECONDS_IN_DAY = 24 * 60 * 60
 
 
-# Worked examples from https://astroconverter.com/utcmjd.html
+# Worked examples from https://heasarc.gsfc.nasa.gov/cgi-bin/Tools/DateConv/dateconv.pl
 @pytest.mark.parametrize(
   "mjd, utc",
   [

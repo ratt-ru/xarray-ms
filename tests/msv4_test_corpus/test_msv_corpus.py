@@ -63,9 +63,7 @@ pmx = pytest.mark.xfail
     ("59754_altaz_2weights_15.ms", ([], ["FIELD_ID"])),
     ("59755_eq_interleave_0.ms", ([], ["FIELD_ID"])),
     ("59755_eq_interleave_15.ms", ([], ["FIELD_ID"])),
-    pytest.param(
-      "gmrt.ms", ([], ["FIELD_ID"]), marks=pmx(reason="TAI Measures conversion")
-    ),
+    ("gmrt.ms", ([], ["FIELD_ID"])),
   ],
   indirect=["msv4_corpus_dataset"],
 )
