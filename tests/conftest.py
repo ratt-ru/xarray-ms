@@ -6,25 +6,33 @@ from xarray_ms.backend.msv2.structure import MSv2StructureFactory
 from xarray_ms.multiton import Multiton
 from xarray_ms.testing.simulator import DEFAULT_SIM_PARAMS, MSStructureSimulator
 
-
 MSV4_TEST_CORPUS = "msv4_test_corpus"
 MSV4_TEST_CORPUS_CMDLINE = f"--{MSV4_TEST_CORPUS}"
 
+
 def pytest_addoption(parser):
-  parser.addoption(MSV4_TEST_CORPUS_CMDLINE, action="store_true", help="Run suite of tests on the MSv4 Test Corpus")
+  parser.addoption(
+    MSV4_TEST_CORPUS_CMDLINE,
+    action="store_true",
+    help="Run suite of tests on the MSv4 Test Corpus",
+  )
 
 
 def pytest_configure(config):
-  config.addinivalue_line("markers", f"{MSV4_TEST_CORPUS}: mark tests as part of the MSv4 Test Corpus suite")
+  config.addinivalue_line(
+    "markers", f"{MSV4_TEST_CORPUS}: mark tests as part of the MSv4 Test Corpus suite"
+  )
 
 
 def pytest_collection_modifyitems(config, items):
-    if config.getoption(MSV4_TEST_CORPUS_CMDLINE):
-      return
-    skip_msv4_corpus = pytest.mark.skip(reason=f"need {MSV4_TEST_CORPUS_CMDLINE} option to run")
-    for item in items:
-      if MSV4_TEST_CORPUS in item.keywords:
-        item.add_marker(skip_msv4_corpus)
+  if config.getoption(MSV4_TEST_CORPUS_CMDLINE):
+    return
+  skip_msv4_corpus = pytest.mark.skip(
+    reason=f"need {MSV4_TEST_CORPUS_CMDLINE} option to run"
+  )
+  for item in items:
+    if MSV4_TEST_CORPUS in item.keywords:
+      item.add_marker(skip_msv4_corpus)
 
 
 @pytest.fixture(autouse=True)
