@@ -18,7 +18,7 @@ jobs:
     steps:
       - name: Link Checker
         id: lychee
-        args: --base . --verbose --no-progress './**/*.md' './**/*.html' './**/*.rst'
         uses: lycheeverse/lychee-action@v2
         with:
+          args: --base . --verbose --no-progress './**/*.md' './**/*.html' './**/*.rst'
           fail: false
