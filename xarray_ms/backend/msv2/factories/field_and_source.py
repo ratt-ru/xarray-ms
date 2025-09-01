@@ -42,7 +42,6 @@ class FieldAndSourceFactory(DatasetFactory):
       )
 
     field_names = field["NAME"].to_numpy()
-
     # Filter out negative source ids
     pa_source_ids = pa.array(source_ids)
     pa_source_ids = pac.replace_with_mask(
@@ -51,8 +50,7 @@ class FieldAndSourceFactory(DatasetFactory):
       pa.array([None] * len(source_ids), pa_source_ids.type),
     )
     pa_source_names = pac.take(source["NAME"], pa_source_ids)
-    pa_source_names = pac.fill_null(pa_source_names, "UNKNOWN").to_numpy()
-    source_names = source["NAME"].take(source_ids).to_numpy()
+    source_names = pac.fill_null(pa_source_names, "UNKNOWN").to_numpy()
 
     return Dataset(
       data_vars=data_vars,
