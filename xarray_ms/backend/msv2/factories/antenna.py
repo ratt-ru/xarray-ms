@@ -61,17 +61,21 @@ class AntennaFactory(DatasetFactory):
     filtered_feeds = feeds.take(np.where(mask)[0])
     nreceptors = filtered_feeds["NUM_RECEPTORS"].unique().to_numpy()
 
-    if len(nreceptors) != 1 or nreceptors.item() != 2:
+    if len(nreceptors) != 1:
       raise NotImplementedError(
-        f"Representation of Measurement Sets with "
-        f"FEED::NUM_RECEPTORS != 2: {nreceptors.tolist()}"
+        f"Measurement Set partitions {self._partition_key} with  "
+        f"multiple FEED::NUM_RECEPTOR values {nreceptors.tolist()}"
       )
 
     receptor_angle = (
-      pac.list_flatten(filtered_feeds["RECEPTOR_ANGLE"]).to_numpy().reshape(-1, 2)
+      pac.list_flatten(filtered_feeds["RECEPTOR_ANGLE"])
+      .to_numpy()
+      .reshape(-1, nreceptors.item())
     )
     pol_type = (
-      pac.list_flatten(filtered_feeds["POLARIZATION_TYPE"]).to_numpy().reshape(-1, 2)
+      pac.list_flatten(filtered_feeds["POLARIZATION_TYPE"])
+      .to_numpy()
+      .reshape(-1, nreceptors.item())
     )
     receptor_labels = [f"pol_{i}" for i in range(nreceptors.item())]
 

@@ -55,9 +55,7 @@ pmx = pytest.mark.xfail
       ([], ["FIELD_ID"]),
       marks=pmx(reason="Single Dish"),
     ),
-    pytest.param(
-      "SNR_G55_10s.split.ms", ([], ["FIELD_ID"]), marks=pmx(reason="Only one feed?")
-    ),
+    ("SNR_G55_10s.split.ms", ([], ["FIELD_ID"])),
     ("59749_bp_8beams_pattern.ms", ([], ["FIELD_ID"])),
     ("59750_altaz_2settings.ms", ([], ["FIELD_ID"])),
     ("59754_altaz_2weights_0.ms", ([], ["FIELD_ID"])),
