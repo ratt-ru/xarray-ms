@@ -6,7 +6,7 @@ import pytest
 import xarray
 from numpy.testing import assert_array_equal
 
-from xarray_ms.errors import IrregularGridWarning
+from xarray_ms.errors import IrregularBaselineGridWarning, IrregularTimeGridWarning
 from xarray_ms.testing.simulator import STANDARD_DATA_COLUMNS
 
 
@@ -86,7 +86,7 @@ def _excise_some_baselines(chunk_desc, data_dict):
 @pytest.mark.parametrize("auto_corrs", [True, False])
 def test_irregular_read(simmed_ms, auto_corrs):
   """Test that excluding baselines works"""
-  with pytest.warns(IrregularGridWarning, match="rows missing from the full"):
+  with pytest.warns(IrregularBaselineGridWarning, match="rows missing from the full"):
     xdt = xarray.open_datatree(simmed_ms, auto_corrs=auto_corrs)
 
   def _selection(n):
@@ -201,7 +201,7 @@ def _randomise_starting_intervals(chunk_desc, data_dict):
 )
 def test_differing_start_intervals(simmed_ms):
   """Test that starting differing interval values result in nan intervals"""
-  with pytest.warns(IrregularGridWarning, match="Multiple intervals"):
+  with pytest.warns(IrregularTimeGridWarning, match="Multiple intervals"):
     xdt = xarray.open_datatree(simmed_ms, auto_corrs=True)
 
   for p in ["000", "001"]:
@@ -236,7 +236,8 @@ def _jitter_intervals(chunk_desc, data_dict):
   indirect=True,
 )
 def test_jittered_intervals(simmed_ms):
-  """Test that intervals with very small differences results using their mean"""
+  """Test that intervals with very small differences results
+  in the use of their mean as the integration time"""
   xdt = xarray.open_datatree(simmed_ms, auto_corrs=True)
 
   for p in ["000", "001"]:
