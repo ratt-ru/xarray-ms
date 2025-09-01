@@ -7,7 +7,10 @@ import xarray_ms  # noqa
 
 pmx = pytest.mark.xfail
 
+
 @pytest.mark.msv4_test_corpus
+@pytest.mark.filterwarnings("ignore::xarray_ms.errors.ImputedMetadataWarning")
+@pytest.mark.filterwarnings("ignore::xarray_ms.errors.IrregularGridWarning")
 @pytest.mark.parametrize(
   "msv4_corpus_dataset, partition_schema",
   [

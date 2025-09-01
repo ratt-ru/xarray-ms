@@ -94,7 +94,7 @@ jobs:
       - name: Test xarray-ms
         run: |
           source .venv/bin/activate
-          py.test -s -vvv tests/
+          py.test -s -vvv tests/ -Werror --msv4_test_corpus
 
       # - name: Debug with tmate on failure
       #   if: ${{ failure() }}
