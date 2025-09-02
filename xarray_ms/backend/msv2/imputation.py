@@ -144,7 +144,7 @@ def maybe_impute_processor_table(
   processor: pa.Table, processor_id: npt.NDArray[np.int32]
 ) -> pa.Table:
   """Generates a PROCESSOR table if there are no row ids
-  associated with the given PROESSOR_ID values"""
+  associated with the given PROCESSOR_ID values"""
   import pyarrow as pa
 
   result = _maybe_return_table_or_max_id(
