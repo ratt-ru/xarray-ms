@@ -385,6 +385,43 @@ class MSv2EntryPoint(BackendEntrypoint):
 
     return dt
 
+  def postprocess_datasets(self, datasets: Dict[str, Dataset]):
+    """Post-process the DataTree, filling and correcting data"""
+    for path, dataset in list(datasets.items()):
+      # Post-process visibility datasets
+      if (ds_attrs := dataset.attrs).get("type") in CORRELATED_DATASET_TYPES:
+        # Create a base data group
+        if "data_groups" not in ds_attrs:
+          assert {"VISIBILITY", "UVW", "FLAG", "WEIGHT"}.issubset(
+            dataset.data_vars.keys()
+          )
+
+          field_and_source_path = f"{path}/field_and_source_xds"
+          try:
+            field_and_source = datasets.pop(field_and_source_path)
+          except KeyError:
+            raise RuntimeError(f"{field_and_source_path} not present in DataTree")
+
+          data_group_name = "base"
+          base_field_and_source_path = f"{path}/field_and_source_{data_group_name}_xds"
+          datasets[base_field_and_source_path] = field_and_source
+
+          ds_attrs["data_groups"] = {
+            data_group_name: {
+              "correlated_data": "VISIBILITY",
+              "description": "Data group associated with the VISIBILITY DataArray",
+              "date": datetime.now(timezone.utc).isoformat(),
+              "field_and_source": base_field_and_source_path,
+              "uvw": "UVW",
+              "flag": "FLAG",
+              "weight": "WEIGHT",
+            }
+          }
+
+        # We may need to fix the UVW frame
+        if (uvw_attrs := dataset.UVW.attrs).get("frame") == "ITRF":
+          uvw_attrs["frame"] = "fk5"
+
   @format_docstring(DEFAULT_PARTITION_COLUMNS=DEFAULT_PARTITION_COLUMNS)
   def open_groups_as_dict(
     self,
@@ -459,5 +496,7 @@ class MSv2EntryPoint(BackendEntrypoint):
       datasets[path] = ds
       datasets[f"{path}/antenna_xds"] = antenna_factory.get_dataset()
       datasets[f"{path}/field_and_source_xds"] = field_and_source.get_dataset()
+
+    self.postprocess_datasets(datasets)
 
     return datasets
