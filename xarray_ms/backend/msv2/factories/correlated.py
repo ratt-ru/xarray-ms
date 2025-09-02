@@ -185,7 +185,7 @@ class CorrelatedFactory(DatasetFactory):
     spw_freq_group_name = spw["FREQ_GROUP_NAME"][spw_id].as_py()
     spw_ref_freq = spw["REF_FREQUENCY"][spw_id].as_py()
     spw_meas_freq_ref = spw["MEAS_FREQ_REF"][spw_id].as_py()
-    spw_frame = FrequencyMeasures(spw_meas_freq_ref).name.lower()
+    spw_frame = FrequencyMeasures(spw_meas_freq_ref).name.upper()
 
     corr_type = Polarisations.from_values(pol["CORR_TYPE"][pol_id].as_py()).to_str()
 
@@ -302,12 +302,19 @@ class CorrelatedFactory(DatasetFactory):
     )
 
     # Add frequency coordinate
-    freq_attrs = {
+    freq_attrs: Dict[str, Any | Dict[str, Any]] = {
       "type": "spectral_coord",
-      "frame": spw_frame,
-      "units": ["Hz"],
+      "observer": spw_frame,
+      "units": "Hz",
       "spectral_window_name": spw_name or "<Unknown>",
-      "reference_frequency": spw_ref_freq,
+      "reference_frequency": {
+        "attrs": {"observer": spw_frame, "type": "spectral_coord", "units": "Hz"},
+        "data": spw_ref_freq,
+      },
+      "channel_width": {
+        "attrs": {"type": "quantity", "units": "Hz"},
+        "data": 0.0,
+      },
       "effective_channel_width": "EFFECTIVE_CHANNEL_WIDTH",
     }
 
@@ -318,9 +325,9 @@ class CorrelatedFactory(DatasetFactory):
     uchan_width = np.unique(chan_width[:-1] if len(chan_width) > 1 else chan_width)
 
     if uchan_width.size == 1:
-      freq_attrs["channel_width"] = uchan_width.item()
+      freq_attrs["channel_width"]["data"] = uchan_width.item()
     elif np.allclose(uchan_width[:, None], uchan_width[None, :]):
-      freq_attrs["channel_width"] = np.mean(uchan_width)
+      freq_attrs["channel_width"]["data"] = np.mean(uchan_width)
     else:
       warnings.warn(
         f"Multiple distinct channel widths {uchan_width} "
@@ -330,7 +337,7 @@ class CorrelatedFactory(DatasetFactory):
         f"a (frequency,) shaped CHANNEL_WIDTH column will be added.",
         IrregularChannelGridWarning,
       )
-      freq_attrs["channel_width"] = np.nan
+      freq_attrs["channel_width"]["data"] = np.nan
       data_vars.append(("CHANNEL_WIDTH", Variable("frequency", chan_width)))
 
     coordinates.append(("frequency", Variable("frequency", chan_freq, freq_attrs)))
