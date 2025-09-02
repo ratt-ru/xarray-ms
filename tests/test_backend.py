@@ -7,7 +7,7 @@ import xarray.testing as xt
 from numpy.testing import assert_array_equal
 
 from xarray_ms.backend.msv2.entrypoint import MSv2EntryPoint
-from xarray_ms.testing.utils import id_string
+from xarray_ms.testing.utils import id_string, prune_datetime_structures
 
 
 def test_entrypoint(simmed_ms):
@@ -36,7 +36,7 @@ def test_open_dataset(simmed_ms):
   with ExitStack() as stack:
     mem_ds = stack.enter_context(xarray.open_dataset(simmed_ms))
     mem_ds.load()
-    del mem_ds.attrs["creation_date"]
+    prune_datetime_structures(mem_ds)
     assert isinstance(mem_ds.VISIBILITY.data, np.ndarray)
 
   chunks = {"time": 2, "frequency": 2}
@@ -44,16 +44,14 @@ def test_open_dataset(simmed_ms):
   # Works with default dask scheduler
   with ExitStack() as stack:
     ds = stack.enter_context(xarray.open_dataset(simmed_ms, chunks=chunks))
-    del ds.attrs["creation_date"]
-    assert ds.identical(mem_ds)
+    assert prune_datetime_structures(ds).identical(mem_ds)
 
   # Works with a LocalCluster
   with ExitStack() as stack:
     cluster = stack.enter_context(LocalCluster(processes=True, n_workers=4))
     stack.enter_context(Client(cluster))
     ds = stack.enter_context(xarray.open_dataset(simmed_ms, chunks=chunks))
-    del ds.attrs["creation_date"]
-    xt.assert_identical(ds, mem_ds)
+    assert prune_datetime_structures(ds).identical(mem_ds)
 
 
 @pytest.mark.filterwarnings("ignore:.*?matched multiple partitions")
@@ -147,11 +145,13 @@ def test_open_datatree(simmed_ms):
 
   # Works with xarray default load mechanism
   with ExitStack() as stack:
-    mem_dt = stack.enter_context(xarray.open_datatree(simmed_ms))
+    mem_dt = prune_datetime_structures(
+      stack.enter_context(xarray.open_datatree(simmed_ms))
+    )
     mem_dt.load()
+
     for node in mem_dt.subtree:
       if node.attrs.get("type") == "visibility":
-        node.attrs.pop("creation_date", None)
         assert isinstance(node.VISIBILITY.data, np.ndarray)
 
   chunks = {"time": 2, "frequency": 2}
@@ -159,20 +159,14 @@ def test_open_datatree(simmed_ms):
   # Works with default dask scheduler
   with ExitStack() as stack:
     dt = stack.enter_context(xarray.open_datatree(simmed_ms, preferred_chunks=chunks))
-    for node in dt.subtree:
-      if node.attrs.get("type") == "visibility":
-        del node.attrs["creation_date"]
-    xt.assert_identical(dt, mem_dt)
+    xt.assert_identical(prune_datetime_structures(dt), mem_dt)
 
   # Works with a LocalCluster
   with ExitStack() as stack:
     cluster = stack.enter_context(LocalCluster(processes=True, n_workers=4))
     stack.enter_context(Client(cluster))
     dt = stack.enter_context(xarray.open_datatree(simmed_ms, preferred_chunks=chunks))
-    for node in dt.subtree:
-      if node.attrs.get("type") == "visibility":
-        del node.attrs["creation_date"]
-    xt.assert_identical(dt, mem_dt)
+    xt.assert_identical(prune_datetime_structures(dt), mem_dt)
 
 
 @pytest.mark.parametrize(
@@ -189,12 +183,8 @@ def test_open_datatree_chunking(simmed_ms):
   """Test opening a datatree with both uniform
   and partition-specific chunking"""
 
-  ncdt = xarray.open_datatree(simmed_ms, auto_corrs=True)
+  ncdt = prune_datetime_structures(xarray.open_datatree(simmed_ms, auto_corrs=True))
   ncdt.load()
-
-  # Remove attributes that would break xarray.identical
-  for p in range(len(ncdt.children)):
-    del ncdt[f"backend_partition_{p:03}"].attrs["creation_date"]
 
   dt = xarray.open_datatree(
     simmed_ms,
@@ -219,11 +209,7 @@ def test_open_datatree_chunking(simmed_ms):
     "uvw_label": (3,),
   }
 
-  # Remove attributes that would break xarray.identical
-  for p in range(len(ncdt.children)):
-    del dt[f"backend_partition_{p:03}"].attrs["creation_date"]
-
-  assert ncdt.identical(dt)
+  assert ncdt.identical(prune_datetime_structures(dt))
 
   dt = xarray.open_datatree(
     simmed_ms,
@@ -250,8 +236,4 @@ def test_open_datatree_chunking(simmed_ms):
     "uvw_label": (3,),
   }
 
-  # Remove attributes that would break xarray.identical
-  for p in range(len(ncdt.children)):
-    del dt[f"backend_partition_{p:03}"].attrs["creation_date"]
-
-  assert ncdt.identical(dt)
+  assert ncdt.identical(prune_datetime_structures(dt))
