@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Correct basic schema issues (:pr:`125`)
 * Support TAI Measure encoding in time data (:pr:`124`)
 * Distinguish between time, baseline and channel irregularity (:pr:`123`)
 * Test xarray-ms against the full MSv4 Test Corpus (:pr:`120`)
