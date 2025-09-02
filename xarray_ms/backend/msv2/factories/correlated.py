@@ -358,8 +358,9 @@ class CorrelatedFactory(DatasetFactory):
     return dict(
       sorted(
         {
-          "observer": obs["OBSERVER"][partition.obs_id].as_py(),
+          "observer": [obs["OBSERVER"][partition.obs_id].as_py()],
           "project": obs["PROJECT"][partition.obs_id].as_py(),
+          "intents": [partition.obs_mode],
         }.items()
       )
     )
