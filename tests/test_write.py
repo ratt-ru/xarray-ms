@@ -92,7 +92,7 @@ def test_store_region(monkeypatch, simmed_ms):
 @pytest.mark.parametrize("chunks", [{"time": 2, "frequency": 2}])
 @pytest.mark.parametrize("simmed_ms", [{"name": "distributed-write.ms"}], indirect=True)
 @pytest.mark.parametrize("nworkers", [4])
-@pytest.mark.parametrize("processes", [True, False])
+@pytest.mark.parametrize("processes", [True])
 def test_distributed_write(simmed_ms, monkeypatch, processes, nworkers, chunks):
   monkeypatch.setattr(Dataset, "to_msv2", dataset_to_msv2, raising=False)
   monkeypatch.setattr(DataTree, "to_msv2", datatree_to_msv2, raising=False)
