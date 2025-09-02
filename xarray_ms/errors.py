@@ -44,3 +44,7 @@ class MissingMeasuresInfo(ValueError):
 
 class MissingQuantumUnits(ValueError):
   """Raised when QuantumUnits information is missing from the column"""
+
+
+class MultipleQuantumUnits(ValueError):
+  """Raised when there are multiple QuantumUnit value types in the column"""

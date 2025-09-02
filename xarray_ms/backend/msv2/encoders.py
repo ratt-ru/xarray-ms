@@ -34,7 +34,11 @@ from xarray.coding.variables import (
 )
 
 from xarray_ms.backend.msv2.array import MSv2Array
-from xarray_ms.errors import MissingMeasuresInfo, MissingQuantumUnits
+from xarray_ms.errors import (
+  MissingMeasuresInfo,
+  MissingQuantumUnits,
+  MultipleQuantumUnits,
+)
 
 if TYPE_CHECKING:
   from xarray.coding.variables import T_Name
@@ -82,12 +86,24 @@ class CasaCoder(VariableCoder):
 
   @property
   def quantum_units(self) -> List[str]:
-    """REturns the QuantumUnits keyword in the column descriptor"""
-    kw = self.column_desc.keywords
+    """Returns the QuantumUnits keyword in the column descriptor"""
     try:
-      return kw["QuantumUnits"]
+      return self.column_desc.keywords["QuantumUnits"]
     except KeyError:
       raise MissingQuantumUnits(f"No QuantumUnits found for {self.column}")
+
+  @property
+  def quantum_unit(self) -> str:
+    """Attempts to return a single QuantumUnit associated with the column"""
+    units = self.quantum_units
+    set_units = set(units)
+    if len(set_units) != 1:
+      raise MultipleQuantumUnits(
+        f"Unable to derive a single QuantumUnit for {self.column} "
+        f"as multiple QuantumUnits {set_units} types were present. "
+      )
+
+    return next(iter(set_units))
 
 
 class QuantityCoder(CasaCoder):
@@ -100,7 +116,7 @@ class QuantityCoder(CasaCoder):
   def decode(self, variable: Variable, name: T_Name = None) -> Variable:
     dims, data, attrs, encoding = unpack_for_decoding(variable)
     attrs["type"] = "quantity"
-    attrs["units"] = self.quantum_units
+    attrs["units"] = self.quantum_unit
     return Variable(dims, data, attrs, encoding, fastpath=True)
 
 
@@ -159,7 +175,7 @@ class UTCCoder(TimeCoder):
     """Convert Modified Julian Date in seconds to UTC in seconds"""
     dims, data, attrs, encoding = unpack_for_decoding(variable)
     attrs["type"] = "time"
-    attrs["units"] = self.quantum_units
+    attrs["units"] = self.quantum_unit
     attrs["scale"] = "utc"
     attrs["format"] = "unix"
 
@@ -207,5 +223,5 @@ class SpectralCoordCoder(CasaCoder):
     # TODO(sjperkins): topo is hard-coded here and will almost
     # certainly need extra work to support other frames
     attrs["frame"] = "topo"
-    attrs["units"] = self.quantum_units
+    attrs["units"] = self.quantum_unit
     return Variable(dims, data, attrs, encoding, fastpath=True)
