@@ -399,7 +399,7 @@ class DataDescription(Sequence):
         raise ValueError(f"{pair} should be a (chan_freq, corrs) tuple") from e
 
       if isinstance(chan_freq, int):
-        # MeerKAT L-bad
+        # MeerKAT L-band
         chan_freq = np.linspace(0.856e9, 2 * 0.856e9, chan_freq)
       elif isinstance(chan_freq, (list, tuple)):
         chan_freq = np.asarray(chan_freq)

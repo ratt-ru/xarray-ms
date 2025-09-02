@@ -18,6 +18,7 @@ testing = [
     "dask>=2024.5.0",
     "distributed>=2024.5.0",
     "zarr>=2.18.3, <3.0.0",
+    "platformdirs>=4.3.8",
 ]
 dev = [
     "pre-commit>=3.8.0",

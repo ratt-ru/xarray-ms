@@ -1,12 +1,18 @@
+from contextlib import nullcontext
 from functools import reduce
 from operator import mul
 
+import arcae
 import numpy as np
 import pytest
 import xarray
 from numpy.testing import assert_array_equal
 
-from xarray_ms.errors import IrregularGridWarning
+from xarray_ms.errors import (
+  IrregularBaselineGridWarning,
+  IrregularChannelGridWarning,
+  IrregularTimeGridWarning,
+)
 from xarray_ms.testing.simulator import STANDARD_DATA_COLUMNS
 
 
@@ -86,7 +92,7 @@ def _excise_some_baselines(chunk_desc, data_dict):
 @pytest.mark.parametrize("auto_corrs", [True, False])
 def test_irregular_read(simmed_ms, auto_corrs):
   """Test that excluding baselines works"""
-  with pytest.warns(IrregularGridWarning, match="rows missing from the full"):
+  with pytest.warns(IrregularBaselineGridWarning, match="rows missing from the full"):
     xdt = xarray.open_datatree(simmed_ms, auto_corrs=auto_corrs)
 
   def _selection(n):
@@ -201,7 +207,7 @@ def _randomise_starting_intervals(chunk_desc, data_dict):
 )
 def test_differing_start_intervals(simmed_ms):
   """Test that starting differing interval values result in nan intervals"""
-  with pytest.warns(IrregularGridWarning, match="Multiple intervals"):
+  with pytest.warns(IrregularTimeGridWarning, match="Multiple intervals"):
     xdt = xarray.open_datatree(simmed_ms, auto_corrs=True)
 
   for p in ["000", "001"]:
@@ -236,7 +242,8 @@ def _jitter_intervals(chunk_desc, data_dict):
   indirect=True,
 )
 def test_jittered_intervals(simmed_ms):
-  """Test that intervals with very small differences results using their mean"""
+  """Test that intervals with very small differences results
+  in the use of their mean as the integration time"""
   xdt = xarray.open_datatree(simmed_ms, auto_corrs=True)
 
   for p in ["000", "001"]:
@@ -345,3 +352,29 @@ def test_isel_loads_on_integers(simmed_ms):
     time=slice(1, 2), baseline_id=1, frequency=slice(4, 6)
   )
   node.load()
+
+
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [
+    {
+      "name": "backend.ms",
+      "data_description": [(8, ["XX", "XY", "YX", "YY"])],
+    }
+  ],
+  indirect=True,
+)
+@pytest.mark.parametrize("end", [True, False])
+def test_irregular_chan_width(simmed_ms, end):
+  """Warn about irregular channel widths, if the the first
+  N-1 CHAN_WIDTH values differ"""
+  # Bump the first channel width in each spectral window
+  with arcae.table(f"{simmed_ms}::SPECTRAL_WINDOW") as spw:
+    for r in range(spw.nrow()):
+      chan_width = spw.getcol("CHAN_WIDTH", index=(slice(r, r + 1),)).copy()
+      chan_width[0][-1 if end else 0] += 1e5
+      spw.putcol("CHAN_WIDTH", chan_width, index=(slice(r, r + 1),))
+
+  with nullcontext() if end else pytest.warns(IrregularChannelGridWarning):
+    with xarray.open_datatree(simmed_ms):
+      pass
