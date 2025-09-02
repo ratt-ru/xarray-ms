@@ -26,6 +26,7 @@ def test_imputed_observation_metadata(simmed_ms):
           "observer": ["unknown"],
           "project": "unknown",
           "intents": ["CALIBRATE_AMPL#OFF_SOURCE"],
+          "release_date": "1978-10-09T08:00:00+00:00",
         }
 
 

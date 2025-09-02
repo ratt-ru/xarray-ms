@@ -1,5 +1,6 @@
 import dataclasses
 import warnings
+from datetime import datetime, timezone
 from typing import Any, Dict, Mapping, Tuple, Type
 
 import numpy as np
@@ -361,6 +362,10 @@ class CorrelatedFactory(DatasetFactory):
           "observer": [obs["OBSERVER"][partition.obs_id].as_py()],
           "project": obs["PROJECT"][partition.obs_id].as_py(),
           "intents": [partition.obs_mode],
+          # TODO: Correct this to the value of the actual column
+          "release_date": datetime(
+            1978, 10, 9, 8, 0, 0, tzinfo=timezone.utc
+          ).isoformat(),
         }.items()
       )
     )
