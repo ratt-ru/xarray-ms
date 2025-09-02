@@ -169,7 +169,7 @@ class CorrelatedFactory(DatasetFactory):
     assert (partition.nbl,) == ant1.shape
 
     antenna = self._subtable_factories["ANTENNA"].instance
-    ant_names = antenna["NAME"].to_numpy()
+    ant_names = antenna["NAME"].to_numpy().astype(str)
     ant1_names = ant_names[ant1]
     ant2_names = ant_names[ant2]
 
@@ -233,7 +233,7 @@ class CorrelatedFactory(DatasetFactory):
       data_vars.append(("WEIGHT", self._variable_from_column("WEIGHT_ROW", dim_sizes)))
 
     field = maybe_impute_field_table(field, partition.field_ids)
-    field_names = field.take(partition.field_ids)["NAME"].to_numpy()
+    field_names = field.take(partition.field_ids)["NAME"].to_numpy().astype(str)
 
     # Add coordinates indexing coordinates
     coordinates = [
