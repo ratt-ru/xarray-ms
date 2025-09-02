@@ -35,13 +35,14 @@ class FieldAndSourceFactory(DatasetFactory):
     field_columns = set(field.column_names)
     data_vars = {}
     if "PHASE_DIR" in field_columns:
+      column_desc = json.loads(field.schema.field("PHASE_DIR").metadata[b"__arcae_metadata__"])["__casa_descriptor__"]
       phase_centre = pac.list_flatten(field["PHASE_DIR"], recursive=True)
       phase_centre = phase_centre.to_numpy().reshape(len(field), 2)
       data_vars["FIELD_PHASE_CENTER_DIRECTION"] = Variable(
         ("field_name", "sky_dir_label"), phase_centre
       )
 
-    field_names = field["NAME"].to_numpy()
+    field_names = field["NAME"].to_numpy().astype(str)
     # Filter out negative source ids
     pa_source_ids = pa.array(source_ids)
     pa_source_ids = pac.replace_with_mask(
@@ -50,7 +51,7 @@ class FieldAndSourceFactory(DatasetFactory):
       pa.array([None] * len(source_ids), pa_source_ids.type),
     )
     pa_source_names = pac.take(source["NAME"], pa_source_ids)
-    source_names = pac.fill_null(pa_source_names, "UNKNOWN").to_numpy()
+    source_names = pac.fill_null(pa_source_names, "UNKNOWN").to_numpy().astype(str)
 
     return Dataset(
       data_vars=data_vars,
