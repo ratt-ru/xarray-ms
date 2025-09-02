@@ -112,7 +112,7 @@ class AntennaFactory(DatasetFactory):
       coords={
         "antenna_name": Variable("antenna_name", antenna_names),
         "mount": Variable("antenna_name", mount),
-        "telescope_name": Variable("telescope_name", telescope_names),
+        "telescope_name": Variable("antenna_name", telescope_names),
         "station_name": Variable("antenna_name", station),
         "cartesian_pos_label": Variable("cartesian_pos_label", ["x", "y", "z"]),
         "polarization_type": Variable(("antenna_name", "receptor_label"), pol_type),
