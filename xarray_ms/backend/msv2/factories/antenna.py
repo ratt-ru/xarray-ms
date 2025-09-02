@@ -51,12 +51,12 @@ class AntennaFactory(DatasetFactory):
         f"feed_id = {partition.feed_ids} and spw_id = {partition.spw_id}"
       )
 
-    antenna_names = filtered_ants["NAME"].to_numpy()
-    telescope_names = np.asarray([telescope_name] * len(antenna_names))
+    antenna_names = filtered_ants["NAME"].to_numpy().astype(str)
+    telescope_names = np.asarray([telescope_name] * len(antenna_names), dtype=str)
     position = pac.list_flatten(filtered_ants["POSITION"]).to_numpy().reshape(-1, 3)
     diameter = filtered_ants["DISH_DIAMETER"].to_numpy()
-    station = filtered_ants["STATION"].to_numpy()
-    mount = filtered_ants["MOUNT"].to_numpy()
+    station = filtered_ants["STATION"].to_numpy().astype(str)
+    mount = filtered_ants["MOUNT"].to_numpy().astype(str)
 
     filtered_feeds = feeds.take(np.where(mask)[0])
     nreceptors = filtered_feeds["NUM_RECEPTORS"].unique().to_numpy()
@@ -75,12 +75,13 @@ class AntennaFactory(DatasetFactory):
     pol_type = (
       pac.list_flatten(filtered_feeds["POLARIZATION_TYPE"])
       .to_numpy()
+      .astype(str)
       .reshape(-1, nreceptors.item())
     )
     receptor_labels = [f"pol_{i}" for i in range(nreceptors.item())]
 
-    metre_attrs = {"units": ["m"], "type": "quantity"}
-    rad_attrs = {"units": ["rad"], "type": "quantity"}
+    metre_attrs = {"units": "m", "type": "quantity"}
+    rad_attrs = {"units": "rad", "type": "quantity"}
 
     data_vars = {
       "ANTENNA_POSITION": Variable(
@@ -112,7 +113,7 @@ class AntennaFactory(DatasetFactory):
         "antenna_name": Variable("antenna_name", antenna_names),
         "mount": Variable("antenna_name", mount),
         "telescope_name": Variable("telescope_name", telescope_names),
-        "station": Variable("antenna_name", station),
+        "station_name": Variable("antenna_name", station),
         "cartesian_pos_label": Variable("cartesian_pos_label", ["x", "y", "z"]),
         "polarization_type": Variable(("antenna_name", "receptor_label"), pol_type),
         "receptor_label": Variable("receptor_label", receptor_labels),
