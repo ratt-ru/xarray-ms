@@ -262,15 +262,21 @@ class CorrelatedFactory(DatasetFactory):
     e = {"preferred_chunks": self._preferred_chunks} if self._preferred_chunks else None
     coordinates = [(n, Variable(d, v, a, e)) for n, (d, v, a) in coordinates]
 
-    # Add time coordinate
+    # Add time coordinate attributes
+    # The coder will create most of them from the measures,
+    # but we also need to manually add the integration_time
     time_coder = TimeCoder("TIME", self._main_column_descs)
+
+    time_attrs: Dict[str, Any] = {
+      "integration_time": {"attrs": {"type": "quantity", "units": "s"}, "data": 0.0}
+    }
 
     if partition.interval.size == 1:
       # Single unique value
-      time_attrs = {"integration_time": partition.interval.item()}
+      time_attrs["integration_time"]["data"] = partition.interval.item()
     elif np.allclose(partition.interval[:, None], partition.interval[None, :]):
       # Tolerate some jitter in the unique values
-      time_attrs = {"integration_time": np.mean(partition.interval)}
+      time_attrs["integration_time"]["data"] = np.mean(partition.interval)
     else:
       # There are multiple unique interval values,
       # a regular grid isn't possible
@@ -286,7 +292,7 @@ class CorrelatedFactory(DatasetFactory):
         f"{'They contain nans in missing rows.' if missing_rows else ''}",
         IrregularTimeGridWarning,
       )
-      time_attrs = {"integration_time": np.nan}
+      time_attrs["integration_time"]["data"] = np.nan
       data_vars.extend(
         [
           ("TIME", self._variable_from_column("TIME", dim_sizes)),
