@@ -1,3 +1,5 @@
+import gc
+
 import numpy as np
 import pytest
 from arcae.lib.arrow_tables import Table, ms_descriptor
@@ -38,8 +40,11 @@ def pytest_collection_modifyitems(config, items):
 @pytest.fixture(autouse=True)
 def clear_caches():
   yield
-  Multiton._INSTANCE_CACHE.clear()
+
+  # Structure Factories have references to Multitons
   MSv2StructureFactory._STRUCTURE_CACHE.clear()
+  Multiton._INSTANCE_CACHE.clear()
+  gc.collect()
 
 
 @pytest.fixture(scope="session", params=[DEFAULT_SIM_PARAMS])
