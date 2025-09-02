@@ -38,7 +38,7 @@ def test_utc_time_encoder_roundtrip(mjd, utc):
   assert utc == datetime.fromtimestamp(utc_seconds, timezone.utc)
   assert decoded_time.attrs == {
     "type": "time",
-    "units": ["s"],
+    "units": "s",
     "scale": "utc",
     "format": "unix",
   }
