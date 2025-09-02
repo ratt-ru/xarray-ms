@@ -57,7 +57,7 @@ class FieldAndSourceFactory(DatasetFactory):
       coords={
         "field_name": Variable("field_name", field_names),
         "sky_dir_label": Variable("sky_dir_label", ["ra", "dec"]),
-        "source_name": Variable("Source_name", source_names),
+        "source_name": Variable("source_name", source_names),
       },
       attrs={"type": "field_and_source"},
     )
