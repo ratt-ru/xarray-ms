@@ -258,6 +258,27 @@ class TAICoder(UTCCoder):
 class SpectralCoordCoder(CasaCoder):
   """Encode Measures Spectral Coordinates"""
 
+  CASA_TO_ASTROPY = {
+    "BARY": "BARY",
+    "REST": "REST",
+    "TOPO": "TOPO",
+    "LSRK": "lsrk",
+    "LSRD": "lsrd",
+    "GEO": "gcrs",
+  }
+
+  @staticmethod
+  def casa_to_astropy(frame: str) -> str:
+    try:
+      return SpectralCoordCoder.CASA_TO_ASTROPY[frame]
+    except KeyError:
+      warnings.warn(
+        f"No specific conversion exists from CASA frame {frame}. "
+        f"{frame} will be used as is.",
+        FrameConversionWarning,
+      )
+      return frame
+
   def encode(self, variable: Variable, name: T_Name = None) -> Variable:
     dims, data, attrs, encoding = unpack_for_encoding(variable)
     attrs.pop("type", None)
@@ -268,8 +289,6 @@ class SpectralCoordCoder(CasaCoder):
     measures = self.measinfo
     assert measures["type"] == "frequency"
     attrs["type"] = "spectral_coord"
-    # TODO(sjperkins): topo is hard-coded here and will almost
-    # certainly need extra work to support other frames
-    attrs["frame"] = "topo"
+    attrs["frame"] = self.casa_to_astropy(measures["Ref"])
     attrs["units"] = self.quantum_unit
     return Variable(dims, data, attrs, encoding, fastpath=True)
