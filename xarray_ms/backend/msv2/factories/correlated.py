@@ -1,5 +1,6 @@
 import dataclasses
 import warnings
+from datetime import datetime, timezone
 from typing import Any, Dict, Mapping, Tuple, Type
 
 import numpy as np
@@ -16,7 +17,10 @@ from xarray_ms.backend.msv2.array import (
 from xarray_ms.backend.msv2.encoders import (
   CasaCoder,
   QuantityCoder,
+  SpectralCoordCoder,
   TimeCoder,
+  UVWCoder,
+  VisibilityCoder,
 )
 from xarray_ms.backend.msv2.factories.core import DatasetFactory
 from xarray_ms.backend.msv2.imputation import (
@@ -25,8 +29,10 @@ from xarray_ms.backend.msv2.imputation import (
   maybe_impute_processor_table,
 )
 from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
-from xarray_ms.casa_types import ColumnDesc, FrequencyMeasures, Polarisations
+from xarray_ms.backend.msv2.table_utils import table_desc
+from xarray_ms.casa_types import ColumnDesc, Polarisations
 from xarray_ms.errors import (
+  FrameConversionWarning,
   IrregularBaselineGridWarning,
   IrregularChannelGridWarning,
   IrregularTimeGridWarning,
@@ -48,13 +54,13 @@ MSV4_to_MSV2_COLUMN_SCHEMAS = {
   "INTEGRATION_TIME": MSv2ColumnSchema("INTERVAL", (), np.nan, QuantityCoder),
   "TIME_CENTROID": MSv2ColumnSchema("TIME_CENTROID", (), np.nan, TimeCoder),
   "EFFECTIVE_INTEGRATION_TIME": MSv2ColumnSchema("EXPOSURE", (), np.nan, QuantityCoder),
-  "UVW": MSv2ColumnSchema("UVW", ("uvw_label",), np.nan, None),
+  "UVW": MSv2ColumnSchema("UVW", ("uvw_label",), np.nan, UVWCoder),
   "FLAG_ROW": MSv2ColumnSchema(
     "FLAG_ROW", ("frequency", "polarization"), 1, None, low_res_dims=()
   ),
   "FLAG": MSv2ColumnSchema("FLAG", ("frequency", "polarization"), 1, None),
   "VISIBILITY": MSv2ColumnSchema(
-    "DATA", ("frequency", "polarization"), np.nan + np.nan * 1j, None
+    "DATA", ("frequency", "polarization"), np.nan + np.nan * 1j, VisibilityCoder
   ),
   "WEIGHT_ROW": MSv2ColumnSchema(
     "WEIGHT",
@@ -152,7 +158,7 @@ class CorrelatedFactory(DatasetFactory):
 
     # Apply any measures encoding
     if schema.coder:
-      coder = schema.coder(schema.name, self._main_column_descs)
+      coder = schema.coder(self._main_column_descs[schema.name])
       var = coder.decode(var)
 
     dims, data, attrs, encoding = unpack_for_decoding(var)
@@ -169,7 +175,7 @@ class CorrelatedFactory(DatasetFactory):
     assert (partition.nbl,) == ant1.shape
 
     antenna = self._subtable_factories["ANTENNA"].instance
-    ant_names = antenna["NAME"].to_numpy()
+    ant_names = antenna["NAME"].to_numpy().astype(str)
     ant1_names = ant_names[ant1]
     ant2_names = ant_names[ant2]
 
@@ -179,13 +185,17 @@ class CorrelatedFactory(DatasetFactory):
     pol = self._subtable_factories["POLARIZATION"].instance
     field = self._subtable_factories["FIELD"].instance
 
+    spw_table_desc = table_desc(spw)
+    chan_freq_coldesc = ColumnDesc.from_descriptor("CHAN_FREQ", spw_table_desc)
+
     chan_freq = spw["CHAN_FREQ"][spw_id].as_py()
     chan_width = spw["CHAN_WIDTH"][spw_id].as_py()
     spw_name = spw["NAME"][spw_id].as_py()
     spw_freq_group_name = spw["FREQ_GROUP_NAME"][spw_id].as_py()
     spw_ref_freq = spw["REF_FREQUENCY"][spw_id].as_py()
-    spw_meas_freq_ref = spw["MEAS_FREQ_REF"][spw_id].as_py()
-    spw_frame = FrequencyMeasures(spw_meas_freq_ref).name.lower()
+    freq_coder = SpectralCoordCoder(chan_freq_coldesc).with_var_ref_cols(
+      lambda c: spw[c].take([spw_id]).to_numpy()
+    )
 
     corr_type = Polarisations.from_values(pol["CORR_TYPE"][pol_id].as_py()).to_str()
 
@@ -233,7 +243,7 @@ class CorrelatedFactory(DatasetFactory):
       data_vars.append(("WEIGHT", self._variable_from_column("WEIGHT_ROW", dim_sizes)))
 
     field = maybe_impute_field_table(field, partition.field_ids)
-    field_names = field.take(partition.field_ids)["NAME"].to_numpy()
+    field_names = field.take(partition.field_ids)["NAME"].to_numpy().astype(str)
 
     # Add coordinates indexing coordinates
     coordinates = [
@@ -262,15 +272,21 @@ class CorrelatedFactory(DatasetFactory):
     e = {"preferred_chunks": self._preferred_chunks} if self._preferred_chunks else None
     coordinates = [(n, Variable(d, v, a, e)) for n, (d, v, a) in coordinates]
 
-    # Add time coordinate
-    time_coder = TimeCoder("TIME", self._main_column_descs)
+    # Add time coordinate attributes
+    # The coder will create most of them from the measures,
+    # but we also need to manually add the integration_time
+    time_coder = TimeCoder(self._main_column_descs["TIME"])
+
+    time_attrs: Dict[str, Any] = {
+      "integration_time": {"attrs": {"type": "quantity", "units": "s"}, "data": 0.0}
+    }
 
     if partition.interval.size == 1:
       # Single unique value
-      time_attrs = {"integration_time": partition.interval.item()}
+      time_attrs["integration_time"]["data"] = partition.interval.item()
     elif np.allclose(partition.interval[:, None], partition.interval[None, :]):
       # Tolerate some jitter in the unique values
-      time_attrs = {"integration_time": np.mean(partition.interval)}
+      time_attrs["integration_time"]["data"] = np.mean(partition.interval)
     else:
       # There are multiple unique interval values,
       # a regular grid isn't possible
@@ -286,7 +302,7 @@ class CorrelatedFactory(DatasetFactory):
         f"{'They contain nans in missing rows.' if missing_rows else ''}",
         IrregularTimeGridWarning,
       )
-      time_attrs = {"integration_time": np.nan}
+      time_attrs["integration_time"]["data"] = np.nan
       data_vars.extend(
         [
           ("TIME", self._variable_from_column("TIME", dim_sizes)),
@@ -302,12 +318,16 @@ class CorrelatedFactory(DatasetFactory):
     )
 
     # Add frequency coordinate
-    freq_attrs = {
-      "type": "spectral_coord",
-      "frame": spw_frame,
-      "units": ["Hz"],
+    frequency = freq_coder.decode(Variable("frequency", chan_freq))
+    freq_attrs: Dict[str, Any | Dict[str, Any]] = {
       "spectral_window_name": spw_name or "<Unknown>",
-      "reference_frequency": spw_ref_freq,
+      "reference_frequency": {
+        "attrs": frequency.attrs.copy(),
+        "data": spw_ref_freq,
+      },
+      "channel_width": {
+        "attrs": {"type": "quantity", "units": "Hz"},
+      },
       "effective_channel_width": "EFFECTIVE_CHANNEL_WIDTH",
     }
 
@@ -318,9 +338,9 @@ class CorrelatedFactory(DatasetFactory):
     uchan_width = np.unique(chan_width[:-1] if len(chan_width) > 1 else chan_width)
 
     if uchan_width.size == 1:
-      freq_attrs["channel_width"] = uchan_width.item()
+      freq_attrs["channel_width"]["data"] = uchan_width.item()
     elif np.allclose(uchan_width[:, None], uchan_width[None, :]):
-      freq_attrs["channel_width"] = np.mean(uchan_width)
+      freq_attrs["channel_width"]["data"] = np.mean(uchan_width)
     else:
       warnings.warn(
         f"Multiple distinct channel widths {uchan_width} "
@@ -330,10 +350,11 @@ class CorrelatedFactory(DatasetFactory):
         f"a (frequency,) shaped CHANNEL_WIDTH column will be added.",
         IrregularChannelGridWarning,
       )
-      freq_attrs["channel_width"] = np.nan
+      freq_attrs["channel_width"]["data"] = np.nan
       data_vars.append(("CHANNEL_WIDTH", Variable("frequency", chan_width)))
 
-    coordinates.append(("frequency", Variable("frequency", chan_freq, freq_attrs)))
+    frequency.attrs.update(freq_attrs)
+    coordinates.append(("frequency", frequency))
 
     return FrozenDict(sorted(data_vars + coordinates))
 
@@ -341,12 +362,26 @@ class CorrelatedFactory(DatasetFactory):
     partition = self._structure_factory.instance[self._partition_key]
     obs = self._subtable_factories["OBSERVATION"].instance
     obs = maybe_impute_observation_table(obs, [partition.obs_id])
+    time_coder = TimeCoder(ColumnDesc.from_descriptor("RELEASE_DATE", table_desc(obs)))
+    if (release_date_ref := time_coder.measinfo.get("Ref")) != "UTC":
+      warnings.warn(
+        f"OBSERVATION::RELEASE_DATE Ref {release_date_ref} != UTC "
+        f"This error is benign if the accuracy of the above column ",
+        FrameConversionWarning,
+      )
+
+    decoded_time = time_coder.decode(
+      Variable("o", obs["RELEASE_DATE"].take([partition.obs_id]))
+    )
+    utc_seconds = decoded_time.values[0]
 
     return dict(
       sorted(
         {
-          "observer": obs["OBSERVER"][partition.obs_id].as_py(),
+          "observer": [obs["OBSERVER"][partition.obs_id].as_py()],
           "project": obs["PROJECT"][partition.obs_id].as_py(),
+          "intents": [partition.obs_mode],
+          "release_date": datetime.fromtimestamp(utc_seconds, timezone.utc).isoformat(),
         }.items()
       )
     )

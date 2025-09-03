@@ -26,7 +26,7 @@ from xarray_ms.backend.msv2.structure import (
   MSv2Structure,
   MSv2StructureFactory,
 )
-from xarray_ms.errors import InvalidPartitionKey
+from xarray_ms.errors import FrameConversionWarning, InvalidPartitionKey
 from xarray_ms.msv4_types import CORRELATED_DATASET_TYPES
 from xarray_ms.multiton import Multiton
 from xarray_ms.utils import format_docstring
@@ -488,6 +488,53 @@ class MSv2EntryPoint(BackendEntrypoint):
 
     return dt
 
+  def postprocess_datasets(self, datasets: Dict[str, Dataset]):
+    """Post-process the DataTree, filling and correcting data"""
+    for path, dataset in list(datasets.items()):
+      # Post-process visibility datasets
+      if (ds_attrs := dataset.attrs).get("type") in CORRELATED_DATASET_TYPES:
+        # Create a base data group
+        if "data_groups" not in ds_attrs:
+          assert {"VISIBILITY", "UVW", "FLAG", "WEIGHT"}.issubset(
+            dataset.data_vars.keys()
+          )
+
+          field_and_source_path = f"{path}/field_and_source_xds"
+          try:
+            field_and_source = datasets.pop(field_and_source_path)
+          except KeyError:
+            raise RuntimeError(f"{field_and_source_path} not present in DataTree")
+
+          data_group_name = "base"
+          base_field_and_source_path = f"{path}/field_and_source_{data_group_name}_xds"
+          datasets[base_field_and_source_path] = field_and_source
+
+          ds_attrs["data_groups"] = {
+            data_group_name: {
+              "correlated_data": "VISIBILITY",
+              "description": "Data group associated with the VISIBILITY DataArray",
+              "date": datetime.now(timezone.utc).isoformat(),
+              "field_and_source": base_field_and_source_path,
+              "uvw": "UVW",
+              "flag": "FLAG",
+              "weight": "WEIGHT",
+            }
+          }
+
+        # We may need to fix the UVW frame if it's set to ITRF
+        if (uvw_attrs := dataset.UVW.attrs)["frame"] == "ITRF":
+          frame = field_and_source.FIELD_PHASE_CENTER_DIRECTION.attrs["frame"]
+          warnings.warn(
+            f"UVW coordinate frame was set to ITRF which is "
+            f"an unsupported MSv4 frame for UVW. "
+            f"Setting the frame to {frame} from the "
+            f"FIELD_PHASE_CENTER_DIRECTION of the field "
+            f"associated with this dataset. "
+            f"See https://github.com/casangi/xradio/issues/476",
+            FrameConversionWarning,
+          )
+          uvw_attrs["frame"] = frame
+
   @format_docstring(DEFAULT_PARTITION_COLUMNS=DEFAULT_PARTITION_COLUMNS)
   def open_groups_as_dict(
     self,
@@ -562,5 +609,7 @@ class MSv2EntryPoint(BackendEntrypoint):
       datasets[path] = ds
       datasets[f"{path}/antenna_xds"] = antenna_factory.get_dataset()
       datasets[f"{path}/field_and_source_xds"] = field_and_source.get_dataset()
+
+    self.postprocess_datasets(datasets)
 
     return datasets

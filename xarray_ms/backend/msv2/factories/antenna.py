@@ -1,8 +1,11 @@
 import numpy as np
 from xarray import Dataset, Variable
 
+from xarray_ms.backend.msv2.encoders import PositionCoder
 from xarray_ms.backend.msv2.factories.core import DatasetFactory
 from xarray_ms.backend.msv2.imputation import maybe_impute_observation_table
+from xarray_ms.backend.msv2.table_utils import table_desc
+from xarray_ms.casa_types import ColumnDesc
 from xarray_ms.errors import InvalidMeasurementSet
 
 RELOCATABLE_ARRAY = {"ALMA", "VLA", "NOEMA", "EVLA"}
@@ -43,6 +46,7 @@ class AntennaFactory(DatasetFactory):
       out=mask,
     )
 
+    ant_tabledesc = table_desc(ants)
     filtered_ants = ants.take(feed_ant_id[mask])
 
     if len(filtered_ants) == 0:
@@ -51,12 +55,12 @@ class AntennaFactory(DatasetFactory):
         f"feed_id = {partition.feed_ids} and spw_id = {partition.spw_id}"
       )
 
-    antenna_names = filtered_ants["NAME"].to_numpy()
-    telescope_names = np.asarray([telescope_name] * len(antenna_names))
+    antenna_names = filtered_ants["NAME"].to_numpy().astype(str)
+    telescope_names = np.asarray([telescope_name] * len(antenna_names), dtype=str)
     position = pac.list_flatten(filtered_ants["POSITION"]).to_numpy().reshape(-1, 3)
     diameter = filtered_ants["DISH_DIAMETER"].to_numpy()
-    station = filtered_ants["STATION"].to_numpy()
-    mount = filtered_ants["MOUNT"].to_numpy()
+    station = filtered_ants["STATION"].to_numpy().astype(str)
+    mount = filtered_ants["MOUNT"].to_numpy().astype(str)
 
     filtered_feeds = feeds.take(np.where(mask)[0])
     nreceptors = filtered_feeds["NUM_RECEPTORS"].unique().to_numpy()
@@ -75,22 +79,29 @@ class AntennaFactory(DatasetFactory):
     pol_type = (
       pac.list_flatten(filtered_feeds["POLARIZATION_TYPE"])
       .to_numpy()
+      .astype(str)
       .reshape(-1, nreceptors.item())
     )
     receptor_labels = [f"pol_{i}" for i in range(nreceptors.item())]
 
-    metre_attrs = {"units": ["m"], "type": "quantity"}
-    rad_attrs = {"units": ["rad"], "type": "quantity"}
+    metre_attrs = {"units": "m", "type": "quantity"}
+    rad_attrs = {"units": "rad", "type": "quantity"}
+
+    position_coder = PositionCoder(
+      ColumnDesc.from_descriptor("POSITION", ant_tabledesc)
+    )
+    antenna_position = Variable(
+      ("antenna_name", "cartesian_pos_label"),
+      position,
+      {
+        # Antenna's are (currently) assumed to be earth-centric
+        "coordinate_system": "geocentric",
+        "origin_object_name": "earth",
+      },
+    )
 
     data_vars = {
-      "ANTENNA_POSITION": Variable(
-        ("antenna_name", "cartesian_pos_label"),
-        position,
-        {
-          "coordinate_system": "geocentric",
-          "origin_object_name": "earth",
-        },
-      ),
+      "ANTENNA_POSITION": position_coder.decode(antenna_position),
       "ANTENNA_DISH_DIAMETER": Variable("antenna_name", diameter, metre_attrs),
       "ANTENNA_EFFECTIVE_DISH_DIAMETER": Variable(
         "antenna_name", diameter, metre_attrs
@@ -111,8 +122,8 @@ class AntennaFactory(DatasetFactory):
       coords={
         "antenna_name": Variable("antenna_name", antenna_names),
         "mount": Variable("antenna_name", mount),
-        "telescope_name": Variable("telescope_name", telescope_names),
-        "station": Variable("antenna_name", station),
+        "telescope_name": Variable("antenna_name", telescope_names),
+        "station_name": Variable("antenna_name", station),
         "cartesian_pos_label": Variable("cartesian_pos_label", ["x", "y", "z"]),
         "polarization_type": Variable(("antenna_name", "receptor_label"), pol_type),
         "receptor_label": Variable("receptor_label", receptor_labels),

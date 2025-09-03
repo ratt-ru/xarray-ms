@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import json
 import warnings
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 import numpy as np
 import numpy.typing as npt
+from xarray import Variable
 
+from xarray_ms.backend.msv2.encoders import UTCCoder
+from xarray_ms.casa_types import ColumnDesc, DirectionMeasures
 from xarray_ms.errors import ImputedMetadataWarning
 
 if TYPE_CHECKING:
@@ -53,19 +58,63 @@ def maybe_impute_field_table(
   npoly = 0
   num_poly = np.full(result + 1, npoly, np.int32)
   direction = pa.array([[0.0, 0.0]], pa.list_(pa.float64(), 2))
+  row_ref_codes = pa.array([DirectionMeasures.J2000.value] * (result + 1), pa.int32())
 
-  return pa.Table.from_pydict(
+  table = pa.Table.from_pydict(
     {
       "NAME": np.array([f"UNKNOWN-{i}" for i in range(result + 1)], dtype=object),
       "NUM_POLY": num_poly,
       "DELAY_DIR": direction,
+      "DelayDir_Ref": row_ref_codes,
       "PHASE_DIR": direction,
+      "PhaseDir_Ref": row_ref_codes,
       "REFERENCE_DIR": direction,
+      "RefDir_Ref": row_ref_codes,
       "SOURCE_ID": np.arange(result + 1, dtype=np.int32),
       # TODO: Both TIME and INTERVAL could be improved
       "TIME": np.zeros(result + 1, np.float64),
     }
   )
+
+  ref_types, ref_codes = map(list, zip(*((m.name, m.value) for m in DirectionMeasures)))
+
+  # Create a minimal table descriptor for the three direction
+  # columns containing synthesised measures data
+  table_desc = {
+    column: {
+      "option": 0,
+      "valueType": "DOUBLE",
+      "keywords": {
+        "QuantumUnits": ["rad", "rad"],
+        "MEASINFO": {
+          "type": "direction",
+          "VarRefCol": ref_column,
+          "TabRefTypes": ref_types,
+          "TabRefCodes": ref_codes,
+        },
+      },
+    }
+    for column, ref_column in [
+      ("DELAY_DIR", "DelayDir_Ref"),
+      ("PHASE_DIR", "PhaseDir_Ref"),
+      ("REFERENCE_DIR", "RefDir_Ref"),
+    ]
+  }
+
+  # Add the table descriptor to the schema metadata
+  updated_schema = table.schema.with_metadata(
+    {"__arcae_metadata__": json.dumps({"__casa_descriptor__": table_desc})}
+  )
+
+  for column in table_desc.keys():
+    i = updated_schema.get_field_index(column)
+    field_metadata = {
+      "__arcae_metadata__": json.dumps({"__casa_descriptor__": table_desc[column]})
+    }
+    field = updated_schema.field(column).with_metadata(field_metadata)
+    updated_schema = updated_schema.set(i, field)
+
+  return table.cast(target_schema=updated_schema)
 
 
 def maybe_impute_source_table(
@@ -129,22 +178,54 @@ def maybe_impute_observation_table(
   if isinstance(result, pa.Table):
     return result
 
+  # Create a minimal table descriptor
+  table_desc = {
+    "RELEASE_DATE": {
+      "option": 0,
+      "valueType": "DOUBLE",
+      "keywords": {
+        "QuantumUnits": ["s"],
+        "MEASINFO": {"type": "epoch", "Ref": "UTC"},
+      },
+    }
+  }
+
+  release_date_coldesc = ColumnDesc.from_descriptor("RELEASE_DATE", table_desc)
+  dt = datetime(1978, 10, 9, 8, 0, 0, tzinfo=timezone.utc).timestamp()
+  release_date_var = Variable("time", [dt] * (result + 1))
+  release_date_var = UTCCoder(release_date_coldesc).encode(release_date_var)
   unknown = np.array(["unknown"] * (result + 1), dtype=object)
 
-  return pa.Table.from_pydict(
+  table = pa.Table.from_pydict(
     {
       "OBSERVER": unknown,
       "PROJECT": unknown,
       "TELESCOPE_NAME": unknown,
+      "RELEASE_DATE": release_date_var.values,
     }
   )
+
+  # Add the table descriptor to the schema metadata
+  updated_schema = table.schema.with_metadata(
+    {"__arcae_metadata__": json.dumps({"__casa_descriptor__": table_desc})}
+  )
+
+  for column in table_desc.keys():
+    i = updated_schema.get_field_index(column)
+    field_metadata = {
+      "__arcae_metadata__": json.dumps({"__casa_descriptor__": table_desc[column]})
+    }
+    field = updated_schema.field(column).with_metadata(field_metadata)
+    updated_schema = updated_schema.set(i, field)
+
+  return table.cast(target_schema=updated_schema)
 
 
 def maybe_impute_processor_table(
   processor: pa.Table, processor_id: npt.NDArray[np.int32]
 ) -> pa.Table:
   """Generates a PROCESSOR table if there are no row ids
-  associated with the given PROESSOR_ID values"""
+  associated with the given PROCESSOR_ID values"""
   import pyarrow as pa
 
   result = _maybe_return_table_or_max_id(

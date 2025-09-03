@@ -225,7 +225,10 @@ class MSStructureSimulator:
 
     # Generate descriptors, create simulated data from the descriptors
     # and write simulated data to the main Measurement Set
-    with Table.ms_from_descriptor(output_ms, "MAIN", 1, self.table_desc) as T:
+    table_desc = {**ms_descriptor("MAIN"), **self.table_desc}
+    table_desc["UVW"]["keywords"]["MEASINFO"]["Ref"] = "J2000"
+
+    with Table.ms_from_descriptor(output_ms, "MAIN", 1, table_desc) as T:
       startrow = 0
 
       for chunk_desc in self.generate_descriptors():
