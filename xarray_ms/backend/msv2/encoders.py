@@ -14,6 +14,7 @@ TableMeasRefDesc::TableMeasRefDesc
 from __future__ import annotations
 
 import sys
+import warnings
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Dict, List
 
@@ -35,6 +36,7 @@ from xarray.coding.variables import (
 
 from xarray_ms.backend.msv2.array import MSv2Array
 from xarray_ms.errors import (
+  FrameConversionWarning,
   MissingMeasuresInfo,
   MissingQuantumUnits,
   MultipleQuantumUnits,
@@ -292,3 +294,23 @@ class SpectralCoordCoder(CasaCoder):
     attrs["frame"] = self.casa_to_astropy(measures["Ref"])
     attrs["units"] = self.quantum_unit
     return Variable(dims, data, attrs, encoding, fastpath=True)
+
+
+class DirectionCoder(CasaCoder):
+  CASA_TO_ASTROPY = {
+    "AZELGEO": "altaz",
+    "ICRS": "icrs",
+    "J2000": "fk5",
+  }
+
+  @staticmethod
+  def casa_to_astropy(frame: str) -> str:
+    try:
+      return DirectionCoder.CASA_TO_ASTROPY[frame]
+    except KeyError:
+      warnings.warn(
+        f"No specific conversion exists from CASA frame {frame}. "
+        f"{frame} will be used as is.",
+        FrameConversionWarning,
+      )
+      return frame
