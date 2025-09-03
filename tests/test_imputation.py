@@ -22,7 +22,12 @@ def test_imputed_observation_metadata(simmed_ms):
   ):
     for node in xarray.open_datatree(simmed_ms).subtree:
       if node.attrs.get("type") in CORRELATED_DATASET_TYPES:
-        assert node.observation_info == {"observer": "unknown", "project": "unknown"}
+        assert node.observation_info == {
+          "observer": ["unknown"],
+          "project": "unknown",
+          "intents": ["CALIBRATE_AMPL#OFF_SOURCE"],
+          "release_date": "1978-10-09T08:00:00+00:00",
+        }
 
 
 @pytest.mark.filterwarnings("ignore::xarray_ms.errors.ImputedMetadataWarning")

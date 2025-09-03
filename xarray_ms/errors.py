@@ -26,6 +26,11 @@ class ImputedMetadataWarning(MissingMetadataWarning):
   if the original metadata is missing"""
 
 
+class FrameConversionWarning(UserWarning):
+  """Warning raised if there's no defined conversion from a CASA
+  to astropy reference frame"""
+
+
 class InvalidMeasurementSet(ValueError):
   """Raised when the Measurement Set foreign key indexing is invalid"""
 
@@ -44,3 +49,7 @@ class MissingMeasuresInfo(ValueError):
 
 class MissingQuantumUnits(ValueError):
   """Raised when QuantumUnits information is missing from the column"""
+
+
+class MultipleQuantumUnits(ValueError):
+  """Raised when there are multiple QuantumUnit value types in the column"""

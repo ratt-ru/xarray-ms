@@ -11,9 +11,11 @@ def test_field_and_source(simmed_ms):
   dt = dt.load()
 
   p0 = dt["test_partition_000"]
-  field_source = p0["field_and_source_xds"]
-  assert field_source.field_name == ["FIELD-0"]
-  assert field_source.source_name == ["SOURCE-0"]
-  np.testing.assert_array_equal(
-    field_source.FIELD_PHASE_CENTER_DIRECTION.values, [[0, 0]]
-  )
+
+  for _, data_group in p0.attrs.get("data_group", {}).items():
+    field_source = data_group["field_and_source"]
+    assert field_source.field_name == ["FIELD-0"]
+    assert field_source.source_name == ["SOURCE-0"]
+    np.testing.assert_array_equal(
+      field_source.FIELD_PHASE_CENTER_DIRECTION.values, [[0, 0]]
+    )

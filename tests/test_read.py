@@ -181,7 +181,7 @@ def test_differing_trailing_intervals(simmed_ms):
 
   for p in ["000", "001"]:
     node = xdt[f"backend_partition_{p}"]
-    assert node.time.attrs["integration_time"] == 8.0
+    assert node.time.integration_time["data"] == 8.0
 
 
 def _randomise_starting_intervals(chunk_desc, data_dict):
@@ -212,7 +212,7 @@ def test_differing_start_intervals(simmed_ms):
 
   for p in ["000", "001"]:
     node = xdt[f"backend_partition_{p}"]
-    assert np.isnan(node.time.attrs["integration_time"])
+    assert np.isnan(node.time.integration_time["data"])
     assert "TIME" in node.data_vars
     assert "INTEGRATION_TIME" in node.data_vars
 
@@ -248,7 +248,7 @@ def test_jittered_intervals(simmed_ms):
 
   for p in ["000", "001"]:
     node = xdt[f"backend_partition_{p}"]
-    assert np.isclose(node.time.integration_time, DUMP_RATE)
+    assert np.isclose(node.time.integration_time["data"], DUMP_RATE)
 
 
 def _remove_weight_spectrum_add_weight(chunk_desc, data_dict):
