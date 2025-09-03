@@ -421,18 +421,15 @@ class MSv2EntryPoint(BackendEntrypoint):
         # We may need to fix the UVW frame if it's set to ITRF
         if (uvw_attrs := dataset.UVW.attrs)["frame"] == "ITRF":
           frame = field_and_source.FIELD_PHASE_CENTER_DIRECTION.attrs["frame"]
-          # TODO: ITRF is the default UVW frame anyway so suppress it for now
-          # and hope for an ITRF -> ITRS conversion
-          # https://github.com/casangi/xradio/issues/476
-          with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=FrameConversionWarning)
-            warnings.warn(
-              f"UVW coordinate frame was set to ITRF which is "
-              f"a currently unsupported frame within the MSv4 schema. "
-              f"Setting to {frame} from the FIELD_PHASE_CENTER_DIRECTION "
-              f"of the field associated with this dataset.",
-              FrameConversionWarning,
-            )
+          warnings.warn(
+            f"UVW coordinate frame was set to ITRF which is "
+            f"an unsupported MSv4 frame for UVW. "
+            f"Setting the frame to {frame} from the "
+            f"FIELD_PHASE_CENTER_DIRECTION of the field "
+            f"associated with this dataset. "
+            f"See https://github.com/casangi/xradio/issues/476",
+            FrameConversionWarning,
+          )
           uvw_attrs["frame"] = frame
 
   @format_docstring(DEFAULT_PARTITION_COLUMNS=DEFAULT_PARTITION_COLUMNS)
