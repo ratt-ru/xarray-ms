@@ -184,7 +184,7 @@ class TimeCoder(CasaCoder):
     elif ref == "TAI":
       cls = TAICoder
     else:
-      raise NotImplementedError(measures["Ref"])
+      raise NotImplementedError(f"Epoch frame {measures['Ref']}")
 
     return cls.from_time_coder(self)
 
