@@ -9,6 +9,7 @@ pmx = pytest.mark.xfail
 
 
 @pytest.mark.msv4_test_corpus
+@pytest.mark.filterwarnings("ignore::xarray_ms.errors.FrameConversionWarning")
 @pytest.mark.filterwarnings("ignore::xarray_ms.errors.ImputedMetadataWarning")
 @pytest.mark.filterwarnings("ignore::xarray_ms.errors.IrregularTimeGridWarning")
 @pytest.mark.filterwarnings("ignore::xarray_ms.errors.IrregularBaselineGridWarning")
