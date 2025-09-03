@@ -35,7 +35,6 @@ class FieldAndSourceFactory(DatasetFactory):
     field_columns = set(field.column_names)
     data_vars = {}
     if "PHASE_DIR" in field_columns:
-      column_desc = json.loads(field.schema.field("PHASE_DIR").metadata[b"__arcae_metadata__"])["__casa_descriptor__"]
       phase_centre = pac.list_flatten(field["PHASE_DIR"], recursive=True)
       phase_centre = phase_centre.to_numpy().reshape(len(field), 2)
       data_vars["FIELD_PHASE_CENTER_DIRECTION"] = Variable(
