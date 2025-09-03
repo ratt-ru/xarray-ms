@@ -32,6 +32,7 @@ from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
 from xarray_ms.backend.msv2.table_utils import table_desc
 from xarray_ms.casa_types import ColumnDesc, Polarisations
 from xarray_ms.errors import (
+  FrameConversionWarning,
   IrregularBaselineGridWarning,
   IrregularChannelGridWarning,
   IrregularTimeGridWarning,
@@ -361,6 +362,18 @@ class CorrelatedFactory(DatasetFactory):
     partition = self._structure_factory.instance[self._partition_key]
     obs = self._subtable_factories["OBSERVATION"].instance
     obs = maybe_impute_observation_table(obs, [partition.obs_id])
+    time_coder = TimeCoder(ColumnDesc.from_descriptor("RELEASE_DATE", table_desc(obs)))
+    if (release_date_ref := time_coder.measinfo.get("Ref")) != "UTC":
+      warnings.warn(
+        f"OBSERVATION::RELEASE_DATE Ref {release_date_ref} != UTC "
+        f"This error is benign if the accuracy of the above column ",
+        FrameConversionWarning,
+      )
+
+    decoded_time = time_coder.decode(
+      Variable("o", obs["RELEASE_DATE"].take([partition.obs_id]))
+    )
+    utc_seconds = decoded_time.values[0]
 
     return dict(
       sorted(
@@ -368,10 +381,7 @@ class CorrelatedFactory(DatasetFactory):
           "observer": [obs["OBSERVER"][partition.obs_id].as_py()],
           "project": obs["PROJECT"][partition.obs_id].as_py(),
           "intents": [partition.obs_mode],
-          # TODO: Correct this to the value of the actual column
-          "release_date": datetime(
-            1978, 10, 9, 8, 0, 0, tzinfo=timezone.utc
-          ).isoformat(),
+          "release_date": datetime.fromtimestamp(utc_seconds, timezone.utc).isoformat(),
         }.items()
       )
     )

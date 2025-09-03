@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import json
 import warnings
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 import numpy as np
 import numpy.typing as npt
+from xarray import Variable
 
-from xarray_ms.casa_types import DirectionMeasures
+from xarray_ms.backend.msv2.encoders import UTCCoder
+from xarray_ms.casa_types import ColumnDesc, DirectionMeasures
 from xarray_ms.errors import ImputedMetadataWarning
 
 if TYPE_CHECKING:
@@ -175,15 +178,47 @@ def maybe_impute_observation_table(
   if isinstance(result, pa.Table):
     return result
 
+  # Create a minimal table descriptor
+  table_desc = {
+    "RELEASE_DATE": {
+      "option": 0,
+      "valueType": "DOUBLE",
+      "keywords": {
+        "QuantumUnits": ["s"],
+        "MEASINFO": {"type": "epoch", "Ref": "UTC"},
+      },
+    }
+  }
+
+  release_date_coldesc = ColumnDesc.from_descriptor("RELEASE_DATE", table_desc)
+  dt = datetime(1978, 10, 9, 8, 0, 0, tzinfo=timezone.utc).timestamp()
+  release_date_var = Variable("time", [dt] * (result + 1))
+  release_date_var = UTCCoder(release_date_coldesc).encode(release_date_var)
   unknown = np.array(["unknown"] * (result + 1), dtype=object)
 
-  return pa.Table.from_pydict(
+  table = pa.Table.from_pydict(
     {
       "OBSERVER": unknown,
       "PROJECT": unknown,
       "TELESCOPE_NAME": unknown,
+      "RELEASE_DATE": release_date_var.values,
     }
   )
+
+  # Add the table descriptor to the schema metadata
+  updated_schema = table.schema.with_metadata(
+    {"__arcae_metadata__": json.dumps({"__casa_descriptor__": table_desc})}
+  )
+
+  for column in table_desc.keys():
+    i = updated_schema.get_field_index(column)
+    field_metadata = {
+      "__arcae_metadata__": json.dumps({"__casa_descriptor__": table_desc[column]})
+    }
+    field = updated_schema.field(column).with_metadata(field_metadata)
+    updated_schema = updated_schema.set(i, field)
+
+  return table.cast(target_schema=updated_schema)
 
 
 def maybe_impute_processor_table(
