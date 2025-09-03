@@ -171,6 +171,7 @@ class DirectionMeasures(IntEnum):
   MOON = 31
   COMET = 32
 
+
 class PositionMeasures(IntEnum):
   """Enumeration of CASA Position Measure Types
   defined at casacore/measures/Measures/MPosition.h
@@ -178,7 +179,6 @@ class PositionMeasures(IntEnum):
 
   ITRF = 0
   WGS84 = 1
-
 
 
 class DataType(IntEnum):
