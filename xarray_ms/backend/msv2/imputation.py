@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import warnings
 from typing import TYPE_CHECKING
 
 import numpy as np
 import numpy.typing as npt
 
+from xarray_ms.casa_types import DirectionMeasures
 from xarray_ms.errors import ImputedMetadataWarning
 
 if TYPE_CHECKING:
@@ -53,19 +55,63 @@ def maybe_impute_field_table(
   npoly = 0
   num_poly = np.full(result + 1, npoly, np.int32)
   direction = pa.array([[0.0, 0.0]], pa.list_(pa.float64(), 2))
+  row_ref_codes = pa.array([DirectionMeasures.J2000.value] * (result + 1), pa.int32())
 
-  return pa.Table.from_pydict(
+  table = pa.Table.from_pydict(
     {
       "NAME": np.array([f"UNKNOWN-{i}" for i in range(result + 1)], dtype=object),
       "NUM_POLY": num_poly,
       "DELAY_DIR": direction,
+      "DelayDir_Ref": row_ref_codes,
       "PHASE_DIR": direction,
+      "PhaseDir_Ref": row_ref_codes,
       "REFERENCE_DIR": direction,
+      "RefDir_Ref": row_ref_codes,
       "SOURCE_ID": np.arange(result + 1, dtype=np.int32),
       # TODO: Both TIME and INTERVAL could be improved
       "TIME": np.zeros(result + 1, np.float64),
     }
   )
+
+  ref_types, ref_codes = map(list, zip(*((m.name, m.value) for m in DirectionMeasures)))
+
+  # Create a minimal table descriptor for the three direction
+  # columns containing synthesised measures data
+  table_desc = {
+    column: {
+      "option": 0,
+      "valueType": "DOUBLE",
+      "keywords": {
+        "QuantumUnits": ["rad", "rad"],
+        "MEASINFO": {
+          "type": "direction",
+          "VarRefCol": ref_column,
+          "TabRefTypes": ref_types,
+          "TabRefCodes": ref_codes,
+        },
+      },
+    }
+    for column, ref_column in [
+      ("DELAY_DIR", "DelayDir_Ref"),
+      ("PHASE_DIR", "PhaseDir_Ref"),
+      ("REFERENCE_DIR", "RefDir_Ref"),
+    ]
+  }
+
+  # Add the table descriptor to the schema metadata
+  updated_schema = table.schema.with_metadata(
+    {"__arcae_metadata__": json.dumps({"__casa_descriptor__": table_desc})}
+  )
+
+  for column in table_desc.keys():
+    i = updated_schema.get_field_index(column)
+    field_metadata = {
+      "__arcae_metadata__": json.dumps({"__casa_descriptor__": table_desc[column]})
+    }
+    field = updated_schema.field(column).with_metadata(field_metadata)
+    updated_schema = updated_schema.set(i, field)
+
+  return table.cast(target_schema=updated_schema)
 
 
 def maybe_impute_source_table(

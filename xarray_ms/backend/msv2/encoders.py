@@ -35,47 +35,56 @@ from xarray.coding.variables import (
 )
 
 from xarray_ms.backend.msv2.array import MSv2Array
+from xarray_ms.casa_types import (
+  ColumnDesc,
+  DirectionMeasures,
+  FrequencyMeasures,
+)
 from xarray_ms.errors import (
   FrameConversionWarning,
   MissingMeasuresInfo,
   MissingQuantumUnits,
   MultipleQuantumUnits,
+  PartitioningError,
 )
 
 if TYPE_CHECKING:
   from xarray.coding.variables import T_Name
 
-  from xarray_ms.casa_types import ColumnDesc
-
 
 class CasaCoder(VariableCoder):
   """Base class for CASA Measures Coders"""
 
-  _column: str
-  _column_descs: Dict[str, ColumnDesc]
+  _column_desc: ColumnDesc
+  _var_ref_cols: Dict[str, npt.NDArray]
 
-  def __init__(self, column: str, column_descs: Dict[str, ColumnDesc]):
-    assert column in column_descs
-    self._column = column
-    self._column_descs = column_descs
+  def __init__(self, column_desc: ColumnDesc):
+    self._column_desc = column_desc
+    self._var_ref_cols = {}
+
+  def with_var_ref_cols(self, fn) -> CasaCoder:
+    """Calls ``fn`` with the name of the desired VarRefCol,
+    fn should return it."""
+    try:
+      measinfo = self.measinfo
+    except MissingMeasuresInfo:
+      return self
+
+    if "VarRefCol" in measinfo:
+      var_ref_col = measinfo["VarRefCol"]
+      self._var_ref_cols[var_ref_col] = fn(var_ref_col)
+
+    return self
 
   @property
   def column(self) -> str:
     """Returns the column"""
-    return self._column
-
-  @property
-  def column_descs(self) -> Dict[str, ColumnDesc]:
-    """Returns the column descriptors"""
-    return self._column_descs
+    return self._column_desc.name
 
   @property
   def column_desc(self) -> ColumnDesc:
     """Returns the column descriptor"""
-    try:
-      return self._column_descs[self._column]
-    except KeyError:
-      raise KeyError(f"No Column Descriptor exist for {self.column}")
+    return self._column_desc
 
   @property
   def measinfo(self) -> Dict[str, Any]:
@@ -175,7 +184,7 @@ class TimeCoder(CasaCoder):
 
   @classmethod
   def from_time_coder(cls, time_coder: TimeCoder) -> Self:
-    return cls(time_coder._column, time_coder._column_descs)
+    return cls(time_coder.column_desc)
 
   def dispatched_coder(self) -> TimeCoder:
     measures = self.measinfo
@@ -252,13 +261,13 @@ class TAICoder(UTCCoder):
 
   def decode(self, variable: Variable, name: T_Name = None) -> Variable:
     """Convert Modified Julian Date in seconds to TAI in seconds"""
-    dims, data, attrs, encoding = unpack_for_decoding(variable)
+    dims, data, attrs, encoding = unpack_for_decoding(super().decode(variable, name))
     attrs["scale"] = "tai"
     return Variable(dims, data, attrs, encoding, fastpath=True)
 
 
 class SpectralCoordCoder(CasaCoder):
-  """Encode Measures Spectral Coordinates"""
+  """Encode Spectral Coordinate Measures"""
 
   CASA_TO_ASTROPY = {
     "BARY": "BARY",
@@ -291,12 +300,38 @@ class SpectralCoordCoder(CasaCoder):
     measures = self.measinfo
     assert measures["type"] == "frequency"
     attrs["type"] = "spectral_coord"
-    attrs["frame"] = self.casa_to_astropy(measures["Ref"])
+
+    if "Ref" in measures:
+      frame = self.casa_to_astropy(measures["Ref"])
+    elif "VarRefCol" in measures:
+      var_ref_col = measures["VarRefCol"]
+      if var_ref_col not in self._var_ref_cols:
+        raise RuntimeError(
+          f"Use coder.with_var_ref_cols(...) to register {var_ref_col}"
+        )
+      if not (var_ref_data := np.unique(self._var_ref_cols[var_ref_col])).size == 1:
+        raise PartitioningError(
+          f"Multiple distinct measures codes were found in {var_ref_col}. "
+          f"This usually stems from not partitioning the Measurement Set "
+          f"finely enough."
+        )
+
+      measure_enum = FrequencyMeasures(var_ref_data.item())
+      frame = self.casa_to_astropy(measure_enum.name)
+    else:
+      raise NotImplementedError(
+        f"Decoding {measures['type']} measures in {self.column} "
+        f"without a Ref or VarRefCol entry: {measures}"
+      )
+
+    attrs["observer"] = frame
     attrs["units"] = self.quantum_unit
     return Variable(dims, data, attrs, encoding, fastpath=True)
 
 
 class DirectionCoder(CasaCoder):
+  """Encode Direction Measures"""
+
   CASA_TO_ASTROPY = {
     "AZELGEO": "altaz",
     "ICRS": "icrs",
@@ -314,3 +349,101 @@ class DirectionCoder(CasaCoder):
         FrameConversionWarning,
       )
       return frame
+
+  def encode(self, variable: Variable, name: T_Name = None) -> Variable:
+    dims, data, attrs, encoding = unpack_for_encoding(variable)
+    attrs.pop("type", None)
+    attrs.pop("frame")
+    attrs.pop("units")
+    return Variable(dims, data, attrs, encoding, fastpath=True)
+
+  def decode(self, variable: Variable, name: T_Name = None) -> Variable:
+    dims, data, attrs, encoding = unpack_for_decoding(variable)
+    measures = self.measinfo
+    assert measures["type"] == "direction"
+    attrs["type"] = "sky_coord"
+    if "Ref" in measures:
+      frame = self.casa_to_astropy(measures["Ref"])
+    elif "VarRefCol" in measures:
+      var_ref_col = measures["VarRefCol"]
+      if var_ref_col not in self._var_ref_cols:
+        raise RuntimeError(
+          f"Use coder.with_var_ref_cols(...) to register {var_ref_col}"
+        )
+      if not (var_ref_data := np.unique(self._var_ref_cols[var_ref_col])).size == 1:
+        raise PartitioningError(
+          f"Multiple distinct measures codes were found in {var_ref_col}. "
+          f"This usually stems from not partitioning the Measurement Set "
+          f"finely enough. Consider including FIELD_ID and maybe SOURCE_ID "
+          f"in your partioning strategy"
+        )
+
+      measure_enum = DirectionMeasures(var_ref_data.item())
+      frame = self.casa_to_astropy(measure_enum.name)
+    else:
+      raise NotImplementedError(
+        f"Decoding {measures['type']} measures in {self.column} "
+        f"without a Ref or VarRefCol entry: {measures}"
+      )
+
+    attrs["frame"] = frame
+    attrs["units"] = self.quantum_unit
+    return Variable(dims, data, attrs, encoding, fastpath=True)
+
+
+class PositionCoder(CasaCoder):
+  """Encode Direction Measures"""
+
+  CASA_TO_ASTROPY = {
+    "ITRF": "ITRS",
+  }
+
+  @staticmethod
+  def casa_to_astropy(frame: str) -> str:
+    try:
+      return PositionCoder.CASA_TO_ASTROPY[frame]
+    except KeyError:
+      warnings.warn(
+        f"No specific conversion exists from CASA frame {frame}. "
+        f"{frame} will be used as is.",
+        FrameConversionWarning,
+      )
+      return frame
+
+  def encode(self, variable: Variable, name: T_Name = None) -> Variable:
+    dims, data, attrs, encoding = unpack_for_encoding(variable)
+    attrs.pop("type", None)
+    attrs.pop("frame")
+    attrs.pop("units")
+    return Variable(dims, data, attrs, encoding, fastpath=True)
+
+  def decode(self, variable: Variable, name: T_Name = None) -> Variable:
+    dims, data, attrs, encoding = unpack_for_decoding(variable)
+    measures = self.measinfo
+    assert measures["type"] == "position"
+    attrs["type"] = "location"
+    if "Ref" in measures:
+      frame = self.casa_to_astropy(measures["Ref"])
+    elif "VarRefCol" in measures:
+      var_ref_col = measures["VarRefCol"]
+      if var_ref_col not in self._var_ref_cols:
+        raise RuntimeError(
+          f"Use coder.with_var_ref_cols(...) to register {var_ref_col}"
+        )
+      if not (var_ref_data := np.unique(self._var_ref_cols[var_ref_col])).size == 1:
+        raise PartitioningError(
+          f"Multiple distinct measures codes were found in {var_ref_col}. "
+          f"This is unusual for position measures"
+        )
+
+      measure_enum = DirectionMeasures(var_ref_data.item())
+      frame = self.casa_to_astropy(measure_enum.name)
+    else:
+      raise NotImplementedError(
+        f"Decoding {measures['type']} measures in {self.column} "
+        f"without a Ref or VarRefCol entry: {measures}"
+      )
+
+    attrs["frame"] = frame
+    attrs["units"] = self.quantum_unit
+    return Variable(dims, data, attrs, encoding, fastpath=True)

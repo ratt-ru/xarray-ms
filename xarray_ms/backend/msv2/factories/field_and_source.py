@@ -1,11 +1,14 @@
 import numpy as np
 from xarray import Dataset, Variable
 
+from xarray_ms.backend.msv2.encoders import DirectionCoder
 from xarray_ms.backend.msv2.factories.core import DatasetFactory
 from xarray_ms.backend.msv2.imputation import (
   maybe_impute_field_table,
   maybe_impute_source_table,
 )
+from xarray_ms.backend.msv2.table_utils import table_desc
+from xarray_ms.casa_types import ColumnDesc
 
 
 class FieldAndSourceFactory(DatasetFactory):
@@ -24,6 +27,8 @@ class FieldAndSourceFactory(DatasetFactory):
     source_ids = field["SOURCE_ID"].to_numpy()
     source = maybe_impute_source_table(source, source_ids)
 
+    field_table_desc = table_desc(field)
+
     num_poly = np.unique(field["NUM_POLY"].to_numpy())
     if not num_poly == [0]:
       raise NotImplementedError(
@@ -37,9 +42,12 @@ class FieldAndSourceFactory(DatasetFactory):
     if "PHASE_DIR" in field_columns:
       phase_centre = pac.list_flatten(field["PHASE_DIR"], recursive=True)
       phase_centre = phase_centre.to_numpy().reshape(len(field), 2)
-      data_vars["FIELD_PHASE_CENTER_DIRECTION"] = Variable(
-        ("field_name", "sky_dir_label"), phase_centre
+      field_phase_centre_dir = Variable(("field_name", "sky_dir_label"), phase_centre)
+      phase_dir_coldesc = ColumnDesc.from_descriptor("PHASE_DIR", field_table_desc)
+      coder = DirectionCoder(phase_dir_coldesc).with_var_ref_cols(
+        lambda c: field[c].to_numpy()
       )
+      data_vars["FIELD_PHASE_CENTER_DIRECTION"] = coder.decode(field_phase_centre_dir)
 
     field_names = field["NAME"].to_numpy().astype(str)
     # Filter out negative source ids

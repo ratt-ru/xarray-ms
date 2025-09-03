@@ -1,8 +1,11 @@
 import numpy as np
 from xarray import Dataset, Variable
 
+from xarray_ms.backend.msv2.encoders import PositionCoder
 from xarray_ms.backend.msv2.factories.core import DatasetFactory
 from xarray_ms.backend.msv2.imputation import maybe_impute_observation_table
+from xarray_ms.backend.msv2.table_utils import table_desc
+from xarray_ms.casa_types import ColumnDesc
 from xarray_ms.errors import InvalidMeasurementSet
 
 RELOCATABLE_ARRAY = {"ALMA", "VLA", "NOEMA", "EVLA"}
@@ -43,6 +46,7 @@ class AntennaFactory(DatasetFactory):
       out=mask,
     )
 
+    ant_tabledesc = table_desc(ants)
     filtered_ants = ants.take(feed_ant_id[mask])
 
     if len(filtered_ants) == 0:
@@ -83,18 +87,21 @@ class AntennaFactory(DatasetFactory):
     metre_attrs = {"units": "m", "type": "quantity"}
     rad_attrs = {"units": "rad", "type": "quantity"}
 
+    position_coder = PositionCoder(
+      ColumnDesc.from_descriptor("POSITION", ant_tabledesc)
+    )
+    antenna_position = Variable(
+      ("antenna_name", "cartesian_pos_label"),
+      position,
+      {
+        # Antenna's are (currently) assumed to be earth-centric
+        "coordinate_system": "geocentric",
+        "origin_object_name": "earth",
+      },
+    )
+
     data_vars = {
-      "ANTENNA_POSITION": Variable(
-        ("antenna_name", "cartesian_pos_label"),
-        position,
-        {
-          "coordinate_system": "geocentric",
-          "origin_object_name": "earth",
-          "type": "location",
-          "frame": "ITRS",
-          "units": "m",
-        },
-      ),
+      "ANTENNA_POSITION": position_coder.decode(antenna_position),
       "ANTENNA_DISH_DIAMETER": Variable("antenna_name", diameter, metre_attrs),
       "ANTENNA_EFFECTIVE_DISH_DIAMETER": Variable(
         "antenna_name", diameter, metre_attrs

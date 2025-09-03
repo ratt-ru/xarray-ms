@@ -29,7 +29,8 @@ from xarray_ms.backend.msv2.imputation import (
   maybe_impute_processor_table,
 )
 from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
-from xarray_ms.casa_types import ColumnDesc, FrequencyMeasures, Polarisations
+from xarray_ms.backend.msv2.table_utils import table_desc
+from xarray_ms.casa_types import ColumnDesc, Polarisations
 from xarray_ms.errors import (
   IrregularBaselineGridWarning,
   IrregularChannelGridWarning,
@@ -156,7 +157,7 @@ class CorrelatedFactory(DatasetFactory):
 
     # Apply any measures encoding
     if schema.coder:
-      coder = schema.coder(schema.name, self._main_column_descs)
+      coder = schema.coder(self._main_column_descs[schema.name])
       var = coder.decode(var)
 
     dims, data, attrs, encoding = unpack_for_decoding(var)
@@ -183,14 +184,17 @@ class CorrelatedFactory(DatasetFactory):
     pol = self._subtable_factories["POLARIZATION"].instance
     field = self._subtable_factories["FIELD"].instance
 
+    spw_table_desc = table_desc(spw)
+    chan_freq_coldesc = ColumnDesc.from_descriptor("CHAN_FREQ", spw_table_desc)
+
     chan_freq = spw["CHAN_FREQ"][spw_id].as_py()
     chan_width = spw["CHAN_WIDTH"][spw_id].as_py()
     spw_name = spw["NAME"][spw_id].as_py()
     spw_freq_group_name = spw["FREQ_GROUP_NAME"][spw_id].as_py()
     spw_ref_freq = spw["REF_FREQUENCY"][spw_id].as_py()
-    spw_meas_freq_ref = spw["MEAS_FREQ_REF"][spw_id].as_py()
-    spw_frame_name = FrequencyMeasures(spw_meas_freq_ref).name.upper()
-    spw_frame = SpectralCoordCoder.casa_to_astropy(spw_frame_name)
+    freq_coder = SpectralCoordCoder(chan_freq_coldesc).with_var_ref_cols(
+      lambda c: spw[c].take([spw_id]).to_numpy()
+    )
 
     corr_type = Polarisations.from_values(pol["CORR_TYPE"][pol_id].as_py()).to_str()
 
@@ -270,7 +274,7 @@ class CorrelatedFactory(DatasetFactory):
     # Add time coordinate attributes
     # The coder will create most of them from the measures,
     # but we also need to manually add the integration_time
-    time_coder = TimeCoder("TIME", self._main_column_descs)
+    time_coder = TimeCoder(self._main_column_descs["TIME"])
 
     time_attrs: Dict[str, Any] = {
       "integration_time": {"attrs": {"type": "quantity", "units": "s"}, "data": 0.0}
@@ -313,18 +317,15 @@ class CorrelatedFactory(DatasetFactory):
     )
 
     # Add frequency coordinate
+    frequency = freq_coder.decode(Variable("frequency", chan_freq))
     freq_attrs: Dict[str, Any | Dict[str, Any]] = {
-      "type": "spectral_coord",
-      "observer": spw_frame,
-      "units": "Hz",
       "spectral_window_name": spw_name or "<Unknown>",
       "reference_frequency": {
-        "attrs": {"observer": spw_frame, "type": "spectral_coord", "units": "Hz"},
+        "attrs": frequency.attrs.copy(),
         "data": spw_ref_freq,
       },
       "channel_width": {
         "attrs": {"type": "quantity", "units": "Hz"},
-        "data": 0.0,
       },
       "effective_channel_width": "EFFECTIVE_CHANNEL_WIDTH",
     }
@@ -351,7 +352,8 @@ class CorrelatedFactory(DatasetFactory):
       freq_attrs["channel_width"]["data"] = np.nan
       data_vars.append(("CHANNEL_WIDTH", Variable("frequency", chan_width)))
 
-    coordinates.append(("frequency", Variable("frequency", chan_freq, freq_attrs)))
+    frequency.attrs.update(freq_attrs)
+    coordinates.append(("frequency", frequency))
 
     return FrozenDict(sorted(data_vars + coordinates))
 

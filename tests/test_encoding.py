@@ -31,7 +31,7 @@ def test_utc_time_encoder_roundtrip(mjd, utc):
   """Test conversion of Modified Julian Date
   to UTC in seconds, and vice versa"""
 
-  time_coder = TimeCoder("TIME", COLUMN_DESCS)
+  time_coder = TimeCoder(COLUMN_DESCS["TIME"])
   time = Variable(("dummy",), np.array([mjd * SECONDS_IN_DAY]))
   decoded_time = time_coder.decode(time)
   utc_seconds = decoded_time.values[0]
