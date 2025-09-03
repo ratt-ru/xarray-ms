@@ -132,6 +132,55 @@ class FrequencyMeasures(IntEnum):
   CMB = 8
 
 
+class DirectionMeasures(IntEnum):
+  """Enumeration of CASA Direction Measure Types
+  defined at casacore/measures/Measures/MDirection.h
+  """
+
+  J2000 = 0
+  JMEAN = 1
+  JTRUE = 2
+  APP = 3
+  B1950 = 4
+  B1950_VLA = 5
+  BMEAN = 6
+  BTRUE = 7
+  GALACTIC = 8
+  HADEC = 9
+  AZEL = 10
+  AZELSW = 11
+  AZELGEO = 12
+  AZELSWGEO = 13
+  JNAT = 14
+  ECLIPTIC = 15
+  MECLIPTIC = 16
+  TECLIPTIC = 17
+  SUPERGAL = 18
+  ITRF = 19
+  TOPO = 20
+  ICRS = 21
+  MERCURY = 22
+  VENUS = 23
+  MARS = 24
+  JUPITER = 25
+  SATURN = 26
+  URANUS = 27
+  NEPTUNE = 28
+  PLUTO = 29
+  SUN = 30
+  MOON = 31
+  COMET = 32
+
+class PositionMeasures(IntEnum):
+  """Enumeration of CASA Position Measure Types
+  defined at casacore/measures/Measures/MPosition.h
+  """
+
+  ITRF = 0
+  WGS84 = 1
+
+
+
 class DataType(IntEnum):
   """
   Enumeration of CASA Data Types, defined at
