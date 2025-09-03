@@ -17,7 +17,10 @@ from xarray_ms.backend.msv2.array import (
 from xarray_ms.backend.msv2.encoders import (
   CasaCoder,
   QuantityCoder,
+  SpectralCoordCoder,
   TimeCoder,
+  UVWCoder,
+  VisibilityCoder,
 )
 from xarray_ms.backend.msv2.factories.core import DatasetFactory
 from xarray_ms.backend.msv2.imputation import (
@@ -49,13 +52,13 @@ MSV4_to_MSV2_COLUMN_SCHEMAS = {
   "INTEGRATION_TIME": MSv2ColumnSchema("INTERVAL", (), np.nan, QuantityCoder),
   "TIME_CENTROID": MSv2ColumnSchema("TIME_CENTROID", (), np.nan, TimeCoder),
   "EFFECTIVE_INTEGRATION_TIME": MSv2ColumnSchema("EXPOSURE", (), np.nan, QuantityCoder),
-  "UVW": MSv2ColumnSchema("UVW", ("uvw_label",), np.nan, None),
+  "UVW": MSv2ColumnSchema("UVW", ("uvw_label",), np.nan, UVWCoder),
   "FLAG_ROW": MSv2ColumnSchema(
     "FLAG_ROW", ("frequency", "polarization"), 1, None, low_res_dims=()
   ),
   "FLAG": MSv2ColumnSchema("FLAG", ("frequency", "polarization"), 1, None),
   "VISIBILITY": MSv2ColumnSchema(
-    "DATA", ("frequency", "polarization"), np.nan + np.nan * 1j, None
+    "DATA", ("frequency", "polarization"), np.nan + np.nan * 1j, VisibilityCoder
   ),
   "WEIGHT_ROW": MSv2ColumnSchema(
     "WEIGHT",
@@ -186,7 +189,8 @@ class CorrelatedFactory(DatasetFactory):
     spw_freq_group_name = spw["FREQ_GROUP_NAME"][spw_id].as_py()
     spw_ref_freq = spw["REF_FREQUENCY"][spw_id].as_py()
     spw_meas_freq_ref = spw["MEAS_FREQ_REF"][spw_id].as_py()
-    spw_frame = FrequencyMeasures(spw_meas_freq_ref).name.upper()
+    spw_frame_name = FrequencyMeasures(spw_meas_freq_ref).name.upper()
+    spw_frame = SpectralCoordCoder.casa_to_astropy(spw_frame_name)
 
     corr_type = Polarisations.from_values(pol["CORR_TYPE"][pol_id].as_py()).to_str()
 
