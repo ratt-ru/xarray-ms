@@ -120,6 +120,54 @@ class QuantityCoder(CasaCoder):
     return Variable(dims, data, attrs, encoding, fastpath=True)
 
 
+class VisibilityCoder(CasaCoder):
+  def encode(self, variable: Variable, name: T_Name = None) -> Variable:
+    dims, data, attrs, encoding = unpack_for_decoding(variable)
+    attrs.pop("units", None)
+    attrs.pop("type", None)
+    return Variable(dims, data, attrs, encoding, fastpath=True)
+
+  def decode(self, variable: Variable, name: T_Name = None) -> Variable:
+    dims, data, attrs, encoding = unpack_for_decoding(variable)
+    attrs["type"] = "quantity"
+    attrs["units"] = "Jy"
+    return Variable(dims, data, attrs, encoding, fastpath=True)
+
+
+class UVWCoder(CasaCoder):
+  def encode(self, variable: Variable, name: T_Name = None) -> Variable:
+    dims, data, attrs, encoding = unpack_for_decoding(variable)
+    attrs.pop("type", None)
+    attrs.pop("units", None)
+    attrs.pop("scale", None)
+    attrs.pop("format", None)
+    return Variable(dims, data, attrs, encoding, fastpath=True)
+
+  def decode(self, variable: Variable, name: T_Name = None) -> Variable:
+    dims, data, attrs, encoding = unpack_for_decoding(variable)
+    measures = self.measinfo
+    assert measures["type"] == "uvw"
+    ref = measures["Ref"].upper()
+    attrs["type"] = "uvw"
+    attrs["units"] = self.quantum_unit
+
+    if ref == "J2000":
+      attrs["frame"] = "fk5"
+    elif ref == "APP":
+      attrs["frame"] = ref
+    elif ref == "ITRF":
+      # NOTE: ITRF is not a valid UVW frame
+      # but some CASA tasks will set it
+      # This should be modified in post-processing
+      # where an appropriate frame can be selected
+      # from the field_and_source dataset
+      attrs["frame"] = ref
+    else:
+      raise NotImplementedError(f"UVW frame {ref}")
+
+    return Variable(dims, data, attrs, encoding, fastpath=True)
+
+
 class TimeCoder(CasaCoder):
   """Dispatches encoding functionality to sub-classes"""
 
