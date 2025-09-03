@@ -90,6 +90,9 @@ class AntennaFactory(DatasetFactory):
         {
           "coordinate_system": "geocentric",
           "origin_object_name": "earth",
+          "type": "location",
+          "frame": "ITRS",
+          "units": "m",
         },
       ),
       "ANTENNA_DISH_DIAMETER": Variable("antenna_name", diameter, metre_attrs),
