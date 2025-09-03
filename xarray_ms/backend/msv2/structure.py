@@ -601,7 +601,7 @@ class MSv2Structure(Mapping):
       else:
         return None
 
-    with Table.from_filename(subtable_path, lockoptions="nolock") as T:
+    with Table.from_filename(subtable_path) as T:
       return T.to_arrow(columns=list(columns))
 
   def __init__(
