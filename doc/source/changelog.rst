@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Test on macos-15 (:pr:`127`)
 * Correct MSv4 schema issues (:pr:`125`)
 * Support TAI Measure encoding in time data (:pr:`124`)
 * Distinguish between time, baseline and channel irregularity (:pr:`123`)
