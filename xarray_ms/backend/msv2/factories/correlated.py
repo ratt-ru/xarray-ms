@@ -1,7 +1,7 @@
 import dataclasses
 import warnings
 from datetime import datetime, timezone
-from typing import Any, Dict, Mapping, Tuple, Type
+from typing import Any, Dict, List, Mapping, Set, Tuple, Type
 
 import numpy as np
 from xarray import Variable
@@ -32,6 +32,7 @@ from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
 from xarray_ms.backend.msv2.table_utils import table_desc
 from xarray_ms.casa_types import ColumnDesc, Polarisations
 from xarray_ms.errors import (
+  ColumnShapeImputationWarning,
   FrameConversionWarning,
   IrregularBaselineGridWarning,
   IrregularChannelGridWarning,
@@ -168,6 +169,97 @@ class CorrelatedFactory(DatasetFactory):
 
     return Variable(dims, LazilyIndexedArray(data), attrs, encoding, fastpath=True)
 
+  def secondary_variables(
+    self, processed_columns: Set[str], dim_sizes: Dict[str, int]
+  ) -> List[Tuple[str, Variable]]:
+    """Prepare any secondary, non-standard variables"""
+    import pyarrow as pa
+    import pyarrow.compute as pac
+    from arcae.lib.arrow_tables import ms_descriptor
+
+    # Ignore all standard msv2 columns, except
+    # for CORRECTED_DATA and CORRECTED_WEIGHT_SPECTRUM
+    ignored_msv2_column_set = {
+      c for c in ms_descriptor("MAIN", complete=True).keys() if not c.startswith("_")
+    }
+    ignored_msv2_column_set -= {"CORRECTED_DATA", "CORRECTED_WEIGHT_SPECTRUM"}
+    remaining_columns = set(self._ms_factory.instance.columns())
+    remaining_columns -= ignored_msv2_column_set
+    remaining_columns -= processed_columns
+
+    if len(remaining_columns) == 0:
+      return []
+
+    partition = self._structure_factory.instance[self._partition_key]
+    # Get the row shapes of all defined rows in the partition
+    partition_rows = partition.row_map.ravel()
+    partition_rows = partition_rows[partition_rows >= 0]
+    variables = []
+
+    for column in remaining_columns:
+      try:
+        pa_row_shapes = self._ms_factory.instance.row_shapes(column, (partition_rows,))
+      except pa.lib.ArrowInvalid as e:
+        if str(e).startswith(f"All rows missing in column {column}"):
+          warnings.warn(
+            f"Ignoring secondary column {column} whose rows "
+            f"were all missing in partition {self._partition_key}",
+            ColumnShapeImputationWarning,
+          )
+        continue
+
+      if isinstance(pa_row_shapes, pa.FixedSizeListArray):
+        ndim = pa_row_shapes.type.list_size
+        pa_row_shapes = pa_row_shapes.filter(pac.is_valid(pa_row_shapes))
+        pa_row_shapes = pac.list_flatten(pa_row_shapes, recursive=True)
+        row_shapes = pa_row_shapes.to_numpy().reshape(-1, ndim)
+        row_shapes = np.unique(row_shapes, axis=0)
+
+        if row_shapes.shape[0] != 1:
+          warnings.warn(
+            f"Ignoring secondary {column} without a distinct row shape {row_shapes}",
+            ColumnShapeImputationWarning,
+          )
+          continue
+
+        row_shape = tuple(row_shapes[0].tolist())
+        column_dims: Tuple[str, ...] = ()
+        sizes = dim_sizes.copy()
+
+        # Identify the obvious candidates
+        for d, dim in reversed(list(enumerate(row_shape, 1))):
+          if sizes.get("polarization", -1) == dim:
+            column_dims = ("polarization",) + column_dims
+            del sizes["polarization"]
+          elif sizes.get("frequency", -1) == dim:
+            column_dims = ("frequency",) + column_dims
+            del sizes["frequency"]
+          else:
+            column_dims += (f"{column}-{d}",)
+
+        array = MainMSv2Array(
+          self._ms_factory,
+          self._structure_factory,
+          self._partition_key,
+          column,
+          (sizes["time"], sizes["baseline_id"]) + row_shape,
+          self._main_column_descs[column].dtype,
+          np.nan,
+        )
+
+        variables.append(
+          (column, Variable(("time", "baseline_id") + column_dims, array))
+        )
+      elif isinstance(pa_row_shapes, pa.NullArray):
+        raise NotImplementedError(f"Secondary scalar column {column}")
+      else:
+        warnings.warn(
+          f"Ignoring scalar secondary column {column}", ColumnShapeImputationWarning
+        )
+        continue
+
+    return variables
+
   def get_variables(self) -> Mapping[str, Variable]:
     structure = self._structure_factory.instance
     partition = structure[self._partition_key]
@@ -222,26 +314,35 @@ class CorrelatedFactory(DatasetFactory):
         IrregularBaselineGridWarning,
       )
 
+    STANDARD_VARIABLES = (
+      "TIME_CENTROID",
+      "EFFECTIVE_INTEGRATION_TIME",
+      "UVW",
+      "VISIBILITY",
+    )
+    processed_columns = {
+      MSV4_to_MSV2_COLUMN_SCHEMAS[v].name for v in STANDARD_VARIABLES
+    }
+
     data_vars = [
-      (n, self._variable_from_column(n, dim_sizes))
-      for n in (
-        "TIME_CENTROID",
-        "EFFECTIVE_INTEGRATION_TIME",
-        "UVW",
-        "VISIBILITY",
-      )
+      (v, self._variable_from_column(v, dim_sizes)) for v in STANDARD_VARIABLES
     ]
 
     if "FLAG" in self._main_column_descs:
       data_vars.append(("FLAG", self._variable_from_column("FLAG", dim_sizes)))
+      processed_columns.add("FLAG")
     else:
       data_vars.append(("FLAG", self._variable_from_column("FLAG_ROW", dim_sizes)))
+      processed_columns.add("FLAG_ROW")
 
     if "WEIGHT_SPECTRUM" in self._main_column_descs:
       data_vars.append(("WEIGHT", self._variable_from_column("WEIGHT", dim_sizes)))
+      processed_columns.add("WEIGHT_SPECTRUM")
     else:
       data_vars.append(("WEIGHT", self._variable_from_column("WEIGHT_ROW", dim_sizes)))
+      processed_columns.add("WEIGHT_ROW")
 
+    data_vars.extend(self.secondary_variables(processed_columns, dim_sizes))
     field = maybe_impute_field_table(field, partition.field_ids)
     field_names = field.take(partition.field_ids)["NAME"].to_numpy().astype(str)
 

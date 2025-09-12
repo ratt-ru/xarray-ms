@@ -13,7 +13,6 @@ from xarray_ms.errors import (
   IrregularChannelGridWarning,
   IrregularTimeGridWarning,
 )
-from xarray_ms.testing.simulator import STANDARD_DATA_COLUMNS
 
 
 @pytest.mark.parametrize(
@@ -273,7 +272,7 @@ def _remove_weight_spectrum_add_weight(chunk_desc, data_dict):
     {
       "name": "backend.ms",
       "data_description": [(8, ["XX", "XY", "YX", "YY"]), (4, ["RR", "LL"])],
-      "table_desc": {k: v for k, v in STANDARD_DATA_COLUMNS.items() if k in {"DATA"}},
+      "table_desc": {"__remove_columns__": ["WEIGHT_SPECTRUM"]},
       "transform_data": _remove_weight_spectrum_add_weight,
     }
   ],
@@ -303,7 +302,7 @@ def test_low_resolution_read(simmed_ms):
       "name": "backend.ms",
       "nantenna": 7,
       "data_description": [(8, ["XX", "XY", "YX", "YY"]), (4, ["RR", "LL"])],
-      "table_desc": {k: v for k, v in STANDARD_DATA_COLUMNS.items() if k in {"DATA"}},
+      "table_desc": {"__remove_columns__": ["WEIGHT_SPECTRUM"]},
       "transform_data": _remove_weight_spectrum_add_weight,
     }
   ],
@@ -378,3 +377,52 @@ def test_irregular_chan_width(simmed_ms, end):
   with nullcontext() if end else pytest.warns(IrregularChannelGridWarning):
     with xarray.open_datatree(simmed_ms):
       pass
+
+
+NONSTANDARD_TABLE_DESC = {
+  "CORRELATED_DATA": {
+    "_c_order": True,
+    "comment": "CORRELATED_DATA column",
+    "dataManagerGroup": "StandardStMan",
+    "dataManagerType": "StandardStMan",
+    "keywords": {},
+    "maxlen": 0,
+    "ndim": 2,
+    "option": 0,
+    # 'shape': ...,  # Variably shaped
+    "valueType": "COMPLEX",
+  },
+  "CORRELATED_WEIGHT_SPECTRUM": {
+    "_c_order": True,
+    "comment": "CORRELATED_WEIGHT_SPECTRUM column",
+    "dataManagerGroup": "StandardStMan",
+    "dataManagerType": "StandardStMan",
+    "keywords": {},
+    "maxlen": 0,
+    "ndim": 2,
+    "option": 0,
+    # 'shape': ...,  # Variably shaped
+    "valueType": "FLOAT",
+  },
+}
+
+
+def _add_non_standard_columns(chunk_desc, data_dict):
+  data_dict["CORRELATED_DATA"] = data_dict["DATA"]
+  return data_dict
+
+
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [
+    {
+      "name": "additional_columns.ms",
+      "transform_data": _add_non_standard_columns,
+      "table_desc": NONSTANDARD_TABLE_DESC,
+    }
+  ],
+  indirect=True,
+)
+def test_additional_columns(simmed_ms):
+  with xarray.open_datatree(simmed_ms) as dt:
+    dt.load()
