@@ -21,6 +21,10 @@ class MissingMetadataWarning(UserWarning):
   """Warning raised when metadata is missing"""
 
 
+class ColumnShapeImputationWarning(UserWarning):
+  """Warning raised when a colum shape cannot be imputed"""
+
+
 class ImputedMetadataWarning(MissingMetadataWarning):
   """Warning raised when metadata is imputed
   if the original metadata is missing"""
