@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Support non-standard columns (:pr:`126`)
 * Test on macos-15 (:pr:`127`)
 * Correct MSv4 schema issues (:pr:`125`)
 * Support TAI Measure encoding in time data (:pr:`124`)
