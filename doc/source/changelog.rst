@@ -3,7 +3,7 @@
 Changelog
 =========
 
-X.Y.Z (DD-MM-YYYY)
+0.3.3 (22-09-2025)
 ------------------
 * Support non-standard columns (:pr:`126`)
 * Test on macos-15 (:pr:`127`)
