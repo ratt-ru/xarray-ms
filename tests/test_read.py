@@ -9,6 +9,7 @@ import xarray
 from numpy.testing import assert_array_equal
 
 from xarray_ms.errors import (
+  ColumnShapeImputationWarning,
   IrregularBaselineGridWarning,
   IrregularChannelGridWarning,
   IrregularTimeGridWarning,
@@ -424,5 +425,19 @@ def _add_non_standard_columns(chunk_desc, data_dict):
   indirect=True,
 )
 def test_additional_columns(simmed_ms):
-  with xarray.open_datatree(simmed_ms) as dt:
-    dt.load()
+  """CORRELATED_DATA is fully populated with data,
+  while CORRELATED_WEIGHT_SPECTRUM's rows are missing"""
+  with pytest.warns(
+    ColumnShapeImputationWarning,
+    match="Ignoring secondary column CORRELATED_WEIGHT_SPECTRUM",
+  ):
+    with xarray.open_datatree(simmed_ms) as dt:
+      dt.load()
+      node = dt["additional_columns_partition_000"]
+      assert node["CORRELATED_DATA"].dims == (
+        "time",
+        "baseline_id",
+        "frequency",
+        "polarization",
+      )
+      assert node["CORRELATED_DATA"].equals(node["VISIBILITY"])
