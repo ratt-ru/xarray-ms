@@ -132,13 +132,6 @@ jobs:
           pip install -U pip build
           python -m build --sdist --wheel
 
-      - name: Publish distribution 📦 to Test PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://test.pypi.org/legacy/
-          skip-existing: true
-        continue-on-error: true
-
       - name: Publish distribution 📦 to PyPI
         if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags')
         uses: pypa/gh-action-pypi-publish@release/v1
