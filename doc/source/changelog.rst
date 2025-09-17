@@ -3,6 +3,10 @@
 Changelog
 =========
 
+0.3.4 (22-09-2025)
+------------------
+* Add user-agent headers to urlib.request.urlopen (:pr:`129`)
+
 0.3.3 (22-09-2025)
 ------------------
 * Support non-standard columns (:pr:`126`)
