@@ -3,11 +3,15 @@
 Changelog
 =========
 
-0.3.4 (22-09-2025)
+0.3.5 (17-09-2025)
+------------------
+* Remove deploy to test-pypi (:pr:`130`)
+
+0.3.4 (17-09-2025)
 ------------------
 * Add user-agent headers to urlib.request.urlopen (:pr:`129`)
 
-0.3.3 (22-09-2025)
+0.3.3 (17-09-2025)
 ------------------
 * Support non-standard columns (:pr:`126`)
 * Test on macos-15 (:pr:`127`)
