@@ -14,6 +14,7 @@ import pytest
 
 BASE_URL = "https://downloadnrao.org"
 METADATA_URL = f"{BASE_URL}/file.download.json"
+HEADERS = {"user-agent": "Wget/1.16 (linux-gnu)"}
 ONE_MB = 1024**2
 
 
@@ -90,7 +91,8 @@ def download_item(ds_meta: DatasetMetadata, output_file: str, checksum_file: str
   storing it's checksum in ``checksum_file``"""
   with ExitStack() as stack:
     url = f"{BASE_URL}/{ds_meta.path}/{ds_meta.filename}"
-    response = stack.enter_context(urllib.request.urlopen(url))
+    request = urllib.request.Request(url, headers=HEADERS)
+    response = stack.enter_context(urllib.request.urlopen(request))
     archive = stack.enter_context(open(output_file, "wb"))
     checkfile = stack.enter_context(open(checksum_file, "w"))
     digest = sha256()
@@ -110,7 +112,8 @@ def download_item(ds_meta: DatasetMetadata, output_file: str, checksum_file: str
 
 @pytest.fixture(scope="session")
 def msv4_corpus_metadata():
-  with urllib.request.urlopen(METADATA_URL) as response:
+  request = urllib.request.Request(METADATA_URL, headers=HEADERS)
+  with urllib.request.urlopen(request) as response:
     return json.loads(response.read())
 
 
