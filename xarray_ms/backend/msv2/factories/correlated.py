@@ -172,7 +172,7 @@ class CorrelatedFactory(DatasetFactory):
   def secondary_variables(
     self, processed_columns: Set[str], dim_sizes: Dict[str, int]
   ) -> List[Tuple[str, Variable]]:
-    """Prepare any secondary, non-standard variables"""
+    """Add any secondary, non-standard variables"""
     import pyarrow as pa
     import pyarrow.compute as pac
     from arcae.lib.arrow_tables import ms_descriptor
@@ -200,12 +200,10 @@ class CorrelatedFactory(DatasetFactory):
       try:
         pa_row_shapes = self._ms_factory.instance.row_shapes(column, (partition_rows,))
       except pa.lib.ArrowInvalid as e:
-        if str(e).startswith(f"All rows missing in column {column}"):
-          warnings.warn(
-            f"Ignoring secondary column {column} whose rows "
-            f"were all missing in partition {self._partition_key}",
-            ColumnShapeImputationWarning,
-          )
+        warnings.warn(
+          f"Ignoring secondary column {column} due to {e}",
+          ColumnShapeImputationWarning,
+        )
         continue
 
       if isinstance(pa_row_shapes, pa.FixedSizeListArray):
@@ -217,7 +215,8 @@ class CorrelatedFactory(DatasetFactory):
 
         if row_shapes.shape[0] != 1:
           warnings.warn(
-            f"Ignoring secondary {column} without a distinct row shape {row_shapes}",
+            f"Ignoring secondary column {column} without "
+            f"a distinct row shape {row_shapes}",
             ColumnShapeImputationWarning,
           )
           continue
