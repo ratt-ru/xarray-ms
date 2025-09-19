@@ -36,9 +36,8 @@ def test_store(monkeypatch, simmed_ms):
   with xarray.open_datatree(simmed_ms, auto_corrs=True) as xdt:
     for node in xdt.subtree:
       if node.attrs.get("type") in CORRELATED_DATASET_TYPES:
-        assert np.all(node.UVW == 0)
-        # Non-standard columns aren't yet exposed
-        # assert np.all(node.CORRECTED == 1 + 2j)
+        np.testing.assert_array_equal(node.UVW, 0)
+        np.testing.assert_array_equal(node.CORRECTED, 2 + 3j)
         read = read or True
 
   assert read
