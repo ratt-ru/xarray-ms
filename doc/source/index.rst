@@ -13,6 +13,7 @@ xarray-ms documentation
    introduction
    install
    tutorial
+   partitioning
    roadmap
    api
    changelog

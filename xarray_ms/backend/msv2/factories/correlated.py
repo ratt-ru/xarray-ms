@@ -77,6 +77,8 @@ MSV4_to_MSV2_COLUMN_SCHEMAS = {
 
 FIXED_DIMENSION_SIZES = {"uvw_label": 3}
 
+PARTITIONING_LINK = "https://xarray-ms.readthedocs.io/en/latest/partitioning.html"
+
 
 class CorrelatedFactory(DatasetFactory):
   """Factory class for generating the main correlated dataset
@@ -309,7 +311,8 @@ class CorrelatedFactory(DatasetFactory):
         f"in the case of data variables "
         f"and flags will be set for these cases. "
         f"This situation is benign, especially if auto-corelations "
-        f"have been requested on a dataset without them.",
+        f"have been requested on a dataset without them. "
+        f"See {PARTITIONING_LINK}",
         IrregularBaselineGridWarning,
       )
 
@@ -399,7 +402,8 @@ class CorrelatedFactory(DatasetFactory):
         f"time.attrs['integration_time'] will be set to 'nan' and "
         f"(time, baseline_id) shaped TIME and INTEGRATION_TIME columns "
         f"will be added. "
-        f"{'They contain nans in missing rows.' if missing_rows else ''}",
+        f"{'They contain nans in missing rows. ' if missing_rows else ''}"
+        f"See {PARTITIONING_LINK}",
         IrregularTimeGridWarning,
       )
       time_attrs["integration_time"]["data"] = np.nan
@@ -447,7 +451,8 @@ class CorrelatedFactory(DatasetFactory):
         f"found in partition {self._partition_key}. "
         f"MSv4 cannot strictly represent this case and so "
         f"frequency.attrs['channel_width'] will be set to 'nan' and "
-        f"a (frequency,) shaped CHANNEL_WIDTH column will be added.",
+        f"a (frequency,) shaped CHANNEL_WIDTH column will be added. "
+        f"See {PARTITIONING_LINK}",
         IrregularChannelGridWarning,
       )
       freq_attrs["channel_width"]["data"] = np.nan
