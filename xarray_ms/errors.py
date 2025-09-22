@@ -2,17 +2,17 @@ class IrregularGridWarning(UserWarning):
   """Base Warning for irregular grids"""
 
 
-class IrregularTimeGridWarning(UserWarning):
+class IrregularTimeGridWarning(IrregularGridWarning):
   """Warning raised when the intervals associated
   with each timestep are not homogenous"""
 
 
-class IrregularBaselineGridWarning(UserWarning):
+class IrregularBaselineGridWarning(IrregularGridWarning):
   """Warning raised when missing baselines are
   present in the Measurement Set"""
 
 
-class IrregularChannelGridWarning(UserWarning):
+class IrregularChannelGridWarning(IrregularGridWarning):
   """Warning raised when an irregular channel grid
   is encountered"""
 
