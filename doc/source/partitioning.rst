@@ -16,8 +16,8 @@ The usefulness of this representation and ordering is that it is
 simple and easy for software to reason about.
 This is desirable as it simplifies our software.
 
-The challenge in converting from MSv2 to MSv4 is that a strategy
-must be formulated to handle irregularity in an MSv2 dataset.
+The challenge in converting from MSv2 to MSv4 is formulating a
+partitioning strategy to handle irregularity in an MSv2 dataset.
 
 Measurement Set v2.0 irregularity
 ---------------------------------
@@ -51,27 +51,31 @@ than enforcement.
 Choosing a partitioning strategy
 --------------------------------
 
-To achieve regularity in frequency, it follows that we must group or *partition*
-MSv2 measurements by at least the ``DATA_DESC_ID`` column.
-By default, measurements are also partitioned by the coarse-grained
-``OBSERVATION_ID``, ``PROCESSOR_ID`` and ``OBS_MODE`` columns.
-Within this partitions, it is possible to sort measurements by ``TIME``, ``ANTENNA1`` and
-``ANTENNA2`` and attempt to establish a grid.
+By default, MSv2 measurements are partitioned by ``DATA_DESC_ID``,
+``OBSERVATION_ID``, ``PROCESSOR_ID`` and the
+``STATE::OBS_MODE`` (via ``STATE_ID``) columns.
+For example, it follows from the previous section that,
+in order to achieve regularity in frequency, *partition*
+MSv2 measurements by the ``DATA_DESC_ID`` column.
+
+Within these partitions, measurements are sorted by
+``TIME``, ``ANTENNA1`` and ``ANTENNA2``
+then forming a grid.
 
 .. _time-partitioning:
 
 Partitioning in time
 ++++++++++++++++++++
 
-Achieving regularity in time requires more thought as it depends on
-identifying partitions of MSv2 where data is:
+Compared to frequency, achieving regularity in time requires more thought
+as it depends on identifying partitions of MSv2 where data:
 
 1. contains monotically increasing ``TIME`` (after ordering).
-2. dumped with a uniform ``INTERVAL``.
-3. Ideally contains no gaps: i.e. ``(TIME - INTERVAL)[1:] == (TIME + INTERVAL)[:-1]``.
+2. is dumped with a uniform ``INTERVAL``.
+3. ideally contains no gaps: i.e. ``(TIME - INTERVAL)[1:] == (TIME + INTERVAL)[:-1]``.
 
 For example, ``OBS_MODE`` specifying ``STATE::OBS_MODE`` via ``STATE_ID``
-is a good default partitioner as it represents a shift in the
+is a good default partitioner, as it represents a shift in the
 interferometer's mode of operation: It identifies when
 the interferometer is e.g. slewing/observing a calibrator/observing a target.
 
@@ -124,7 +128,7 @@ related to each of the three dimensions.
 +++++++++++++++++++++++++++++++++++++++++++++++++++
 
 This warning is raised when it is impossible
-to identify a unique ``INTERVAL`` value for the partition.
+to identify a unique ``INTERVAL`` value for a partition.
 This is required to assign a single ``integration_time``
 to the ``time`` coordinate.
 
@@ -132,15 +136,15 @@ The above check is relaxed slightly by excluding the last time
 in the partition (to handle averaged data) and by allowing
 a degree of jitter in the ``INTERVAL`` column.
 
-Generally this happens if the requested partitioning schema
+Generally, this happens if the requested partitioning schema
 does not satisfy the criteria in :ref:`time-partitioning`.
 The solution is to experiment with other partitioning columns.
 
 Should the user wish to continue with this case,
 ``xarray-ms`` sets ``integration_time=nan``
 and adds ``(time, baseline_id)``-shaped,
-``TIME`` and ``INTEGRATION_TIME`` columns and
-downstream applications should account for this.
+``TIME`` and ``INTEGRATION_TIME`` columns.
+Downstream applications should account for this.
 
 :class:`~xarray_ms.errors.IrregularChannelGridWarning`
 ++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -150,9 +154,10 @@ This warning is raised when it is impossible to identify a unique
 This is required to assign a single ``channel_width``
 attribute to the ``frequency`` coordinate.
 
-As a work-around ``xarray-ms`` set ``channel_width=nan``
-and adds ``(frequency,)``-shaped ``CHANNEL_WIDTH`` columns
-to handle this case.
+Should the user wish to continue with this
+case ``xarray-ms`` sets ``channel_width=nan``
+and adds ``(frequency,)``-shaped ``CHANNEL_WIDTH`` columns.
+Downstream application should account for this.
 
 :class:`~xarray_ms.errors.IrregularBaselineGridWarning`
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++
