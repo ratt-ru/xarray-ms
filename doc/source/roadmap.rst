@@ -1,7 +1,7 @@
 .. _compliance-and-roadmap:
 
 Measurement Set v4 Compliance
------------------------------
+=============================
 
 xarray-ms fully implements the loading of correlated data from
 MSv2 datasets into the Measurement Set v4.0 specification.
@@ -24,7 +24,7 @@ In particular, it loads the MSv2 dataset present in the
   This is not difficult as it involves loading in
   ``MAIN::FLOAT_DATA`` into the ``SPECTRUM`` variable and
   renaming ``FIELD_PHASE_CENTER_DIRECTION`` to
-  ``FIELD_REFERENCE_CENTER_DIRECTION"`` in the
+  ``FIELD_REFERENCE_CENTER_DIRECTION`` in the
   ``field_and_source_xds`` dataset.
 
 MSv4 specifies a set of optional datasets, of which the following are implemented:

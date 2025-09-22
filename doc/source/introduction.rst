@@ -72,5 +72,5 @@ Why xarray-ms?
 * xarray-ms uses arcae_, a high-performance backend to CASA Tables implementing
   a subset of python-casacore_'s interface.
 * Some limited support for irregular MSv2 data via padding.
-* Refer to the `MSv4 compliance and roadmap <compliance-and-roadmap_>`_
+* Refer to the :ref:`MSv4 compliance and roadmap <compliance-and-roadmap>`
   section for information on adherence to the specification.
