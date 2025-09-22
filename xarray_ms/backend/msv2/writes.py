@@ -1,6 +1,6 @@
 import warnings
 from collections import defaultdict
-from typing import Any, Dict, Iterable, Literal, Mapping, Set, Tuple
+from typing import Any, Dict, Iterable, List, Literal, Mapping, Set, Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -209,26 +209,90 @@ def msv2_store_from_dataset(ds: Dataset, region="auto") -> MSv2Store:
   )
 
 
-def datatree_to_msv2(
-  dt: DataTree,
-  variables: str | Iterable[str],
-  compute: Literal[True] = True,
-  write_inherited_coords: bool = False,
-):
+WriteVariablesT = str | Tuple[str, str] | List[str | Tuple[str, str]] | Dict[str, str]
+
+
+def promote_write_variables(variables: WriteVariablesT) -> Dict[str, str]:
+  type_except = TypeError(
+    f"{variables} should be one of:\n"
+    f"1. a str representing a variable\n"
+    f"2. a Tuple[str, str] variable -> column mapping\n"
+    f"3. A List containing either 1. or 2.\n"
+    f"4. A Dict[str, str] variable -> column mapping"
+  )
+
+  def check_var(var, on_type_error="raise"):
+    if isinstance(var, str):
+      return (var, var)
+    elif isinstance(var, tuple):
+      if not len(var) == 2 and all(isinstance(v, str) for v in var):
+        raise type_except
+
+      return (var[0], var[1])
+
+    if on_type_error == "raise":
+      raise type_except
+
+    return None
+
+  if result := check_var(variables, on_type_error="none"):
+    return result
+
+  if isinstance(variables, list):
+    return {src: dest for v in variables for src, dest in check_var(v)}
+
+  if isinstance(variables, dict):
+    for k, v in variables.items():
+      if not isinstance(k, str) or not isinstance(v, str):
+        raise type_except
+
+  raise type_except
+
+
+IGNORED_VARIABLES = [
+  # Standard MSv4 variables
+  # spectrum_xds
+  "SPECTRUM",
+  # visibility_xds
+  "VISIBILITY",
+  "FLAG",
+  "WEIGHT",
+  "UVW",
+  "EFFECTIVE_INTEGRATION_TIME",
+  "TIME_CENTROID",
+  "TIME_CENTROID_EXTRA_PRECISION",
+  "EFFECTIVE_CHANNEL_WIDTH",
+  "FREQUENCY_CENTROID",
+  # Added by Correlated Factory if grids are irregular
+  "TIME",
+  "INTEGRATION_TIME",
+  "CHANNEL_WIDTH",
+]
+
+
+def sync_msv2(dt: DataTree, variables: WriteVariablesT):
   assert isinstance(dt, DataTree)
-  list_var_names = [variables] if isinstance(variables, str) else list(variables)
-  set_var_names = set(list_var_names)
-
-  if len(set_var_names) == 0:
-    warnings.warn("Empty 'variables'")
-    return
-
   vis_datasets = [
     n for n in dt.subtree if n.attrs.get("type") in CORRELATED_DATASET_TYPES
   ]
 
   if len(vis_datasets) == 0:
     warnings.warn("No visibility datasets were found on the DataTree")
+    return
+
+  table_factory = msv2_store_from_dataset(next(iter(vis_datasets)).ds)._table_factory
+  table_desc = table_factory.instance.tabledesc()
+
+  write_var_map = promote_write_variables(variables)
+
+  if variables is None:
+    columns = table_factory.instance.columns()
+
+  list_var_names = [variables] if isinstance(variables, str) else list(variables)
+  set_var_names = set(list_var_names)
+
+  if len(set_var_names) == 0:
+    warnings.warn("Empty 'variables'")
     return
 
   shapes_and_dtypes: ShapeAndDTypeType = defaultdict(lambda: (set(), set()))
@@ -258,11 +322,38 @@ def datatree_to_msv2(
   table_factory.instance.addcols(column_descs, dminfo)
   assert set(column_descs.keys()).issubset(table_factory.instance.columns())
 
-  if compute:
-    for node in vis_datasets:
-      at_root = node is dt.root
-      ds = node.to_dataset(inherit=write_inherited_coords or at_root)
-      dataset_to_msv2(ds, list_var_names, compute)
+
+def datatree_to_msv2(
+  dt: DataTree,
+  variables: str | Iterable[str],
+  compute: Literal[True] = True,
+  write_inherited_coords: bool = False,
+):
+  assert isinstance(dt, DataTree)
+  list_var_names = [variables] if isinstance(variables, str) else list(variables)
+  set_var_names = set(list_var_names)
+
+  if len(set_var_names) == 0:
+    warnings.warn("Empty 'variables'")
+    return
+
+  if (
+    len(
+      vis_datasets := [
+        n for n in dt.subtree if n.attrs.get("type") in CORRELATED_DATASET_TYPES
+      ]
+    )
+    == 0
+  ):
+    warnings.warn(
+      "No visibility datasets were found for write on the DataTree", UserWarning
+    )
+    return
+
+  for node in vis_datasets:
+    at_root = node is dt.root
+    ds = node.to_dataset(inherit=write_inherited_coords or at_root)
+    dataset_to_msv2(ds, list_var_names, compute)
 
 
 def dataset_to_msv2(

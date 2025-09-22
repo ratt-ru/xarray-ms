@@ -6,7 +6,7 @@ import pytest
 import xarray
 from xarray import Dataset, DataTree
 
-from xarray_ms.backend.msv2.writes import dataset_to_msv2, datatree_to_msv2
+from xarray_ms.backend.msv2.writes import dataset_to_msv2, datatree_to_msv2, sync_msv2
 from xarray_ms.errors import MismatchedWriteRegion
 from xarray_ms.msv4_types import CORRELATED_DATASET_TYPES
 
@@ -15,6 +15,7 @@ from xarray_ms.msv4_types import CORRELATED_DATASET_TYPES
 def test_store(monkeypatch, simmed_ms):
   monkeypatch.setattr(Dataset, "to_msv2", dataset_to_msv2, raising=False)
   monkeypatch.setattr(DataTree, "to_msv2", datatree_to_msv2, raising=False)
+  monkeypatch.setattr(DataTree, "sync_msv2", sync_msv2, raising=False)
 
   read = written = False
 
@@ -30,6 +31,7 @@ def test_store(monkeypatch, simmed_ms):
         xdt[node.path] = DataTree(ds)
         assert len(node.encoding) > 0
 
+    xdt.sync_msv2(["CORRECTED"])
     xdt.to_msv2(["UVW", "CORRECTED"])
     written = written or True
 
@@ -43,8 +45,9 @@ def test_store(monkeypatch, simmed_ms):
   assert read
   assert written
 
-  # But we can check that CORRECTED has been written correctly
+  # We can check that CORRECTED has been written correctly
   with arcae.table(simmed_ms) as T:
+    np.testing.assert_array_equal(T.getcol("UVW"), 0)
     np.testing.assert_array_equal(T.getcol("CORRECTED"), 2 + 3j)
 
 
@@ -52,6 +55,7 @@ def test_store(monkeypatch, simmed_ms):
 def test_store_region(monkeypatch, simmed_ms):
   monkeypatch.setattr(Dataset, "to_msv2", dataset_to_msv2, raising=False)
   monkeypatch.setattr(DataTree, "to_msv2", datatree_to_msv2, raising=False)
+  monkeypatch.setattr(DataTree, "sync_msv2", sync_msv2, raising=False)
 
   region = {"time": slice(0, 2), "frequency": slice(2, 4)}
 
@@ -64,7 +68,7 @@ def test_store_region(monkeypatch, simmed_ms):
         assert len(node.encoding) > 0
 
     # Create the new MS columns
-    xdt.to_msv2(["CORRECTED"], compute=False)
+    xdt.sync_msv2("CORRECTED")
 
     for node in xdt.subtree:
       if node.attrs.get("type") in CORRELATED_DATASET_TYPES:
@@ -97,12 +101,12 @@ def test_distributed_write(simmed_ms, monkeypatch, processes, nworkers, chunks):
   monkeypatch.setattr(DataTree, "to_msv2", datatree_to_msv2, raising=False)
   da = pytest.importorskip("dask.array")
   distributed = pytest.importorskip("dask.distributed")
-  Client = distributed.Client
-  LocalCluster = distributed.LocalCluster
 
   with ExitStack() as stack:
-    cluster = stack.enter_context(LocalCluster(processes=processes, n_workers=nworkers))
-    stack.enter_context(Client(cluster))
+    cluster = stack.enter_context(
+      distributed.LocalCluster(processes=processes, n_workers=nworkers)
+    )
+    stack.enter_context(distributed.Client(cluster))
     dt = stack.enter_context(
       xarray.open_datatree(simmed_ms, chunks=chunks, auto_corrs=True)
     )
@@ -121,7 +125,6 @@ def test_distributed_write(simmed_ms, monkeypatch, processes, nworkers, chunks):
 
     for node in dt.subtree:
       if node.attrs.get("type") in CORRELATED_DATASET_TYPES:
-        print("Writing")
         node.ds.to_msv2(["CORRECTED"], compute=True)
 
   with arcae.table(simmed_ms) as T:
