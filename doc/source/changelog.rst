@@ -5,6 +5,7 @@ Changelog
 
 0.3.6 (22-09-2025)
 ------------------
+* Document Partitioning Strategies (:pr:`132`)
 * Document MSv4 compliance and roadmap (:pr:`131`)
 
 0.3.5 (17-09-2025)
