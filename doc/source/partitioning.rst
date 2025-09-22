@@ -1,3 +1,5 @@
+.. _partitioning-guide:
+
 Partitioning Guide
 ==================
 
@@ -39,11 +41,11 @@ representing the frequency centroid and bandwidth of the sample, respectively.
 The challenge that MSv2 poses to radio astronomy software in the worst case,
 is that it can represent overlapped or disjoint measurements in time and frequency
 for one or more baselines.
-Most observational data is quite well-behaved:
+However, most observational data is quite well-behaved:
 Measurements are commonly ordered by ``TIME, ANTENNA1, ANTENNA2``
 and ``CHAN_FREQ`` commonly increases monotically with
 equidistant values (i.e. ``CHAN_WIDTH`` values are uniform) but this cannot
-always be assumed:
+always be assumed.
 Any regularity in an MSv2 MS is achieved through convention rather
 than enforcement.
 
