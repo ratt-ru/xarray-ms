@@ -26,6 +26,7 @@ dev = [
 ]
 doc = [
     "sphinx>=8.0.2",
+    "sphinxcontrib-spelling",
     "pygments>=2.18.0",
     "sphinx-copybutton>=0.5.2",
     "pydata-sphinx-theme>=0.15.4",
