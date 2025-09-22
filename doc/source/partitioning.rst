@@ -7,7 +7,7 @@ Partitioning Guide
 ``time``, ``baseline_id`` and ``frequency`` coordinates where
 ``time`` and ``frequency`` have associated ``integration_time`` and
 ``channel_width`` attributes.
-In the best case, this represents monotic, equidistant values along
+In the best case, this represents monotonic, equidistant values along
 ``time`` and ``frequency`` and the standard quadratic relation between
 antennas in the case of ``baseline_id``.
 Observational data recorded directly off an interferometer and stored
