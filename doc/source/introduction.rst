@@ -72,16 +72,5 @@ Why xarray-ms?
 * xarray-ms uses arcae_, a high-performance backend to CASA Tables implementing
   a subset of python-casacore_'s interface.
 * Some limited support for irregular MSv2 data via padding.
-
-Work in Progress
-----------------
-
-The Measurement Set v4 specification is currently under active development.
-xarray-ms is also currently under active development and does not yet
-have feature parity with MSv4 or xradio_.
-Some measures information and many secondary datasets are not currently implemented.
-
-However, the most important parts of the MSv2 ``MAIN`` tables,
-as well as the ``ANTENNA``, ``POLARIZATON`` and ``SPECTRAL_WINDOW``
-sub-tables are implemented and should be sufficient
-for basic algorithm development.
+* Refer to the :ref:`MSv4 compliance and roadmap <compliance-and-roadmap>`
+  section for information on adherence to the specification.

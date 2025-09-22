@@ -13,5 +13,6 @@ xarray-ms documentation
    introduction
    install
    tutorial
+   roadmap
    api
    changelog
