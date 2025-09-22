@@ -3,7 +3,7 @@ Tutorial
 
 The `Measurement Set v2.0 <msv2-spec_>`_ is a tabular format that
 includes notions of regularity or, the shape of the data, in the MAIN table.
-This is accomplished through the ``DATA_DESC_ID`` column which defines the
+This is achieved through the ``DATA_DESC_ID`` column which defines the
 Spectral Window and Polarisation Configuration associated with each row:
 the shape of the visibility in each row of the ``DATA`` column can
 vary per-row.
