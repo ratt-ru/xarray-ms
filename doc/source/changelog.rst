@@ -3,6 +3,10 @@
 Changelog
 =========
 
+X.Y.Z (DD-MM-YYYY)
+------------------
+* Provide a physically realistic SPECTRAL_WINDOW::REF_FREQUENCY in simulated data (:pr:`133`)
+
 0.3.6 (22-09-2025)
 ------------------
 * Document Partitioning Strategies and Irregular Grid Handling (:pr:`132`)
