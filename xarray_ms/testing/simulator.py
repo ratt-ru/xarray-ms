@@ -290,11 +290,13 @@ class MSStructureSimulator:
         (nchan,) = chan_freq.shape
         index = (np.array([r]),)
         chan_width = np.full(nchan, (chan_freq[-1] - chan_freq[0]) / nchan)
+        ref_freq = chan_freq[0] + chan_freq[-1] / 2
         T.putcol("NUM_CHAN", np.array([nchan]), index=index)
         T.putcol("CHAN_FREQ", chan_freq[None, :], index=index)
         T.putcol("CHAN_WIDTH", chan_width[None, :], index=index)
         T.putcol("RESOLUTION", chan_freq[None, :], index=index)
         T.putcol("EFFECTIVE_BW", chan_width[None, :], index=index)
+        T.putcol("REF_FREQUENCY", ref_freq[None], index=index)
 
     # Partially populate the POLARIZATION table
     with Table.from_filename(f"{output_ms}::POLARIZATION", **kw) as T:
