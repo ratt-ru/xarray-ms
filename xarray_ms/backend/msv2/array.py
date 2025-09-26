@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+import re
+from contextlib import contextmanager
 from functools import reduce
 from operator import mul
-from typing import TYPE_CHECKING, Any, Callable, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Literal, Tuple
 
 import numpy as np
 from xarray.backends import BackendArray
 from xarray.core.indexing import (
   IndexingSupport,
   OuterIndexer,
+  expanded_indexer,
   explicit_indexing_adapter,
 )
+
+from xarray_ms.errors import MismatchedWriteRegion
 
 if TYPE_CHECKING:
   import numpy.typing as npt
@@ -20,17 +25,50 @@ if TYPE_CHECKING:
 
   TransformerT = Callable[[npt.NDArray], npt.NDArray]
 
+MAIN_PREFIX_DIMS = ("time", "baseline_id")
 
-def slice_length(s: npt.NDArray | slice, max_len) -> int:
+DATA_COLUMN_DIM_MISMATCH_RE = re.compile(
+  r"Number of data dimensions (?P<data>\d+) does not "
+  r"match number of column dimensions (?P<column>\d+)"
+)
+
+
+def slice_length(
+  s: npt.NDArray | slice, max_len: int, op: Literal["read", "write"]
+) -> int:
   if isinstance(s, np.ndarray):
     if s.ndim != 1:
       raise NotImplementedError("Slicing with non-1D numpy arrays")
     return len(s)
 
-  start, stop, step = s.indices(min(max_len, s.stop) if s.stop is not None else max_len)
+  clamp_op = min if op == "read" else max
+  start, stop, step = s.indices(
+    clamp_op(max_len, s.stop) if s.stop is not None else max_len
+  )
   if step != 1:
     raise NotImplementedError(f"Slicing with steps {s} other than 1 not supported")
   return stop - start
+
+
+@contextmanager
+def rethrow_arcae_exceptions():
+  import pyarrow as pa
+
+  try:
+    yield
+  except pa.lib.ArrowInvalid as e:
+    if m := re.match(DATA_COLUMN_DIM_MISMATCH_RE, str(e)):
+      data_dims = m.group("data")
+      column_dims = m.group("column")
+      raise MismatchedWriteRegion(
+        f"Attempted to write an array of dimensionality {data_dims} "
+        f"to a column of dimensionality {column_dims} "
+        f"This can occur if xarray variable dimensions "
+        f"have been selected out with integer indices. "
+        f"Prefer xarray semantics that retain dimensionality "
+        f"such as slicing during selection or sum(..., keepdims=True)"
+      )
+    raise
 
 
 class MSv2Array(BackendArray):
@@ -47,6 +85,9 @@ class MSv2Array(BackendArray):
     self.dtype = dtype
 
   def __getitem__(self, key) -> npt.NDArray:
+    raise NotImplementedError
+
+  def __setitem__(self, key, value) -> None:
     raise NotImplementedError
 
   @property
@@ -99,7 +140,7 @@ class MainMSv2Array(MSv2Array):
     self._default = default
     self._transform = transform
 
-    assert len(shape) >= 2, "(time, baseline_ids) required"
+    assert len(shape) >= len(MAIN_PREFIX_DIMS), f"{MAIN_PREFIX_DIMS} required"
 
   def __getitem__(self, key) -> npt.NDArray:
     return explicit_indexing_adapter(
@@ -118,7 +159,7 @@ class MainMSv2Array(MSv2Array):
   def _getitem(self, key) -> npt.NDArray:
     assert len(key) == len(self.shape)
     key, squeeze_axis = self.promote_integer_dims(key)
-    expected_shape = tuple(slice_length(k, s) for k, s in zip(key, self.shape))
+    expected_shape = tuple(slice_length(k, s, "read") for k, s in zip(key, self.shape))
     if reduce(mul, expected_shape, 1) == 0:
       return np.empty(expected_shape, dtype=self.dtype)
     # Map the (time, baseline_id) coordinates onto row indices
@@ -126,11 +167,23 @@ class MainMSv2Array(MSv2Array):
     row_key = (rows.ravel(),) + key[2:]
     row_shape = (rows.size,) + expected_shape[2:]
     result = np.full(row_shape, self._default, dtype=self.dtype)
-    self._table_factory.instance.getcol(self._column, row_key, result)
+    with rethrow_arcae_exceptions():
+      self._table_factory.instance.getcol(self._column, row_key, result)
     result = result.reshape(rows.shape + expected_shape[2:])
     # arcae doesn't handle squeezing out the selecting axis so we do it here.
     result = result.squeeze(axis=squeeze_axis)
     return self._transform(result) if self._transform else result
+
+  def __setitem__(self, key, value: npt.NDArray) -> None:
+    key = expanded_indexer(key, len(self.shape))
+    expected_shape = tuple(slice_length(k, s, "write") for k, s in zip(key, self.shape))
+    rows = self._structure_factory.instance[self._partition].row_map[key[:2]]
+    row_key = (rows.ravel(),) + key[2:]
+    row_shape = (rows.size,) + expected_shape[2:]
+    value = self._transform(value) if self._transform else value
+    value = value.reshape(row_shape)
+    with rethrow_arcae_exceptions():
+      self._table_factory.instance.putcol(self._column, value, index=row_key)
 
   @property
   def transform(self) -> TransformerT | None:
@@ -190,7 +243,7 @@ class BroadcastMSv2Array(MSv2Array):
     )
 
   def _getitem(self, key) -> npt.NDArray:
-    expected_shape = tuple(slice_length(k, s) for k, s in zip(key, self.shape))
+    expected_shape = tuple(slice_length(k, s, "read") for k, s in zip(key, self.shape))
     if reduce(mul, expected_shape, 1) == 0:
       return np.empty(expected_shape, dtype=self.dtype)
     low_res_key = tuple(k for i, k in zip(self._low_res_index, key) if i is not None)
