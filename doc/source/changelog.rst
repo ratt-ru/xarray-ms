@@ -5,6 +5,11 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Temporarily restrict xarray to \< 2025.9.1 (:pr:`136`) until
+   `xarray#10808 <https://github.com/pydata/xarray/issues/10808>`_
+  is resolved.
+* Restrict arcae to \< 0.4.0 to prevent
+  API-breaking write support changes (:pr:`136`)
 * Provide a physically realistic SPECTRAL_WINDOW::REF_FREQUENCY in simulated data (:pr:`133`)
 
 0.3.6 (22-09-2025)
