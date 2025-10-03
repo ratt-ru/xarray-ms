@@ -38,10 +38,10 @@ Additionally, the ``DATA_DESC_ID`` column establishes a relation to the
 ``SPECTRAL_WINDOW::CHAN_FREQ`` and ``SPECTRAL_WINDOW::CHAN_WIDTH`` columns
 representing the frequency centroid and bandwidth of the sample, respectively.
 
-The challenge that MSv2 poses to radio astronomy software in the worst case,
+The challenge that MSv2 poses to radio astronomy software in the worst case
 is that it can represent overlapped or disjoint measurements in time and frequency
 for one or more baselines.
-However, most observational data is quite well-behaved:
+However, most observational data is well-behaved:
 Measurements are commonly ordered by ``TIME, ANTENNA1, ANTENNA2``
 and ``CHAN_FREQ`` commonly increases monotically with
 equidistant values (i.e. ``CHAN_WIDTH`` values are uniform) but this cannot
@@ -56,13 +56,27 @@ Choosing a partitioning strategy
 By default, MSv2 measurements are partitioned by ``DATA_DESC_ID``,
 ``OBSERVATION_ID``, ``PROCESSOR_ID`` and the
 ``STATE::OBS_MODE`` (via ``STATE_ID``) columns.
+
+.. autodata:: xarray_ms.backend.msv2.structure.DEFAULT_PARTITION_COLUMNS
+
 For example, it follows from the previous section that,
 in order to achieve regularity in frequency, *partition*
 MSv2 measurements by the ``DATA_DESC_ID`` column.
 
+Partitioning always uses these columns, but additional columns can be
+selected if finer grained partitioning is required:
+
+.. autodata:: xarray_ms.backend.msv2.structure.VALID_PARTITION_COLUMNS
+
+Note that ``OBS_MODE`` and ``SUB_SCAN_NUMBER`` are columns in the ``STATE``
+subtable, while ``SOURCE_ID`` is a column of the ``FIELD`` subtable.
+Partitioning on these columns is achieved by joining on the ``STATE_ID``
+and ``FIELD_ID`` columns, respectively.
+
+
 Within these partitions, measurements are sorted by
 ``TIME``, ``ANTENNA1`` and ``ANTENNA2``
-then forming a grid.
+to form a grid.
 
 .. _time-partitioning:
 
@@ -132,14 +146,14 @@ related to each of the three dimensions.
 This warning is raised when it is impossible
 to identify a unique ``INTERVAL`` value for a partition.
 This is required to assign a single ``integration_time``
-to the ``time`` coordinate.
+attribute to the ``time`` coordinate.
 
 The above check is relaxed slightly by excluding the last time
 in the partition (to handle averaged data) and by allowing
 a degree of jitter in the ``INTERVAL`` column.
 
 Generally, this happens if the requested partitioning schema
-does not satisfy the criteria in :ref:`time-partitioning`.
+does not satisfy the criteria described in :ref:`time-partitioning`.
 The solution is to experiment with other partitioning columns.
 
 Should the user wish to continue with this case,

@@ -16,13 +16,13 @@ or group MSv2 rows by the same shape and configuration.
 In xarray-ms, this is accomplished by specifying a ``partition_schema``
 when opening a Measurement Set.
 Different columns may be used to define the partition.
-See :ref:`partitioning-schema` for more information.
+See :ref:`partitioning-guide` for more information.
 
 Opening a Measurement Set
 -------------------------
 
 As xarray-ms implements an `xarray backend <xarray_backend_>`_,
-it is possible to use the :func:`xarray.backends.api.open_datatree` function
+it is possible to use the :func:`xarray.open_datatree` function
 to open multiple partitions of a Measurement Set.
 
 .. ipython:: python
@@ -50,7 +50,7 @@ to open multiple partitions of a Measurement Set.
 Selecting a subset of the data
 ++++++++++++++++++++++++++++++
 
-By default, :func:`~xarray.backends.api.open_datatree` will return a datatree
+By default, :func:`~xarray.open_datatree` will return a datatree
 with a lazy view over the data.
 xarray has extensive functionality for
 `indexing and selecting data <xarray_indexing_and_selecting_>`_.
