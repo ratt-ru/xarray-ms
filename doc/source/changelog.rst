@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Documentation updates (:pr:`134`)
 * Temporarily restrict xarray to \< 2025.9.1 (:pr:`136`) until
   `xarray#10808 <https://github.com/pydata/xarray/issues/10808_>`_
   is resolved.
