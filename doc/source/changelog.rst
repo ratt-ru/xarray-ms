@@ -3,7 +3,7 @@
 Changelog
 =========
 
-X.Y.Z (DD-MM-YYYY)
+0.3.7 (03-10-2025)
 ------------------
 * Documentation updates (:pr:`134`)
 * Temporarily restrict xarray to \< 2025.9.1 (:pr:`136`) until
