@@ -6,7 +6,7 @@ authors = [{name = "Simon Perkins", email = "simon.perkins@gmail.com"}]
 readme = "README.rst"
 requires-python = ">=3.10"
 dependencies = [
-    "xarray>=2025.0",
+    "xarray>=2025.0, < 2025.9.1",
     "cacheout>=0.16.0",
     "arcae>=0.3.2",
     "typing-extensions>=4.12.2",
