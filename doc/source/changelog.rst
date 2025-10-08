@@ -3,16 +3,20 @@
 Changelog
 =========
 
+X.Y.Z (DD-MM-YYYY)
+------------------
+* Remove xarray version restriction (:pr:`137`)
+
 0.3.7 (03-10-2025)
 ------------------
 * Documentation updates (:pr:`134`)
+* Add ``MsV2EntryPoint.supports_groups=True`` (:pr:`136`)
 * Temporarily restrict xarray to \< 2025.9.1 (:pr:`136`) until
   `xarray#10808 <https://github.com/pydata/xarray/issues/10808_>`_
   is resolved.
 * Restrict arcae to \< 0.4.0 to prevent
   API-breaking write support changes (:pr:`136`)
 * Provide a physically realistic SPECTRAL_WINDOW::REF_FREQUENCY in simulated data (:pr:`133`)
-
 
 0.3.6 (22-09-2025)
 ------------------
