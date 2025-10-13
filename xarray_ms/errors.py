@@ -36,7 +36,7 @@ class FrameConversionWarning(UserWarning):
 
 
 class InvalidMeasurementSet(ValueError):
-  """Raised when the Measurement Set foreign key indexing is invalid"""
+  """Raised when the Measurement Set is invalid in some way"""
 
 
 class InvalidPartitionKey(ValueError):
