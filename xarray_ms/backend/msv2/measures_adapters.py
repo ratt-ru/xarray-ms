@@ -124,10 +124,7 @@ class SimpleMeasuresAdapter(AbstractMeasuresAdapter, ColumnInspectionMixin):
     return self.extract_msv4_type(self._column_desc)
 
   def msv2_frame(self) -> str | None:
-    if (frame := self._column_desc.keywords.get("MEASINFO", {}).get("Ref")) is None:
-      return None
-
-    return frame
+    return self._column_desc.keywords.get("MEASINFO", {}).get("Ref")
 
 
 class ArrowTableMeasuresAdapter(AbstractMeasuresAdapter, ColumnInspectionMixin):
