@@ -9,8 +9,8 @@ import numpy as np
 import numpy.typing as npt
 from xarray import Variable
 
-from xarray_ms.backend.msv2.encoders import UTCCoder
-from xarray_ms.casa_types import ColumnDesc, DirectionMeasures
+from xarray_ms.backend.msv2.measures_encoders import CasaCoderFactory
+from xarray_ms.casa_types import DirectionMeasures
 from xarray_ms.errors import ImputedMetadataWarning
 
 if TYPE_CHECKING:
@@ -181,7 +181,7 @@ def maybe_impute_observation_table(
   # Create a minimal table descriptor
   table_desc = {
     "RELEASE_DATE": {
-      "option": 0,
+      "option": "0",
       "valueType": "DOUBLE",
       "keywords": {
         "QuantumUnits": ["s"],
@@ -190,10 +190,10 @@ def maybe_impute_observation_table(
     }
   }
 
-  release_date_coldesc = ColumnDesc.from_descriptor("RELEASE_DATE", table_desc)
+  time_coder = CasaCoderFactory.from_table_desc(table_desc).create("RELEASE_DATE")
   dt = datetime(1978, 10, 9, 8, 0, 0, tzinfo=timezone.utc).timestamp()
   release_date_var = Variable("time", [dt] * (result + 1))
-  release_date_var = UTCCoder(release_date_coldesc).encode(release_date_var)
+  release_date_var = time_coder.encode(release_date_var)
   unknown = np.array(["unknown"] * (result + 1), dtype=object)
 
   table = pa.Table.from_pydict(

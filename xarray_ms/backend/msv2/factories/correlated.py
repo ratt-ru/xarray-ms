@@ -1,7 +1,7 @@
 import dataclasses
 import warnings
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Mapping, Set, Tuple, Type
+from typing import Any, Collection, Dict, List, Mapping, Set, Tuple
 
 import numpy as np
 from xarray import Variable
@@ -14,22 +14,18 @@ from xarray_ms.backend.msv2.array import (
   MainMSv2Array,
   MSv2Array,
 )
-from xarray_ms.backend.msv2.encoders import (
-  CasaCoder,
-  QuantityCoder,
-  SpectralCoordCoder,
-  TimeCoder,
-  UVWCoder,
-  VisibilityCoder,
-)
 from xarray_ms.backend.msv2.factories.core import DatasetFactory
 from xarray_ms.backend.msv2.imputation import (
   maybe_impute_field_table,
   maybe_impute_observation_table,
   maybe_impute_processor_table,
 )
+from xarray_ms.backend.msv2.measures_encoders import (
+  BaseCasaCoder,
+  CasaCoderFactory,
+  VisiblityCoder,
+)
 from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
-from xarray_ms.backend.msv2.table_utils import table_desc
 from xarray_ms.casa_types import ColumnDesc, Polarisations
 from xarray_ms.errors import (
   ColumnShapeImputationWarning,
@@ -46,22 +42,22 @@ class MSv2ColumnSchema:
   name: str
   dims: Tuple[str, ...]
   default: Any = None
-  coder: Type[CasaCoder] | None = None
+  coder: BaseCasaCoder | None = None
   low_res_dims: Tuple[str, ...] | None = None
 
 
 MSV4_to_MSV2_COLUMN_SCHEMAS = {
-  "TIME": MSv2ColumnSchema("TIME", (), np.nan, TimeCoder),
-  "INTEGRATION_TIME": MSv2ColumnSchema("INTERVAL", (), np.nan, QuantityCoder),
-  "TIME_CENTROID": MSv2ColumnSchema("TIME_CENTROID", (), np.nan, TimeCoder),
-  "EFFECTIVE_INTEGRATION_TIME": MSv2ColumnSchema("EXPOSURE", (), np.nan, QuantityCoder),
-  "UVW": MSv2ColumnSchema("UVW", ("uvw_label",), np.nan, UVWCoder),
+  "TIME": MSv2ColumnSchema("TIME", (), np.nan, None),
+  "INTEGRATION_TIME": MSv2ColumnSchema("INTERVAL", (), np.nan, None),
+  "TIME_CENTROID": MSv2ColumnSchema("TIME_CENTROID", (), np.nan, None),
+  "EFFECTIVE_INTEGRATION_TIME": MSv2ColumnSchema("EXPOSURE", (), np.nan, None),
+  "UVW": MSv2ColumnSchema("UVW", ("uvw_label",), np.nan, None),
   "FLAG_ROW": MSv2ColumnSchema(
     "FLAG_ROW", ("frequency", "polarization"), 1, None, low_res_dims=()
   ),
   "FLAG": MSv2ColumnSchema("FLAG", ("frequency", "polarization"), 1, None),
   "VISIBILITY": MSv2ColumnSchema(
-    "DATA", ("frequency", "polarization"), np.nan + np.nan * 1j, VisibilityCoder
+    "DATA", ("frequency", "polarization"), np.nan + np.nan * 1j, VisiblityCoder()
   ),
   "WEIGHT_ROW": MSv2ColumnSchema(
     "WEIGHT",
@@ -90,7 +86,8 @@ class CorrelatedFactory(DatasetFactory):
   _spw_factory: Multiton
   _pol_factory: Multiton
   _obs_factory: Multiton
-  _column_descs: Dict[str, ColumnDesc]
+  _main_table_desc: Dict[str, Collection[str]]
+  _coder_factory: CasaCoderFactory
 
   def __init__(
     self,
@@ -105,10 +102,8 @@ class CorrelatedFactory(DatasetFactory):
     self._ms_factory = ms_factory
 
     ms = ms_factory.instance
-    ms_table_desc = ms.tabledesc()
-    self._main_column_descs = {
-      c: ColumnDesc.from_descriptor(c, ms_table_desc) for c in ms.columns()
-    }
+    self._main_table_desc = ms.tabledesc()
+    self._coder_factory = CasaCoderFactory.from_table_desc(self._main_table_desc)
 
   def _variable_from_column(self, column: str, dim_sizes: Dict[str, int]) -> Variable:
     """Derive an xarray Variable from the MSv2 column descriptor and schemas"""
@@ -118,7 +113,7 @@ class CorrelatedFactory(DatasetFactory):
       raise KeyError(f"Column {column} was not present")
 
     try:
-      column_desc = self._main_column_descs[schema.name]
+      column_desc = ColumnDesc.from_descriptor(schema.name, self._main_table_desc)
     except KeyError:
       raise KeyError(f"No Column Descriptor exist for {schema.name}")
 
@@ -159,11 +154,11 @@ class CorrelatedFactory(DatasetFactory):
 
     var = Variable(dims, array, fastpath=True)
 
-    # Apply any measures encoding
-    if schema.coder:
-      coder = schema.coder(self._main_column_descs[schema.name])
-      var = coder.decode(var)
+    # Apply any given measures encoding or create a default measures encoder
+    if (coder := schema.coder) is None:
+      coder = self._coder_factory.create(schema.name)
 
+    var = coder.decode(var)
     dims, data, attrs, encoding = unpack_for_decoding(var)
 
     if self._preferred_chunks:
@@ -238,18 +233,21 @@ class CorrelatedFactory(DatasetFactory):
           else:
             column_dims += (f"{column}-{d}",)
 
+        column_desc = ColumnDesc.from_descriptor(column, self._main_table_desc)
+        coder = self._coder_factory.create(column)
+
         array = MainMSv2Array(
           self._ms_factory,
           self._structure_factory,
           self._partition_key,
           column,
           (sizes["time"], sizes["baseline_id"]) + row_shape,
-          self._main_column_descs[column].dtype,
+          column_desc.dtype,
           np.nan,
         )
 
         variables.append(
-          (column, Variable(("time", "baseline_id") + column_dims, array))
+          (column, coder.decode(Variable(("time", "baseline_id") + column_dims, array)))
         )
       elif isinstance(pa_row_shapes, pa.NullArray):
         raise NotImplementedError(f"Secondary scalar column {column}")
@@ -274,23 +272,20 @@ class CorrelatedFactory(DatasetFactory):
 
     spw_id = partition.spw_id
     pol_id = partition.pol_id
-    spw = self._subtable_factories["SPECTRAL_WINDOW"].instance
-    pol = self._subtable_factories["POLARIZATION"].instance
+    spw = self._subtable_factories["SPECTRAL_WINDOW"].instance.take([spw_id])
+    pol = self._subtable_factories["POLARIZATION"].instance.take([pol_id])
     field = self._subtable_factories["FIELD"].instance
 
-    spw_table_desc = table_desc(spw)
-    chan_freq_coldesc = ColumnDesc.from_descriptor("CHAN_FREQ", spw_table_desc)
+    spw_coder_factory = CasaCoderFactory.from_arrow_table(spw)
+    chan_freq = spw["CHAN_FREQ"][0].as_py()
+    chan_width = spw["CHAN_WIDTH"][0].as_py()
+    spw_name = spw["NAME"][0].as_py()
+    spw_freq_group_name = spw["FREQ_GROUP_NAME"][0].as_py()
+    spw_ref_freq = spw["REF_FREQUENCY"][0].as_py()
+    freq_coder = spw_coder_factory.create("CHAN_FREQ")
+    ref_freq_coder = spw_coder_factory.create("REF_FREQUENCY")
 
-    chan_freq = spw["CHAN_FREQ"][spw_id].as_py()
-    chan_width = spw["CHAN_WIDTH"][spw_id].as_py()
-    spw_name = spw["NAME"][spw_id].as_py()
-    spw_freq_group_name = spw["FREQ_GROUP_NAME"][spw_id].as_py()
-    spw_ref_freq = spw["REF_FREQUENCY"][spw_id].as_py()
-    freq_coder = SpectralCoordCoder(chan_freq_coldesc).with_var_ref_cols(
-      lambda c: spw[c].take([spw_id]).to_numpy()
-    )
-
-    corr_type = Polarisations.from_values(pol["CORR_TYPE"][pol_id].as_py()).to_str()
+    corr_type = Polarisations.from_values(pol["CORR_TYPE"][0].as_py()).to_str()
 
     dim_sizes = {
       "time": len(partition.time),
@@ -330,14 +325,14 @@ class CorrelatedFactory(DatasetFactory):
       (v, self._variable_from_column(v, dim_sizes)) for v in STANDARD_VARIABLES
     ]
 
-    if "FLAG" in self._main_column_descs:
+    if "FLAG" in self._main_table_desc:
       data_vars.append(("FLAG", self._variable_from_column("FLAG", dim_sizes)))
       processed_columns.add("FLAG")
     else:
       data_vars.append(("FLAG", self._variable_from_column("FLAG_ROW", dim_sizes)))
       processed_columns.add("FLAG_ROW")
 
-    if "WEIGHT_SPECTRUM" in self._main_column_descs:
+    if "WEIGHT_SPECTRUM" in self._main_table_desc:
       data_vars.append(("WEIGHT", self._variable_from_column("WEIGHT", dim_sizes)))
       processed_columns.add("WEIGHT_SPECTRUM")
     else:
@@ -378,7 +373,7 @@ class CorrelatedFactory(DatasetFactory):
     # Add time coordinate attributes
     # The coder will create most of them from the measures,
     # but we also need to manually add the integration_time
-    time_coder = TimeCoder(self._main_column_descs["TIME"])
+    time_coder = self._coder_factory.create("TIME")
 
     time_attrs: Dict[str, Any] = {
       "integration_time": {"attrs": {"type": "quantity", "units": "s"}, "data": 0.0}
@@ -421,13 +416,15 @@ class CorrelatedFactory(DatasetFactory):
       ("time", time_coder.decode(Variable("time", partition.time, time_attrs)))
     )
 
-    # Add frequency coordinate
+    # Add frequency coordinate and attributes
     frequency = freq_coder.decode(Variable("frequency", chan_freq))
+    ref_freq = ref_freq_coder.decode(Variable((), spw_ref_freq))
+
     freq_attrs: Dict[str, Any | Dict[str, Any]] = {
       "spectral_window_name": spw_name or "<Unknown>",
       "reference_frequency": {
-        "attrs": frequency.attrs.copy(),
-        "data": spw_ref_freq,
+        "attrs": ref_freq.attrs,
+        "data": ref_freq.values.item(),
       },
       "channel_width": {
         "attrs": {"type": "quantity", "units": "Hz"},
@@ -456,7 +453,10 @@ class CorrelatedFactory(DatasetFactory):
         IrregularChannelGridWarning,
       )
       freq_attrs["channel_width"]["data"] = np.nan
-      data_vars.append(("CHANNEL_WIDTH", Variable("frequency", chan_width)))
+      chan_width_coder = spw_coder_factory.create("CHAN_WIDTH")
+      data_vars.append(
+        ("CHANNEL_WIDTH", chan_width_coder.decode(Variable("frequency", chan_width)))
+      )
 
     frequency.attrs.update(freq_attrs)
     coordinates.append(("frequency", frequency))
@@ -466,25 +466,24 @@ class CorrelatedFactory(DatasetFactory):
   def _observation_info(self) -> Dict[str, Any]:
     partition = self._structure_factory.instance[self._partition_key]
     obs = self._subtable_factories["OBSERVATION"].instance
-    obs = maybe_impute_observation_table(obs, [partition.obs_id])
-    time_coder = TimeCoder(ColumnDesc.from_descriptor("RELEASE_DATE", table_desc(obs)))
-    if (release_date_ref := time_coder.measinfo.get("Ref")) != "UTC":
+    obs = maybe_impute_observation_table(obs, [partition.obs_id]).take(
+      [partition.obs_id]
+    )
+    release_date_coder = CasaCoderFactory.from_arrow_table(obs).create("RELEASE_DATE")
+    decoded_time = release_date_coder.decode(Variable("o", obs["RELEASE_DATE"]))
+    if (frame := decoded_time.attrs["scale"]) != "utc":
       warnings.warn(
-        f"OBSERVATION::RELEASE_DATE Ref {release_date_ref} != UTC "
+        f"OBSERVATION::RELEASE_DATE Ref {frame} != utc "
         f"This error is benign if the accuracy of the above column ",
         FrameConversionWarning,
       )
-
-    decoded_time = time_coder.decode(
-      Variable("o", obs["RELEASE_DATE"].take([partition.obs_id]))
-    )
     utc_seconds = decoded_time.values[0]
 
     return dict(
       sorted(
         {
-          "observer": [obs["OBSERVER"][partition.obs_id].as_py()],
-          "project": obs["PROJECT"][partition.obs_id].as_py(),
+          "observer": [obs["OBSERVER"][0].as_py()],
+          "project": obs["PROJECT"][0].as_py(),
           "intents": [partition.obs_mode],
           "release_date": datetime.fromtimestamp(utc_seconds, timezone.utc).isoformat(),
         }.items()

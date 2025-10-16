@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import typing
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Collection, Dict, Sequence
+from typing import TYPE_CHECKING, Any, Collection, Dict, Literal, Sequence, overload
 
 import numpy as np
 
-from xarray_ms.backend.msv2.table_utils import table_desc
+from xarray_ms.backend.msv2.table_utils import extract_table_desc as extract_table_desc
 from xarray_ms.casa_types import (
   ColumnDesc,
   DirectionMeasures,
@@ -17,6 +18,8 @@ from xarray_ms.casa_types import (
 )
 from xarray_ms.errors import (
   InvalidMeasurementSet,
+  MissingMeasuresInfo,
+  MissingQuantumUnits,
   MultipleQuantumUnits,
   PartitioningError,
 )
@@ -41,38 +44,142 @@ CASA_MEASURES_MAP = {
 }
 
 
+def raise_invalid_on_missing(on_missing: Literal["none", "raise"]):
+  if on_missing not in {"none", "raise"}:
+    raise ValueError(f"'on_missing' {on_missing} not in {{'none', 'raise'}}")
+
+
 class ColumnInspectionMixin:
   """Adds common methods for extracting measure information from
   Column Descriptors"""
 
-  def extract_quantum_unit(self, column_desc: ColumnDesc) -> str | None:
+  @overload
+  def extract_measinfo(
+    self, column_desc: ColumnDesc, on_missing: Literal["none"]
+  ) -> Dict[str, Collection[str]] | None: ...
+
+  @overload
+  def extract_measinfo(
+    self, column_desc: ColumnDesc, on_missing: Literal["raise"]
+  ) -> Dict[str, Collection[str]]: ...
+
+  def extract_measinfo(
+    self, column_desc: ColumnDesc, on_missing: Literal["none", "raise"] = "none"
+  ) -> Dict[str, Collection[str]] | None:
+    """Extracts the MEASINFO keyword from the column descriptor, if present"""
+    try:
+      return column_desc.keywords["MEASINFO"]
+    except KeyError:
+      if on_missing == "none":
+        return None
+      elif on_missing == "raise":
+        raise MissingMeasuresInfo(
+          f"{column_desc.name} keywords does not contain MEASINFO"
+        )
+      raise_invalid_on_missing(on_missing)
+
+  @overload
+  def extract_quantum_unit(
+    self, column_desc: ColumnDesc, on_missing: Literal["none"]
+  ) -> str | None: ...
+
+  @overload
+  def extract_quantum_unit(
+    self, column_desc: ColumnDesc, on_missing: Literal["raise"]
+  ) -> str: ...
+
+  def extract_quantum_unit(
+    self, column_desc: ColumnDesc, on_missing: Literal["none", "raise"] = "none"
+  ) -> str | None:
     """Attempts to extract a single quantum unit from the keywords
-    of the column descriptor"""
-    if (quantum_units := column_desc.keywords.get("QuantumUnits")) is None:
-      return None
+    of the column descriptor.
+
+    if multiple QuantumUnits values are present then they must all be the same
+    """
+    try:
+      quantum_units = column_desc.keywords["QuantumUnits"]
+    except KeyError:
+      if on_missing == "none":
+        return None
+      elif on_missing == "raise":
+        raise MissingQuantumUnits(
+          f"QuantumUnits is not present in {column_desc.name} keywords"
+        )
+      raise_invalid_on_missing(on_missing)
 
     if len(quantum_unit_set := set(quantum_units)) == 1:
       return next(iter(quantum_unit_set))
 
     if len(quantum_unit_set) == 0:
-      return None
+      if on_missing == "none":
+        return None
+      elif on_missing == "raise":
+        raise MissingQuantumUnits(f"Empty QuantumUnits in {column_desc.name} keywords")
+      raise_invalid_on_missing(on_missing)
 
     raise MultipleQuantumUnits(
-      f"Multiple quantum units {quantum_units} found "
-      f"for column {getattr(self, 'column_name', '<unknown>')}. "
+      f"Multiple quantum units {list(quantum_unit_set)} found "
+      f"for column {column_desc.name}. "
       f"MSv4 doesn't strictly cater for this unusual case, "
       f"but please log an issue for it"
     )
 
-  def extract_msv2_type(self, column_desc: ColumnDesc) -> str | None:
+  @overload
+  def extract_msv2_type(
+    self, column_desc: ColumnDesc, on_missing: Literal["none"]
+  ) -> str | None: ...
+
+  @overload
+  def extract_msv2_type(
+    self, column_desc: ColumnDesc, on_missing: Literal["raise"]
+  ) -> str: ...
+
+  def extract_msv2_type(
+    self, column_desc: ColumnDesc, on_missing: Literal["none", "raise"] = "none"
+  ) -> str | None:
     """Returns the msv2 measures type, derived from the 'type' keyword
     in the column descriptor keywords"""
-    return column_desc.keywords.get("MEASINFO", {}).get("type")
+    try:
+      if (
+        measinfo := self.extract_measinfo(column_desc, on_missing=on_missing)
+      ) is None:
+        return None
+    except MissingMeasuresInfo:
+      if on_missing == "none":
+        return None
+      elif on_missing == "raise":
+        raise
+      raise_invalid_on_missing(on_missing)
 
-  def extract_msv4_type(self, column_desc: ColumnDesc) -> str | None:
+    try:
+      return typing.cast(str, measinfo["type"])
+    except KeyError:
+      if on_missing == "none":
+        return None
+      elif on_missing == "raise":
+        raise MissingMeasuresInfo(
+          f"'type' was not present in {column_desc.name} MEASINFO {measinfo}"
+        )
+      raise_invalid_on_missing(on_missing)
+
+  @overload
+  def extract_msv4_type(
+    self, column_desc: ColumnDesc, on_missing: Literal["none"]
+  ) -> str | None: ...
+
+  @overload
+  def extract_msv4_type(
+    self, column_desc: ColumnDesc, on_missing: Literal["raise"]
+  ) -> str: ...
+
+  def extract_msv4_type(
+    self, column_desc: ColumnDesc, on_missing: Literal["none", "raise"] = "none"
+  ) -> str | None:
     """Returns the msv4 measures type, derived from the 'type' keyword
     in the column descriptor keywords"""
-    if (casa_type := self.extract_msv2_type(column_desc)) is None:
+    if (
+      casa_type := self.extract_msv2_type(column_desc, on_missing=on_missing)
+    ) is None:
       return None
 
     try:
@@ -82,29 +189,79 @@ class ColumnInspectionMixin:
 
 
 class AbstractMeasuresAdapter(ABC):
+  """Abstract base class presenting a uniform interface
+  for extracting measures information from an underlying data source
+
+  Five methods should be implemented:
+
+  - ``column_name()``: Returns the column for this measures
+  - ``msv2_type()``: Returns the MSv2 measures type.
+    For example, ``epoch``, ``frequency`` or ``location``.
+  - ``msv2_frame()``: Returns the MSv2 measures frame associated with a measures type.
+    For example ``UTC`` or ``TAI`` for a ``epoch`` measures.
+  - ``msv4_frame()``: Returns the MSv4 measures type. For example
+    ``time`` and ``spectral_coord`` if the MSv2 type is
+    ``epoch`` and ``frequency`` respectively,
+  - ``quantum_unit()``: Returns a single quantum unit associated with the measure.
+
+
+  """
+
   @property
   @abstractmethod
   def column_name(self) -> str:
+    """Returns the column name associated with this measures"""
+    raise NotImplementedError
+
+  @overload
+  def msv2_frame(self, on_missing: Literal["none"]) -> str | None: ...
+
+  @overload
+  def msv2_frame(self, on_missing: Literal["raise"]) -> str: ...
+
+  @abstractmethod
+  def msv2_frame(self, on_missing: Literal["none", "raise"] = "none") -> str | None:
+    """Returns the MSv2 Measures frame.
+
+    This corresponds to ``MEASINFO['Ref']`` or possibly ``MEASINFO['VarRefCol']``"""
     raise NotImplementedError
 
   @abstractmethod
-  def msv2_frame(self) -> str | None:
+  def msv2_type(self, on_missing: Literal["none", "raise"] = "none") -> str | None:
+    """Returns the MSv2 Measures type.
+
+    This corresponds to ``MEASINFO['type']`` in the column descriptor keywords"""
     raise NotImplementedError
 
   @abstractmethod
-  def msv2_type(self) -> str | None:
+  def msv4_type(self, on_missing: Literal["none", "raise"] = "none") -> str | None:
+    """Return the MSv4 Measures type"""
     raise NotImplementedError
 
   @abstractmethod
-  def msv4_type(self) -> str | None:
+  def quantum_unit(self, on_missing: Literal["none", "raise"] = "none") -> str | None:
+    """Returns a single unit associated with this measure.
+
+    This corresponds to ``MEASINFO['QuantumUnits']`` in the
+    column descriptor keywords"""
     raise NotImplementedError
 
-  @abstractmethod
-  def quantum_unit(self) -> str | None:
-    raise NotImplementedError
 
+class ColumnDescMeasuresAdapter(AbstractMeasuresAdapter, ColumnInspectionMixin):
+  """Measures Adapter extracting information from a Column Descriptor only
 
-class SimpleMeasuresAdapter(AbstractMeasuresAdapter, ColumnInspectionMixin):
+  This adapter only extracts information from a MEASINFO that contains no indirection.
+  This means that the Column Descriptor is sufficient to define measure completely.
+  More concrently the frame should be constant per row
+  (i.e. ``MEASINFO["Ref"]`` is defined)
+
+  More generally, MEASINFO can contain indirection that
+  refers to other columns in the table in cases where the frame,
+  offsets and values vary per row.
+  For example, ``MEASINFO["VarRefCol"]`` refers to a table column
+  which defines the per-row frame codes.
+  """
+
   _column_desc: ColumnDesc
 
   def __init__(self, column_desc: ColumnDesc):
@@ -114,46 +271,73 @@ class SimpleMeasuresAdapter(AbstractMeasuresAdapter, ColumnInspectionMixin):
   def column_name(self) -> str:
     return self._column_desc.name
 
-  def quantum_unit(self) -> str | None:
-    return self.extract_quantum_unit(self._column_desc)
+  def quantum_unit(self, on_missing: Literal["none", "raise"] = "none") -> str | None:
+    return self.extract_quantum_unit(self._column_desc, on_missing=on_missing)
 
-  def msv2_type(self):
-    return self.extract_msv2_type(self._column_desc)
+  def msv2_type(self, on_missing: Literal["none", "raise"] = "none"):
+    return self.extract_msv2_type(self._column_desc, on_missing=on_missing)
 
-  def msv4_type(self) -> str | None:
-    return self.extract_msv4_type(self._column_desc)
+  def msv4_type(self, on_missing: Literal["none", "raise"] = "none") -> str | None:
+    return self.extract_msv4_type(self._column_desc, on_missing=on_missing)
 
-  def msv2_frame(self) -> str | None:
-    return self._column_desc.keywords.get("MEASINFO", {}).get("Ref")
+  @overload
+  def msv2_frame(self, on_missing: Literal["none"]) -> str | None: ...
+
+  @overload
+  def msv2_frame(self, on_missing: Literal["raise"]) -> str: ...
+
+  def msv2_frame(self, on_missing: Literal["none", "raise"] = "none") -> str | None:
+    if (
+      measinfo := self.extract_measinfo(self._column_desc, on_missing=on_missing)
+    ) is None:
+      return None
+
+    try:
+      return typing.cast(str, measinfo["Ref"])
+    except KeyError:
+      if on_missing == "none":
+        return None
+      elif on_missing == "raise":
+        raise MissingMeasuresInfo(
+          f"'Ref' was not present in {self.column_name} MEASINFO {measinfo}"
+        )
+      raise_invalid_on_missing(on_missing)
 
 
-class ArrowTableMeasuresAdapter(AbstractMeasuresAdapter, ColumnInspectionMixin):
+class ArrowTableMeasuresAdapter(ColumnDescMeasuresAdapter, ColumnInspectionMixin):
+  """Measures adapter extracting measures information from an Arrow table.
+
+  This adapter can handle indirection in the MEASINFO of a column"""
+
   _table: pa.Table
-  _table_desc: Dict[str, Collection[str]]
-  _column_desc: ColumnDesc
+  _table_desc: Dict[str, Any]
 
-  def __init__(self, column_name: str, table: pa.Table):
+  def __init__(
+    self,
+    column_name: str,
+    table: pa.Table,
+    table_desc: Dict[str, Any] | None = None,
+  ):
     self._table = table
-    self._table_desc = td = table_desc(table)
-    self._column_desc = ColumnDesc.from_descriptor(column_name, td)
+    self._table_desc = extract_table_desc(table) if table_desc is None else table_desc
+    self._column_desc = ColumnDesc.from_descriptor(column_name, self._table_desc)
+    super().__init__(self._column_desc)
 
-  @property
-  def column_name(self) -> str:
-    return self._column_desc.name
+  @overload
+  def msv2_frame(self, on_missing: Literal["none"]) -> str | None: ...
 
-  def quantum_unit(self) -> str | None:
-    return self.extract_quantum_unit(self._column_desc)
+  @overload
+  def msv2_frame(self, on_missing: Literal["raise"]) -> str: ...
 
-  def msv2_type(self):
-    return self.extract_msv2_type(self._column_desc)
+  def msv2_frame(self, on_missing: Literal["none", "raise"] = "none") -> str | None:
+    if (
+      measinfo := self.extract_measinfo(self._column_desc, on_missing=on_missing)
+    ) is None:
+      return None
 
-  def msv4_type(self) -> str | None:
-    return self.extract_msv4_type(self._column_desc)
-
-  def msv2_frame(self) -> str | None:
-    measinfo = self._column_desc.keywords.get("MEASINFO", {})
-
-    if not isinstance(measure_type := measinfo.get("type"), str):
+    if (
+      measure_type := self.extract_msv2_type(self._column_desc, on_missing=on_missing)
+    ) is None:
       return None
 
     try:
@@ -197,8 +381,38 @@ class ArrowTableMeasuresAdapter(AbstractMeasuresAdapter, ColumnInspectionMixin):
 
       return next(iter(frames))
 
-    # There's a single Reference frame
-    elif isinstance(frame := measinfo.get("Ref"), str):
-      return frame
+    # Otherwise defer to "Ref" in the column descriptor
+    return super().msv2_frame(on_missing=on_missing)
+
+
+class MeasuresAdapterFactory:
+  _table: pa.Table | None
+  _table_desc: Dict[str, Collection[str]] | None
+
+  def __init__(
+    self,
+    table: pa.Table | None = None,
+    table_desc: Dict[str, Any] | None = None,
+  ):
+    self._table = table
+    self._table_desc = table_desc
+
+  @staticmethod
+  def from_arrow_table(table: pa.Table):
+    return MeasuresAdapterFactory(table=table, table_desc=extract_table_desc(table))
+
+  @staticmethod
+  def from_table_desc(table_desc: Dict[str, Any]):
+    return MeasuresAdapterFactory(table_desc=table_desc)
+
+  def create(self, column_name: str) -> AbstractMeasuresAdapter:
+    if self._table is not None:
+      return ArrowTableMeasuresAdapter(column_name, self._table, self._table_desc)
+    elif self._table_desc is not None:
+      return ColumnDescMeasuresAdapter(
+        ColumnDesc.from_descriptor(column_name, self._table_desc)
+      )
     else:
-      return None
+      raise ValueError(
+        "MeasuresAdapterFactory was not configured with a column or table source"
+      )

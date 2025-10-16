@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import warnings
 from datetime import datetime
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING, Any, Dict
 
 import numpy as np
 import numpy.typing as npt
+import pyarrow as pa
 from xarray import Variable
 from xarray.coding.variables import (
   VariableCoder,
@@ -14,7 +15,10 @@ from xarray.coding.variables import (
 )
 
 from xarray_ms.backend.msv2.array import MSv2Array
-from xarray_ms.backend.msv2.measures_adapters import AbstractMeasuresAdapter
+from xarray_ms.backend.msv2.measures_adapters import (
+  AbstractMeasuresAdapter,
+  MeasuresAdapterFactory,
+)
 from xarray_ms.errors import FrameConversionWarning
 
 if TYPE_CHECKING:
@@ -34,36 +38,147 @@ def msv2_to_msv4_frame(frame_map: Dict[str, str], frame: str) -> str:
     return frame
 
 
-class BaseCasaCoder(VariableCoder):
-  _measures: AbstractMeasuresAdapter
+class CasaCoderFactory:
+  """Factory for automatically creating CasaCoderProxy objects"""
+
+  __slots__ = "_measures_adapter_factory"
+  _measures_adapter_factory: MeasuresAdapterFactory
+
+  def __init__(self, measures_adapter_factory: MeasuresAdapterFactory):
+    self._measures_adapter_factory = measures_adapter_factory
+
+  @staticmethod
+  def from_table_desc(table_desc: Dict[str, Any]):
+    return CasaCoderFactory(MeasuresAdapterFactory.from_table_desc(table_desc))
+
+  @staticmethod
+  def from_arrow_table(table: pa.Table):
+    return CasaCoderFactory(MeasuresAdapterFactory.from_arrow_table(table))
+
+  def create(self, column_name: str) -> CasaCoderProxy:
+    return CasaCoderProxy(self._measures_adapter_factory.create(column_name))
+
+
+class CasaCoderProxy(VariableCoder):
+  """Proxy an VariableCoder implementation depending
+  on the type of measures discovered in the supplied adapter"""
+
+  __slots__ = "_impl"
+  _impl: VariableCoder
 
   def __init__(self, measures_adapter: AbstractMeasuresAdapter):
-    self._measures = measures_adapter
+    if (msv2_type := measures_adapter.msv2_type(on_missing="none")) is not None:
+      if msv2_type == "epoch":
+        self._impl = EpochCoder(measures_adapter)
+      elif msv2_type == "frequency":
+        self._impl = FrequencyCoder(measures_adapter)
+      elif msv2_type == "uvw":
+        self._impl = UvwCoder(measures_adapter)
+      elif msv2_type == "position":
+        self._impl = PositionCoder(measures_adapter)
+      elif msv2_type == "direction":
+        self._impl = DirectionCoder(measures_adapter)
+      else:
+        raise NotImplementedError(f"{msv2_type} measures")
+    elif measures_adapter.quantum_unit(on_missing="none") is not None:
+      self._impl = QuantityCoder(measures_adapter)
+    else:
+      self._impl = NoopCoder()
 
-
-class TemporaryCoder(BaseCasaCoder):
   def encode(self, variable: Variable, name: T_Name = None) -> Variable:
-    dims, data, attrs, encoding = unpack_for_encoding(super().encode(variable, name))
+    """Defer coding to the implementation"""
+    return self._impl.encode(variable, name)
+
+  def decode(self, variable: Variable, name: T_Name = None) -> Variable:
+    """Defer decoding to the implementation"""
+    return self._impl.decode(variable, name)
+
+
+class NoopCoder(VariableCoder):
+  """This coder not mutate the variable during encoding and decoding"""
+
+  def encode(self, variable: Variable, name: T_Name = None) -> Variable:
+    return variable
+
+  def decode(self, variable: Variable, name: T_Name = None) -> Variable:
+    return variable
+
+
+class BaseCasaCoder(VariableCoder):
+  """Base class for encoding/decoding CASA Measures"""
+
+
+class MeasuresCasaCoder(VariableCoder):
+  """Base class for encoding/decoding Casa Measures
+  using actual measures data"""
+
+  __slots__ = "measures_adapter"
+  measures_adapter: AbstractMeasuresAdapter
+
+  def __init__(self, measures_adapter: AbstractMeasuresAdapter):
+    self.measures_adapter = measures_adapter
+
+
+class QuantityCoder(MeasuresCasaCoder):
+  """Encodes a quantum unit"""
+
+  def encode(self, variable: Variable, name: T_Name = None) -> Variable:
+    dims, data, attrs, encoding = unpack_for_encoding(variable)
+    attrs = {k: v for k, v in attrs.items() if k not in {"type", "units"}}
     return Variable(dims, data, attrs, encoding, fastpath=True)
 
   def decode(self, variable: Variable, name: T_Name = None) -> Variable:
-    dims, data, attrs, encoding = unpack_for_decoding(super().decode(variable, name))
+    dims, data, attrs, encoding = unpack_for_decoding(variable)
+    attrs["type"] = "quantity"
+    attrs["units"] = self.measures_adapter.quantum_unit("raise")
     return Variable(dims, data, attrs, encoding, fastpath=True)
 
 
-class UvwCoder(BaseCasaCoder):
+class HardCodedCoder(BaseCasaCoder):
+  """Adds and removes the supplied attributes during decoding and encoding"""
+
+  __slots__ = "_attrs"
+  _attrs: Dict[str, Any]
+
+  def __init__(self, attrs: Dict[str, Any]):
+    self._attrs = attrs
+
   def encode(self, variable: Variable, name: T_Name = None) -> Variable:
-    dims, data, attrs, encoding = unpack_for_encoding(super().encode(variable, name))
+    dims, data, attrs, encoding = unpack_for_encoding(variable)
+    attrs = {k: v for k, v in attrs.items() if k not in self._attrs}
+    return Variable(dims, data, attrs, encoding, fastpath=True)
+
+  def decode(self, variable: Variable, name: T_Name = None) -> Variable:
+    dims, data, attrs, encoding = unpack_for_decoding(variable)
+    attrs.update(self._attrs)
+    return Variable(dims, data, attrs, encoding, fastpath=True)
+
+
+class VisiblityCoder(HardCodedCoder):
+  """Visibility encoder"""
+
+  def __init__(self):
+    super().__init__({"type": "quantity", "units": "Jy"})
+
+
+class DimensionlessCoder(HardCodedCoder):
+  def __init__(self):
+    super().__init__({"type": "quantity", "units": "dimensionless"})
+
+
+class UvwCoder(MeasuresCasaCoder):
+  """Encodes UVW coordinate measures"""
+
+  def encode(self, variable: Variable, name: T_Name = None) -> Variable:
+    dims, data, attrs, encoding = unpack_for_encoding(variable)
     attrs = {k: v for k, v in attrs.items() if k not in {"type", "units", "frame"}}
     return Variable(dims, data, attrs, encoding, fastpath=True)
 
   def decode(self, variable: Variable, name: T_Name = None) -> Variable:
-    dims, data, attrs, encoding = unpack_for_decoding(super().decode(variable, name))
-    attrs["type"] = self._measures.msv4_type()
-    if units := self._measures.quantum_unit():
-      attrs["units"] = units
-
-    if (msv2_frame := self._measures.msv2_frame()) == "J2000":
+    dims, data, attrs, encoding = unpack_for_decoding(variable)
+    attrs["type"] = self.measures_adapter.msv4_type("raise")
+    attrs["units"] = self.measures_adapter.quantum_unit("raise")
+    if (msv2_frame := self.measures_adapter.msv2_frame("raise")) == "J2000":
       attrs["frame"] = "fk5"
     elif msv2_frame == "APP":
       attrs["frame"] = msv2_frame
@@ -80,15 +195,25 @@ class UvwCoder(BaseCasaCoder):
     return Variable(dims, data, attrs, encoding, fastpath=True)
 
 
-class EpochCoder(BaseCasaCoder):
+class EpochCoder(MeasuresCasaCoder):
   """Encode/Decode MJD UTC and TAI to unix UTC/TAI"""
 
   MJD_EPOCH: datetime = datetime(1858, 11, 17)
   UTC_EPOCH: datetime = datetime(1970, 1, 1)
   MJD_OFFSET_SECONDS: float = (UTC_EPOCH - MJD_EPOCH).total_seconds()
 
+  @staticmethod
+  def encode_array(data: npt.NDArray) -> npt.NDArray:
+    """Converts from unix UTC/TAI to MJD UTC/TAI"""
+    return data + EpochCoder.MJD_OFFSET_SECONDS
+
+  @staticmethod
+  def decode_array(data: npt.NDArray) -> npt.NDArray:
+    """Converts from MJD UTC/TAI to unix UTC/TAI"""
+    return data - EpochCoder.MJD_OFFSET_SECONDS
+
   def encode(self, variable: Variable, name: T_Name = None) -> Variable:
-    dims, data, attrs, encoding = unpack_for_encoding(super().encode(variable, name))
+    dims, data, attrs, encoding = unpack_for_encoding(variable)
 
     if isinstance(data, MSv2Array):
       data.transform = EpochCoder.encode_array
@@ -104,37 +229,32 @@ class EpochCoder(BaseCasaCoder):
     return Variable(dims, data, attrs, encoding, fastpath=True)
 
   def decode(self, variable: Variable, name: T_Name = None) -> Variable:
-    dims, data, attrs, encoding = unpack_for_decoding(super().decode(variable, name))
-    attrs["type"] = self._measures.msv4_type()
-    if units := self._measures.quantum_unit():
-      attrs["units"] = units
+    dims, data, attrs, encoding = unpack_for_decoding(variable)
+    attrs["type"] = self.measures_adapter.msv4_type()
+    attrs["units"] = self.measures_adapter.quantum_unit("raise")
     attrs["format"] = "unix"
-    if (msv2_frame := self._measures.msv2_frame()) == "UTC":
+    if (msv2_frame := self.measures_adapter.msv2_frame("raise")) == "UTC":
       attrs["scale"] = "utc"
     elif msv2_frame == "TAI":
-      attrs["scale"] == "tai"
+      attrs["scale"] = "tai"
     else:
       raise NotImplementedError(f"Epoch frame {msv2_frame}")
 
     if isinstance(data, MSv2Array):
       data.transform = EpochCoder.decode_array
     elif isinstance(data, np.ndarray):
-      data = EpochCoder.decode(data)
+      data = EpochCoder.decode_array(data)
     else:
       raise NotImplementedError(f"Decoding of {type(data)}")
 
     return Variable(dims, data, attrs, encoding, fastpath=True)
 
-  @staticmethod
-  def encode_array(data: npt.NDArray) -> npt.NDArray:
-    return data + EpochCoder.MJD_OFFSET_SECONDS
 
-  @staticmethod
-  def decode_array(data: npt.NDArray) -> npt.NDArray:
-    return data - EpochCoder.MJD_OFFSET_SECONDS
+class DirectionCoder(MeasuresCasaCoder):
+  """Handles encoding of direction measures.
 
+  This encompasses celestial directions or, directions in the sky"""
 
-class DirectionCoder(BaseCasaCoder):
   MSV2_TO_MSV4_FRAME = {
     "AZELGEO": "altaz",
     "ICRS": "icrs",
@@ -142,40 +262,45 @@ class DirectionCoder(BaseCasaCoder):
   }
 
   def encode(self, variable: Variable, name: T_Name = None) -> Variable:
-    dims, data, attrs, encoding = unpack_for_encoding(super().encode(variable, name))
+    dims, data, attrs, encoding = unpack_for_encoding(variable)
     attrs = {k: v for k, v in attrs.items() if k not in {"frame", "units", "type"}}
     return Variable(dims, data, attrs, encoding, fastpath=True)
 
   def decode(self, variable: Variable, name: T_Name = None) -> Variable:
-    dims, data, attrs, encoding = unpack_for_decoding(super().decode(variable, name))
-    attrs["type"] = self._measures.msv4_type()
-    if units := self._measures.quantum_unit():
-      attrs["units"] = units
-    msv2_frame = self._measures.msv2_frame()
-    assert msv2_frame is not None
-    attrs["frame"] = msv2_to_msv4_frame(self.MSV2_TO_MSV4_FRAME, msv2_frame)
+    dims, data, attrs, encoding = unpack_for_decoding(variable)
+    attrs["type"] = self.measures_adapter.msv4_type("raise")
+    attrs["units"] = self.measures_adapter.quantum_unit("raise")
+    attrs["frame"] = msv2_to_msv4_frame(
+      self.MSV2_TO_MSV4_FRAME, self.measures_adapter.msv2_frame("raise")
+    )
     return Variable(dims, data, attrs, encoding, fastpath=True)
 
 
-class PositionCoder(BaseCasaCoder):
+class PositionCoder(MeasuresCasaCoder):
+  """Handles encoding of position measures.
+
+  This encompasses terrestrial locations or, locations on the ground"""
+
   MSV2_TO_MSV4_FRAME = {"ITRF": "ITRS"}
 
   def encode(self, variable: Variable, name: T_Name = None) -> Variable:
-    dims, data, attrs, encoding = unpack_for_encoding(super().encode(variable, name))
+    dims, data, attrs, encoding = unpack_for_encoding(variable)
     attrs = {k: v for k, v in attrs.items() if k not in {"type", "frame", "units"}}
     return Variable(dims, data, attrs, encoding, fastpath=True)
 
   def decode(self, variable: Variable, name: T_Name = None) -> Variable:
-    dims, data, attrs, encoding = unpack_for_decoding(super().decode(variable, name))
-    attrs["type"] = self._measures.msv4_type()
-    if units := self._measures.quantum_unit():
-      attrs["units"] = units
-    if msv2_frame := self._measures.msv2_frame():
-      attrs["frame"] = msv2_to_msv4_frame(self.MSV2_TO_MSV4_FRAME, msv2_frame)
+    dims, data, attrs, encoding = unpack_for_decoding(variable)
+    attrs["type"] = self.measures_adapter.msv4_type("raise")
+    attrs["units"] = self.measures_adapter.quantum_unit("raise")
+    attrs["frame"] = msv2_to_msv4_frame(
+      self.MSV2_TO_MSV4_FRAME, self.measures_adapter.msv2_frame("raise")
+    )
     return Variable(dims, data, attrs, encoding, fastpath=True)
 
 
-class FrequencyCoder(BaseCasaCoder):
+class FrequencyCoder(MeasuresCasaCoder):
+  """Handles encoding of frequency measures"""
+
   MSV2_TO_MSV4_FRAME = {
     "BARY": "BARY",
     "REST": "REST",
@@ -186,24 +311,15 @@ class FrequencyCoder(BaseCasaCoder):
   }
 
   def encode(self, variable: Variable, name: T_Name = None) -> Variable:
-    dims, data, attrs, encoding = unpack_for_encoding(super().encode(variable, name))
+    dims, data, attrs, encoding = unpack_for_encoding(variable)
     attrs = {k: v for k, v in attrs.items() if k not in {"type", "observer", "units"}}
     return Variable(dims, data, attrs, encoding, fastpath=True)
 
   def decode(self, variable: Variable, name: T_Name = None) -> Variable:
-    dims, data, attrs, encoding = unpack_for_decoding(super().decode(variable, name))
-    attrs["type"] = self._measures.msv4_type()
-    if units := self._measures.quantum_unit():
-      attrs["units"] = units
-    if msv2_frame := self._measures.msv2_frame():
-      attrs["observer"] = msv2_to_msv4_frame(self.MSV2_TO_MSV4_FRAME, msv2_frame)
+    dims, data, attrs, encoding = unpack_for_decoding(variable)
+    attrs["type"] = self.measures_adapter.msv4_type("raise")
+    attrs["units"] = self.measures_adapter.quantum_unit("raise")
+    attrs["observer"] = msv2_to_msv4_frame(
+      self.MSV2_TO_MSV4_FRAME, self.measures_adapter.msv2_frame("raise")
+    )
     return Variable(dims, data, attrs, encoding, fastpath=True)
-
-
-CASA_MEASURES_CODERS_MAP = {
-  "uvw": UvwCoder,
-  "epoch": EpochCoder,
-  "frequency": FrequencyCoder,
-  "direction": DirectionCoder,
-  "position": PositionCoder,
-}
