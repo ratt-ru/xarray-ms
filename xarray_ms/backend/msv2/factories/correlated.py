@@ -471,10 +471,10 @@ class CorrelatedFactory(DatasetFactory):
     )
     release_date_coder = CasaCoderFactory.from_arrow_table(obs).create("RELEASE_DATE")
     decoded_time = release_date_coder.decode(Variable("o", obs["RELEASE_DATE"]))
-    if (frame := decoded_time.attrs["scale"]) != "utc":
+    if (frame := decoded_time.attrs["scale"]) not in {"utc", "tai"}:
       warnings.warn(
-        f"OBSERVATION::RELEASE_DATE Ref {frame} != utc "
-        f"This error is benign if the accuracy of the above column ",
+        f"OBSERVATION::RELEASE_DATE Ref {frame} not in {{'utc', 'tai'}}. "
+        f"observation_info['release_date'] may be innaccurate.",
         FrameConversionWarning,
       )
     utc_seconds = decoded_time.values[0]
