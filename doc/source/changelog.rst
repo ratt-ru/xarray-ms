@@ -5,6 +5,8 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Fix construction of ``field_and_source_xds`` to use unique partition field id values (:pr:`138`)
+* Formalise measures handling (:pr:`138`)
 * Remove xarray version restriction (:pr:`137`)
 
 0.3.7 (03-10-2025)
