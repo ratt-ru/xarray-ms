@@ -39,6 +39,10 @@ class InvalidMeasurementSet(ValueError):
   """Raised when the Measurement Set is invalid in some way"""
 
 
+class ComplexMeasuremetSet(ValueError):
+  """Raised when complexity in the Measurement Set prevents processing"""
+
+
 class InvalidPartitionKey(ValueError):
   """Raised when a string representing a partition key is invalid"""
 

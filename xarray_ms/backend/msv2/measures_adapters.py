@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Collection, Dict, Literal, Sequence, overload
+from typing import TYPE_CHECKING, Any, Dict, Literal, Sequence, overload
 
 import numpy as np
 
@@ -17,6 +17,7 @@ from xarray_ms.casa_types import (
   UvwMeasures,
 )
 from xarray_ms.errors import (
+  ComplexMeasuremetSet,
   InvalidMeasurementSet,
   MissingMeasuresInfo,
   MissingQuantumUnits,
@@ -49,6 +50,34 @@ def raise_invalid_on_missing(on_missing: Literal["none", "raise"]):
     raise ValueError(f"'on_missing' {on_missing} not in {{'none', 'raise'}}")
 
 
+def raise_on_measinfo_indirection(column_name: str, measinfo: Dict[str, Any]):
+  """Raises if the MEASINFO requires indirection to other columns in the
+  table in order to fully resolve the Measures
+
+  i.e. if it has a ``VarRefCol`` for defining a per-row frame or
+  ``RefOff*`` keywords for defining offsets.
+  """
+
+  def check() -> bool:
+    for k in measinfo:
+      if "VarRefCol" in k:
+        return True
+
+      if k.startswith("RefOff"):
+        return True
+
+    return False
+
+  if check():
+    raise ComplexMeasuremetSet(
+      f"The MEASINFO in column {column_name} {measinfo} "
+      f"contains indirection in the form of `VarRefCol` "
+      f"or `RefCol*` entries. "
+      f"A more complex measures adapter is required to "
+      f"handle this case"
+    )
+
+
 class ColumnInspectionMixin:
   """Adds common methods for extracting measure information from
   Column Descriptors"""
@@ -56,16 +85,16 @@ class ColumnInspectionMixin:
   @overload
   def extract_measinfo(
     self, column_desc: ColumnDesc, on_missing: Literal["none"]
-  ) -> Dict[str, Collection[str]] | None: ...
+  ) -> Dict[str, Any] | None: ...
 
   @overload
   def extract_measinfo(
     self, column_desc: ColumnDesc, on_missing: Literal["raise"]
-  ) -> Dict[str, Collection[str]]: ...
+  ) -> Dict[str, Any]: ...
 
   def extract_measinfo(
     self, column_desc: ColumnDesc, on_missing: Literal["none", "raise"] = "none"
-  ) -> Dict[str, Collection[str]] | None:
+  ) -> Dict[str, Any] | None:
     """Extracts the MEASINFO keyword from the column descriptor, if present"""
     try:
       return column_desc.keywords["MEASINFO"]
@@ -295,6 +324,7 @@ class ColumnDescMeasuresAdapter(AbstractMeasuresAdapter, ColumnInspectionMixin):
     try:
       return typing.cast(str, measinfo["Ref"])
     except KeyError:
+      raise_on_measinfo_indirection(self.column_name, measinfo)
       if on_missing == "none":
         return None
       elif on_missing == "raise":
@@ -381,13 +411,13 @@ class ArrowTableMeasuresAdapter(ColumnDescMeasuresAdapter, ColumnInspectionMixin
 
       return next(iter(frames))
 
-    # Otherwise defer to "Ref" in the column descriptor
+    # Otherwise attempt to defer to "Ref" in the column descriptor
     return super().msv2_frame(on_missing=on_missing)
 
 
 class MeasuresAdapterFactory:
   _table: pa.Table | None
-  _table_desc: Dict[str, Collection[str]] | None
+  _table_desc: Dict[str, Any] | None
 
   def __init__(
     self,
