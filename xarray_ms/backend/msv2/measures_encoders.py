@@ -87,7 +87,7 @@ class MSv2Coder(VariableCoder):
 
 
 class NoopCoder(MSv2Coder):
-  """This coder not mutate the variable during encoding and decoding"""
+  """This coder does not modify variables during encoding and decoding"""
 
   def encode(self, variable: Variable, name: T_Name = None) -> Variable:
     return variable
