@@ -11,7 +11,7 @@ from xarray import Variable
 
 from xarray_ms.backend.msv2.array import MainMSv2Array
 from xarray_ms.backend.msv2.measures_adapters import MeasuresAdapterFactory
-from xarray_ms.backend.msv2.measures_encoders import CasaCoderFactory, EpochCoder
+from xarray_ms.backend.msv2.measures_encoders import EpochCoder, MSv2CoderFactory
 from xarray_ms.backend.msv2.table_utils import extract_table_desc as extract_table_desc
 from xarray_ms.casa_types import FrequencyMeasures
 from xarray_ms.errors import PartitioningError
@@ -164,7 +164,7 @@ def test_spw_measures_table_desc(spw_with_meas_freq_ref_lsrk_ref):
   assert chan_freq_adapter.msv4_type() == "spectral_coord"
   assert chan_freq_adapter.quantum_unit() == "Hz"
 
-  coder_factory = CasaCoderFactory(measures_adapter_factory)
+  coder_factory = MSv2CoderFactory(measures_adapter_factory)
   frequency_coder = coder_factory.create("CHAN_FREQ")
   frequency = frequency_coder.decode(
     Variable("frequency", spw_with_meas_freq_ref_lsrk_ref["CHAN_FREQ"].to_numpy())
@@ -193,7 +193,7 @@ def test_spw_measures_table(spw_with_meas_freq_ref_varcolref):
   assert chan_freq_adapter.msv4_type() == "spectral_coord"
   assert chan_freq_adapter.quantum_unit() == "Hz"
 
-  coder_factory = CasaCoderFactory(measures_adapter_factory)
+  coder_factory = MSv2CoderFactory(measures_adapter_factory)
   coder = coder_factory.create("CHAN_FREQ")
   var = coder.decode(
     Variable("frequency", spw_with_meas_freq_ref_varcolref["CHAN_FREQ"].to_numpy())
@@ -212,7 +212,7 @@ def test_spw_measures_table_multiple_frames(spw_with_meas_freq_ref_varcolref):
   with pytest.raises(PartitioningError):
     assert chan_freq_adapter.msv2_frame() == "TOPO"
 
-  coder_factory = CasaCoderFactory(measures_adapter_factory)
+  coder_factory = MSv2CoderFactory(measures_adapter_factory)
   coder = coder_factory.create("CHAN_FREQ")
   with pytest.raises(PartitioningError):
     coder.decode(
@@ -239,7 +239,7 @@ def test_utc_time_encoder_roundtrip_ndarray(mjd, utc, msv2_frame):
 
   table_desc = ms_descriptor("MAIN", True)
   table_desc["TIME"]["keywords"]["MEASINFO"]["Ref"] = msv2_frame
-  coder_factory = CasaCoderFactory.from_table_desc(table_desc)
+  coder_factory = MSv2CoderFactory.from_table_desc(table_desc)
   time_coder = coder_factory.create("TIME")
   time = Variable(("dummy",), np.array([mjd * SECONDS_IN_DAY]))
   decoded_time = time_coder.decode(time)
@@ -268,7 +268,7 @@ def test_utc_time_encoder_roundtrip_backend_array_utc(mjd, utc):
   """Test conversion of Modified Julian Date
   to UTC in seconds, and vice versa"""
 
-  coder_factory = CasaCoderFactory.from_table_desc(ms_descriptor("MAIN", True))
+  coder_factory = MSv2CoderFactory.from_table_desc(ms_descriptor("MAIN", True))
   time_coder = coder_factory.create("TIME")
   data = np.array([mjd * SECONDS_IN_DAY])[:, None]
   array = MainMSv2Array(None, None, None, "TIME", data.shape, data.dtype, 0.0, None)

@@ -21,8 +21,8 @@ from xarray_ms.backend.msv2.imputation import (
   maybe_impute_processor_table,
 )
 from xarray_ms.backend.msv2.measures_encoders import (
-  CasaCoderFactory,
   MSv2Coder,
+  MSv2CoderFactory,
   VisiblityCoder,
 )
 from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
@@ -87,7 +87,7 @@ class CorrelatedFactory(DatasetFactory):
   _pol_factory: Multiton
   _obs_factory: Multiton
   _main_table_desc: Dict[str, Collection[str]]
-  _coder_factory: CasaCoderFactory
+  _coder_factory: MSv2CoderFactory
 
   def __init__(
     self,
@@ -103,7 +103,7 @@ class CorrelatedFactory(DatasetFactory):
 
     ms = ms_factory.instance
     self._main_table_desc = ms.tabledesc()
-    self._coder_factory = CasaCoderFactory.from_table_desc(self._main_table_desc)
+    self._coder_factory = MSv2CoderFactory.from_table_desc(self._main_table_desc)
 
   def _variable_from_column(self, column: str, dim_sizes: Dict[str, int]) -> Variable:
     """Derive an xarray Variable from the MSv2 column descriptor and schemas"""
@@ -276,7 +276,7 @@ class CorrelatedFactory(DatasetFactory):
     pol = self._subtable_factories["POLARIZATION"].instance.take([pol_id])
     field = self._subtable_factories["FIELD"].instance
 
-    spw_coder_factory = CasaCoderFactory.from_arrow_table(spw)
+    spw_coder_factory = MSv2CoderFactory.from_arrow_table(spw)
     chan_freq = spw["CHAN_FREQ"][0].as_py()
     chan_width = spw["CHAN_WIDTH"][0].as_py()
     spw_name = spw["NAME"][0].as_py()
@@ -469,7 +469,7 @@ class CorrelatedFactory(DatasetFactory):
     obs = maybe_impute_observation_table(obs, [partition.obs_id]).take(
       [partition.obs_id]
     )
-    release_date_coder = CasaCoderFactory.from_arrow_table(obs).create("RELEASE_DATE")
+    release_date_coder = MSv2CoderFactory.from_arrow_table(obs).create("RELEASE_DATE")
     decoded_time = release_date_coder.decode(Variable("o", obs["RELEASE_DATE"]))
     if (frame := decoded_time.attrs["scale"]) not in {"utc", "tai"}:
       warnings.warn(

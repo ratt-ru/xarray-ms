@@ -3,7 +3,7 @@ from xarray import Dataset, Variable
 
 from xarray_ms.backend.msv2.factories.core import DatasetFactory
 from xarray_ms.backend.msv2.imputation import maybe_impute_observation_table
-from xarray_ms.backend.msv2.measures_encoders import CasaCoderFactory
+from xarray_ms.backend.msv2.measures_encoders import MSv2CoderFactory
 from xarray_ms.errors import InvalidMeasurementSet
 
 RELOCATABLE_ARRAY = {"ALMA", "VLA", "NOEMA", "EVLA"}
@@ -52,7 +52,7 @@ class AntennaFactory(DatasetFactory):
         f"feed_id = {partition.feed_ids} and spw_id = {partition.spw_id}"
       )
 
-    ant_coder_factory = CasaCoderFactory.from_arrow_table(filtered_ants)
+    ant_coder_factory = MSv2CoderFactory.from_arrow_table(filtered_ants)
     antenna_names = filtered_ants["NAME"].to_numpy().astype(str)
     telescope_names = np.asarray([telescope_name] * len(antenna_names), dtype=str)
     position = pac.list_flatten(filtered_ants["POSITION"]).to_numpy().reshape(-1, 3)
@@ -61,7 +61,7 @@ class AntennaFactory(DatasetFactory):
     mount = filtered_ants["MOUNT"].to_numpy().astype(str)
 
     filtered_feeds = feeds.take(np.where(mask)[0])
-    feed_coder_factory = CasaCoderFactory.from_arrow_table(filtered_feeds)
+    feed_coder_factory = MSv2CoderFactory.from_arrow_table(filtered_feeds)
     nreceptors = filtered_feeds["NUM_RECEPTORS"].unique().to_numpy()
 
     if len(nreceptors) != 1:

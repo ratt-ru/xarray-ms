@@ -9,7 +9,7 @@ import numpy as np
 import numpy.typing as npt
 from xarray import Variable
 
-from xarray_ms.backend.msv2.measures_encoders import CasaCoderFactory
+from xarray_ms.backend.msv2.measures_encoders import MSv2CoderFactory
 from xarray_ms.casa_types import DirectionMeasures
 from xarray_ms.errors import ImputedMetadataWarning
 
@@ -190,7 +190,7 @@ def maybe_impute_observation_table(
     }
   }
 
-  time_coder = CasaCoderFactory.from_table_desc(table_desc).create("RELEASE_DATE")
+  time_coder = MSv2CoderFactory.from_table_desc(table_desc).create("RELEASE_DATE")
   dt = datetime(1978, 10, 9, 8, 0, 0, tzinfo=timezone.utc).timestamp()
   release_date_var = Variable("time", [dt] * (result + 1))
   release_date_var = time_coder.encode(release_date_var)

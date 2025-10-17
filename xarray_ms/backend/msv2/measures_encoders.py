@@ -38,8 +38,8 @@ def msv2_to_msv4_frame(frame_map: Dict[str, str], frame: str) -> str:
     return frame
 
 
-class CasaCoderFactory:
-  """Factory for automatically creating MSv2Coder objects"""
+class MSv2CoderFactory:
+  """MSv2Coder Factory"""
 
   __slots__ = "_measures_adapter_factory"
   _measures_adapter_factory: MeasuresAdapterFactory
@@ -50,12 +50,12 @@ class CasaCoderFactory:
   @staticmethod
   def from_table_desc(table_desc: Dict[str, Any]):
     """Constructs a factory from a table descriptor"""
-    return CasaCoderFactory(MeasuresAdapterFactory.from_table_desc(table_desc))
+    return MSv2CoderFactory(MeasuresAdapterFactory.from_table_desc(table_desc))
 
   @staticmethod
   def from_arrow_table(table: pa.Table):
     """Constructs a factory from an arrow table"""
-    return CasaCoderFactory(MeasuresAdapterFactory.from_arrow_table(table))
+    return MSv2CoderFactory(MeasuresAdapterFactory.from_arrow_table(table))
 
   def create(self, column_name: str) -> MSv2Coder:
     """Creates a coder for the given column"""

@@ -6,7 +6,7 @@ from xarray_ms.backend.msv2.imputation import (
   maybe_impute_field_table,
   maybe_impute_source_table,
 )
-from xarray_ms.backend.msv2.measures_encoders import CasaCoderFactory
+from xarray_ms.backend.msv2.measures_encoders import MSv2CoderFactory
 
 
 class FieldAndSourceFactory(DatasetFactory):
@@ -24,7 +24,7 @@ class FieldAndSourceFactory(DatasetFactory):
 
     field = maybe_impute_field_table(field, ufield_ids)
     field = field.take(ufield_ids)
-    field_coder = CasaCoderFactory.from_arrow_table(field)
+    field_coder = MSv2CoderFactory.from_arrow_table(field)
     source_ids = field["SOURCE_ID"].to_numpy()
     source = maybe_impute_source_table(source, source_ids)
 
