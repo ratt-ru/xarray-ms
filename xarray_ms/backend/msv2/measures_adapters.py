@@ -78,7 +78,7 @@ def raise_on_measinfo_indirection(column_name: str, measinfo: Dict[str, Any]):
     )
 
 
-class ColumnInspectionMixin:
+class MeasuresMixin:
   """Adds common methods for extracting measure information from
   Column Descriptors"""
 
@@ -276,7 +276,7 @@ class AbstractMeasuresAdapter(ABC):
     raise NotImplementedError
 
 
-class ColumnDescMeasuresAdapter(AbstractMeasuresAdapter, ColumnInspectionMixin):
+class ColumnDescMeasuresAdapter(AbstractMeasuresAdapter, MeasuresMixin):
   """Measures Adapter extracting information from a Column Descriptor only
 
   This adapter only extracts information from a MEASINFO that contains no indirection.
@@ -334,7 +334,7 @@ class ColumnDescMeasuresAdapter(AbstractMeasuresAdapter, ColumnInspectionMixin):
       raise_invalid_on_missing(on_missing)
 
 
-class ArrowTableMeasuresAdapter(ColumnDescMeasuresAdapter, ColumnInspectionMixin):
+class ArrowTableMeasuresAdapter(ColumnDescMeasuresAdapter, MeasuresMixin):
   """Measures adapter extracting measures information from an Arrow table.
 
   This adapter can handle indirection in the MEASINFO of a column"""
