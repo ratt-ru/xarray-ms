@@ -275,6 +275,7 @@ class CorrelatedFactory(DatasetFactory):
     spw = self._subtable_factories["SPECTRAL_WINDOW"].instance.take([spw_id])
     pol = self._subtable_factories["POLARIZATION"].instance.take([pol_id])
     field = self._subtable_factories["FIELD"].instance
+    partition_intents = list(s.strip() for s in partition.obs_mode.split(","))
 
     spw_coder_factory = MSv2CoderFactory.from_arrow_table(spw)
     chan_freq = spw["CHAN_FREQ"][0].as_py()
@@ -360,7 +361,14 @@ class CorrelatedFactory(DatasetFactory):
       ("polarization", (("polarization",), corr_type, None)),
       ("uvw_label", (("uvw_label",), ["u", "v", "w"], None)),
       ("field_name", ("time", field_names, {"coordinates": "field_name"})),
-      ("scan_number", ("time", partition.scan_numbers, {"coordinates": "scan_number"})),
+      (
+        "scan_name",
+        (
+          "time",
+          partition.scan_numbers.astype(str),
+          {"coordinates": "scan_name", "scan_intents": partition_intents},
+        ),
+      ),
     ]
 
     e = {"preferred_chunks": self._preferred_chunks} if self._preferred_chunks else None
@@ -418,6 +426,12 @@ class CorrelatedFactory(DatasetFactory):
 
     freq_attrs: Dict[str, Any | Dict[str, Any]] = {
       "spectral_window_name": spw_name or "<Unknown>",
+      # NOTE(sjperkins)
+      # According to the schema this identifies if the SPW
+      # is used, for example, for continuum or spectral line
+      # There doesn't seem to be a way to derive this from MSv2
+      # so leave a default value to satisfy the schema checker
+      "spectral_window_intents": ["<Unknown>"],
       "reference_frequency": {
         "attrs": ref_freq.attrs,
         "data": ref_freq.values.item(),
@@ -479,8 +493,7 @@ class CorrelatedFactory(DatasetFactory):
       sorted(
         {
           "observer": [obs["OBSERVER"][0].as_py()],
-          "project": obs["PROJECT"][0].as_py(),
-          "intents": [partition.obs_mode],
+          "project_UID": obs["PROJECT"][0].as_py(),
           "release_date": datetime.fromtimestamp(utc_seconds, timezone.utc).isoformat(),
         }.items()
       )

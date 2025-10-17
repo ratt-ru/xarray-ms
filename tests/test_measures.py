@@ -324,9 +324,13 @@ def test_standard_conversion_measures(simmed_ms):
         },
         "data": 1712000000.0,
       },
+      "spectral_window_intents": ["<Unknown>"],
       "spectral_window_name": "<Unknown>",
       "type": "spectral_coord",
       "units": "Hz",
+    }
+    assert ds.scan_name.attrs == {
+      "scan_intents": ["CALIBRATE_AMPL#OFF_SOURCE"],
     }
     assert ds.TIME_CENTROID.attrs == {
       "format": "unix",
