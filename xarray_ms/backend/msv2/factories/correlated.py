@@ -21,8 +21,8 @@ from xarray_ms.backend.msv2.imputation import (
   maybe_impute_processor_table,
 )
 from xarray_ms.backend.msv2.measures_encoders import (
-  BaseCasaCoder,
   CasaCoderFactory,
+  MSv2Coder,
   VisiblityCoder,
 )
 from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
@@ -42,7 +42,7 @@ class MSv2ColumnSchema:
   name: str
   dims: Tuple[str, ...]
   default: Any = None
-  coder: BaseCasaCoder | None = None
+  coder: MSv2Coder | None = None
   low_res_dims: Tuple[str, ...] | None = None
 
 

@@ -55,46 +55,33 @@ class CasaCoderFactory:
   def from_arrow_table(table: pa.Table):
     return CasaCoderFactory(MeasuresAdapterFactory.from_arrow_table(table))
 
-  def create(self, column_name: str) -> CasaCoderProxy:
-    return CasaCoderProxy(self._measures_adapter_factory.create(column_name))
+  def create(self, column_name: str) -> VariableCoder:
+    measures_adapter = self._measures_adapter_factory.create(column_name)
 
-
-class CasaCoderProxy(VariableCoder):
-  """Proxy an VariableCoder implementation depending
-  on the type of measures discovered in the supplied adapter"""
-
-  __slots__ = "_impl"
-  _impl: VariableCoder
-
-  def __init__(self, measures_adapter: AbstractMeasuresAdapter):
     if (msv2_type := measures_adapter.msv2_type(on_missing="none")) is not None:
       if msv2_type == "epoch":
-        self._impl = EpochCoder(measures_adapter)
+        return EpochCoder(measures_adapter)
       elif msv2_type == "frequency":
-        self._impl = FrequencyCoder(measures_adapter)
+        return FrequencyCoder(measures_adapter)
       elif msv2_type == "uvw":
-        self._impl = UvwCoder(measures_adapter)
+        return UvwCoder(measures_adapter)
       elif msv2_type == "position":
-        self._impl = PositionCoder(measures_adapter)
+        return PositionCoder(measures_adapter)
       elif msv2_type == "direction":
-        self._impl = DirectionCoder(measures_adapter)
+        return DirectionCoder(measures_adapter)
       else:
         raise NotImplementedError(f"{msv2_type} measures")
     elif measures_adapter.quantum_unit(on_missing="none") is not None:
-      self._impl = QuantityCoder(measures_adapter)
+      return QuantityCoder(measures_adapter)
     else:
-      self._impl = NoopCoder()
-
-  def encode(self, variable: Variable, name: T_Name = None) -> Variable:
-    """Defer coding to the implementation"""
-    return self._impl.encode(variable, name)
-
-  def decode(self, variable: Variable, name: T_Name = None) -> Variable:
-    """Defer decoding to the implementation"""
-    return self._impl.decode(variable, name)
+      return NoopCoder()
 
 
-class NoopCoder(VariableCoder):
+class MSv2Coder(VariableCoder):
+  """Base class for encoding/decoding MSv2 variables"""
+
+
+class NoopCoder(MSv2Coder):
   """This coder not mutate the variable during encoding and decoding"""
 
   def encode(self, variable: Variable, name: T_Name = None) -> Variable:
@@ -104,11 +91,7 @@ class NoopCoder(VariableCoder):
     return variable
 
 
-class BaseCasaCoder(VariableCoder):
-  """Base class for encoding/decoding CASA Measures"""
-
-
-class MeasuresCasaCoder(VariableCoder):
+class MeasuresCoder(MSv2Coder):
   """Base class for encoding/decoding Casa Measures
   using actual measures data"""
 
@@ -119,7 +102,7 @@ class MeasuresCasaCoder(VariableCoder):
     self.measures_adapter = measures_adapter
 
 
-class QuantityCoder(MeasuresCasaCoder):
+class QuantityCoder(MeasuresCoder):
   """Encodes a quantum unit"""
 
   def encode(self, variable: Variable, name: T_Name = None) -> Variable:
@@ -134,7 +117,7 @@ class QuantityCoder(MeasuresCasaCoder):
     return Variable(dims, data, attrs, encoding, fastpath=True)
 
 
-class HardCodedCoder(BaseCasaCoder):
+class SuppliedAttributesCoder(MSv2Coder):
   """Adds and removes the supplied attributes during decoding and encoding"""
 
   __slots__ = "_attrs"
@@ -154,19 +137,19 @@ class HardCodedCoder(BaseCasaCoder):
     return Variable(dims, data, attrs, encoding, fastpath=True)
 
 
-class VisiblityCoder(HardCodedCoder):
+class VisiblityCoder(SuppliedAttributesCoder):
   """Visibility encoder"""
 
   def __init__(self):
     super().__init__({"type": "quantity", "units": "Jy"})
 
 
-class DimensionlessCoder(HardCodedCoder):
+class DimensionlessCoder(SuppliedAttributesCoder):
   def __init__(self):
     super().__init__({"type": "quantity", "units": "dimensionless"})
 
 
-class UvwCoder(MeasuresCasaCoder):
+class UvwCoder(MeasuresCoder):
   """Encodes UVW coordinate measures"""
 
   def encode(self, variable: Variable, name: T_Name = None) -> Variable:
@@ -195,7 +178,7 @@ class UvwCoder(MeasuresCasaCoder):
     return Variable(dims, data, attrs, encoding, fastpath=True)
 
 
-class EpochCoder(MeasuresCasaCoder):
+class EpochCoder(MeasuresCoder):
   """Encode/Decode MJD UTC and TAI to unix UTC/TAI"""
 
   MJD_EPOCH: datetime = datetime(1858, 11, 17)
@@ -250,7 +233,7 @@ class EpochCoder(MeasuresCasaCoder):
     return Variable(dims, data, attrs, encoding, fastpath=True)
 
 
-class DirectionCoder(MeasuresCasaCoder):
+class DirectionCoder(MeasuresCoder):
   """Handles encoding of direction measures.
 
   This encompasses celestial directions or, directions in the sky"""
@@ -276,7 +259,7 @@ class DirectionCoder(MeasuresCasaCoder):
     return Variable(dims, data, attrs, encoding, fastpath=True)
 
 
-class PositionCoder(MeasuresCasaCoder):
+class PositionCoder(MeasuresCoder):
   """Handles encoding of position measures.
 
   This encompasses terrestrial locations or, locations on the ground"""
@@ -298,7 +281,7 @@ class PositionCoder(MeasuresCasaCoder):
     return Variable(dims, data, attrs, encoding, fastpath=True)
 
 
-class FrequencyCoder(MeasuresCasaCoder):
+class FrequencyCoder(MeasuresCoder):
   """Handles encoding of frequency measures"""
 
   MSV2_TO_MSV4_FRAME = {
