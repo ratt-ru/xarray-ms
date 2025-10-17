@@ -361,10 +361,6 @@ class CorrelatedFactory(DatasetFactory):
       ("uvw_label", (("uvw_label",), ["u", "v", "w"], None)),
       ("field_name", ("time", field_names, {"coordinates": "field_name"})),
       ("scan_number", ("time", partition.scan_numbers, {"coordinates": "scan_number"})),
-      (
-        "sub_scan_number",
-        ("time", partition.sub_scan_numbers, {"coordinates": "sub_scan_number"}),
-      ),
     ]
 
     e = {"preferred_chunks": self._preferred_chunks} if self._preferred_chunks else None
