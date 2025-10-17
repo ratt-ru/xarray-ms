@@ -3,7 +3,7 @@
 Changelog
 =========
 
-X.Y.Z (DD-MM-YYYY)
+0.3.8 (17-10-2025)
 ------------------
 * Synchronise with v4.0.0 schema version (:pr:`139`)
 * Remove ``correlated_xds.scan_number`` coordinate (:pr:`139`)
