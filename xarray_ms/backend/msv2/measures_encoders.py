@@ -39,7 +39,7 @@ def msv2_to_msv4_frame(frame_map: Dict[str, str], frame: str) -> str:
 
 
 class CasaCoderFactory:
-  """Factory for automatically creating CasaCoderProxy objects"""
+  """Factory for automatically creating MSv2Coder objects"""
 
   __slots__ = "_measures_adapter_factory"
   _measures_adapter_factory: MeasuresAdapterFactory
@@ -49,15 +49,19 @@ class CasaCoderFactory:
 
   @staticmethod
   def from_table_desc(table_desc: Dict[str, Any]):
+    """Constructs a factory from a table descriptor"""
     return CasaCoderFactory(MeasuresAdapterFactory.from_table_desc(table_desc))
 
   @staticmethod
   def from_arrow_table(table: pa.Table):
+    """Constructs a factory from an arrow table"""
     return CasaCoderFactory(MeasuresAdapterFactory.from_arrow_table(table))
 
-  def create(self, column_name: str) -> VariableCoder:
+  def create(self, column_name: str) -> MSv2Coder:
+    """Creates a coder for the given column"""
     measures_adapter = self._measures_adapter_factory.create(column_name)
 
+    # Instantiate the appropriate coder object for a given measures type
     if (msv2_type := measures_adapter.msv2_type(on_missing="none")) is not None:
       if msv2_type == "epoch":
         return EpochCoder(measures_adapter)
@@ -71,8 +75,9 @@ class CasaCoderFactory:
         return DirectionCoder(measures_adapter)
       else:
         raise NotImplementedError(f"{msv2_type} measures")
-    elif measures_adapter.quantum_unit(on_missing="none") is not None:
-      return QuantityCoder(measures_adapter)
+    # Otherwise this may only be a quantity
+    elif (unit := measures_adapter.quantum_unit(on_missing="none")) is not None:
+      return SuppliedQuantityCoder(unit)
     else:
       return NoopCoder()
 
@@ -137,16 +142,25 @@ class SuppliedAttributesCoder(MSv2Coder):
     return Variable(dims, data, attrs, encoding, fastpath=True)
 
 
-class VisiblityCoder(SuppliedAttributesCoder):
-  """Visibility encoder"""
+class SuppliedQuantityCoder(SuppliedAttributesCoder):
+  """Encodes a quantum unit supplied in the constructor"""
+
+  def __init__(self, units: str):
+    super().__init__({"type": "quantity", "units": units})
+
+
+class VisiblityCoder(SuppliedQuantityCoder):
+  """Visibility coder"""
 
   def __init__(self):
-    super().__init__({"type": "quantity", "units": "Jy"})
+    super().__init__("Jy")
 
 
-class DimensionlessCoder(SuppliedAttributesCoder):
+class DimensionlessCoder(SuppliedQuantityCoder):
+  """Dimensionless quantity coder"""
+
   def __init__(self):
-    super().__init__({"type": "quantity", "units": "dimensionless"})
+    super().__init__("dimensionless")
 
 
 class UvwCoder(MeasuresCoder):
@@ -234,7 +248,7 @@ class EpochCoder(MeasuresCoder):
 
 
 class DirectionCoder(MeasuresCoder):
-  """Handles encoding of direction measures.
+  """Encodes direction measures.
 
   This encompasses celestial directions or, directions in the sky"""
 
@@ -260,7 +274,7 @@ class DirectionCoder(MeasuresCoder):
 
 
 class PositionCoder(MeasuresCoder):
-  """Handles encoding of position measures.
+  """Encodes position measures.
 
   This encompasses terrestrial locations or, locations on the ground"""
 
@@ -282,7 +296,7 @@ class PositionCoder(MeasuresCoder):
 
 
 class FrequencyCoder(MeasuresCoder):
-  """Handles encoding of frequency measures"""
+  """Encodes frequency measures"""
 
   MSV2_TO_MSV4_FRAME = {
     "BARY": "BARY",
