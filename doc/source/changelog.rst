@@ -5,6 +5,13 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Synchronise with v4.0.0 schema version (:pr:`139`)
+* Remove ``correlated_xds.scan_number`` coordinate (:pr:`139`)
+* Remove ``correlated_xds.sub_scan_number`` coordinate (:pr:`139`)
+* Add ``corelated_xds.scan_name`` coordinate (:pr:`139`)
+* Add ``correlated_xds.frequency.spectral_window_intents`` coordinate attribute (:pr:`139`)
+* Remove ``correlated_xds.observation_info["intents"]`` (:pr:`139`)
+* Rename ``correlated_xds.observation_info["project"]`` to ``"project_UID"`` (:pr:`139`)
 * Fix construction of ``field_and_source_xds`` to use unique partition field id values (:pr:`138`)
 * Formalise measures handling (:pr:`138`)
 * Remove xarray version restriction (:pr:`137`)
