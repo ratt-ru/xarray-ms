@@ -115,9 +115,54 @@ class ColumnDesc:
     )
 
 
+class EpochMeasures(IntEnum):
+  """Enumeration of CASA Epoch Measure Types
+  defined at casacore/measures/Measures/MEpoch.h"""
+
+  LAST = 0  # Local Apparent Sidereal Time
+  LMST = 1  # Local Mean Sidereal Time
+  GMST1 = 2  # Greenwich Mean ST1
+  GAST = 3  # Greenwich Apparent ST
+  UT1 = 4
+  UT2 = 5
+  UTC = 6
+  TAI = 7
+  TDT = 8
+  TCG = 9
+  TDB = 10
+  TCB = 11
+
+
+class UvwMeasures(IntEnum):
+  """Enumeration of CASA Epoch Measure Types
+  defined at casacore/measures/Measures/Muvw.h"""
+
+  J2000 = 0
+  JMEAN = 1
+  JTRUE = 2
+  APP = 3
+  B1950 = 4
+  B1950_VLA = 5
+  BMEAN = 6
+  BTRUE = 7
+  GALACTIC = 8
+  HADEC = 9
+  AZEL = 10
+  AZELSW = 11
+  AZELGEO = 12
+  AZELSWGEO = 13
+  JNAT = 14
+  ECLIPTIC = 15
+  MECLIPTIC = 16
+  TECLIPTIC = 17
+  SUPERGAL = 18
+  ITRF = 19
+  TOPO = 20
+  ICRS = 21
+
+
 class FrequencyMeasures(IntEnum):
-  """
-  Enumeration of CASA Frequency Measure Types
+  """Enumeration of CASA Frequency Measure Types
   defined at casacore/measures/Measures/MFrequency.h
   """
 

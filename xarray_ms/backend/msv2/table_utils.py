@@ -4,7 +4,7 @@ from typing import Any, Dict
 import pyarrow as pa
 
 
-def table_desc(table: pa.Table) -> Dict[str, Any]:
+def extract_table_desc(table: pa.Table) -> Dict[str, Any]:
   """Extract the CASA table descriptor stored in an Arrow table constructed by arcae"""
   try:
     arcae_metadata = table.schema.metadata[b"__arcae_metadata__"]

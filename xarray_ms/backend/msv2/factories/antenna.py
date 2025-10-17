@@ -1,11 +1,9 @@
 import numpy as np
 from xarray import Dataset, Variable
 
-from xarray_ms.backend.msv2.encoders import PositionCoder
 from xarray_ms.backend.msv2.factories.core import DatasetFactory
 from xarray_ms.backend.msv2.imputation import maybe_impute_observation_table
-from xarray_ms.backend.msv2.table_utils import table_desc
-from xarray_ms.casa_types import ColumnDesc
+from xarray_ms.backend.msv2.measures_encoders import MSv2CoderFactory
 from xarray_ms.errors import InvalidMeasurementSet
 
 RELOCATABLE_ARRAY = {"ALMA", "VLA", "NOEMA", "EVLA"}
@@ -46,7 +44,6 @@ class AntennaFactory(DatasetFactory):
       out=mask,
     )
 
-    ant_tabledesc = table_desc(ants)
     filtered_ants = ants.take(feed_ant_id[mask])
 
     if len(filtered_ants) == 0:
@@ -55,6 +52,7 @@ class AntennaFactory(DatasetFactory):
         f"feed_id = {partition.feed_ids} and spw_id = {partition.spw_id}"
       )
 
+    ant_coder_factory = MSv2CoderFactory.from_arrow_table(filtered_ants)
     antenna_names = filtered_ants["NAME"].to_numpy().astype(str)
     telescope_names = np.asarray([telescope_name] * len(antenna_names), dtype=str)
     position = pac.list_flatten(filtered_ants["POSITION"]).to_numpy().reshape(-1, 3)
@@ -63,6 +61,7 @@ class AntennaFactory(DatasetFactory):
     mount = filtered_ants["MOUNT"].to_numpy().astype(str)
 
     filtered_feeds = feeds.take(np.where(mask)[0])
+    feed_coder_factory = MSv2CoderFactory.from_arrow_table(filtered_feeds)
     nreceptors = filtered_feeds["NUM_RECEPTORS"].unique().to_numpy()
 
     if len(nreceptors) != 1:
@@ -83,13 +82,6 @@ class AntennaFactory(DatasetFactory):
       .reshape(-1, nreceptors.item())
     )
     receptor_labels = [f"pol_{i}" for i in range(nreceptors.item())]
-
-    metre_attrs = {"units": "m", "type": "quantity"}
-    rad_attrs = {"units": "rad", "type": "quantity"}
-
-    position_coder = PositionCoder(
-      ColumnDesc.from_descriptor("POSITION", ant_tabledesc)
-    )
     antenna_position = Variable(
       ("antenna_name", "cartesian_pos_label"),
       position,
@@ -100,22 +92,27 @@ class AntennaFactory(DatasetFactory):
       },
     )
 
+    dish_diameter = Variable("antenna_name", diameter)
+    ant_receptor_angle = Variable(("antenna_name", "receptor_label"), receptor_angle)
+
     data_vars = {
-      "ANTENNA_POSITION": position_coder.decode(antenna_position),
-      "ANTENNA_DISH_DIAMETER": Variable("antenna_name", diameter, metre_attrs),
-      "ANTENNA_EFFECTIVE_DISH_DIAMETER": Variable(
-        "antenna_name", diameter, metre_attrs
+      "ANTENNA_POSITION": ant_coder_factory.create("POSITION").decode(antenna_position),
+      "ANTENNA_DISH_DIAMETER": ant_coder_factory.create("DISH_DIAMETER").decode(
+        dish_diameter
       ),
-      "ANTENNA_RECEPTOR_ANGLE": Variable(
-        ("antenna_name", "receptor_label"), receptor_angle, rad_attrs
+      "ANTENNA_EFFECTIVE_DISH_DIAMETER": ant_coder_factory.create(
+        "DISH_DIAMETER"
+      ).decode(dish_diameter),
+      "ANTENNA_RECEPTOR_ANGLE": feed_coder_factory.create("RECEPTOR_ANGLE").decode(
+        ant_receptor_angle
       ),
     }
 
     if "FOCUS_LENGTH" in filtered_feeds:
       focus_length = filtered_feeds["FOCUS_LENGTH"].to_numpy()
-      data_vars["ANTENNA_FOCUS_LENGTH"] = Variable(
-        "antenna_name", focus_length, metre_attrs
-      )
+      data_vars["ANTENNA_FOCUS_LENGTH"] = feed_coder_factory.create(
+        "FOCUS_LENGTH"
+      ).decode(Variable("antenna_name", focus_length))
 
     return Dataset(
       data_vars=data_vars,
