@@ -3,6 +3,10 @@
 Changelog
 =========
 
+X.Y.Z (DD-MM-YYYY)
+------------------
+* Correct exception name from ComplexMeasuremetSet to ComplexMeasurementSet (:pr:`143`)
+
 0.3.8 (17-10-2025)
 ------------------
 * Synchronise with v4.0.0 schema version (:pr:`139`)
