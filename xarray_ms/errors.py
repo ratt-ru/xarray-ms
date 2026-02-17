@@ -39,7 +39,7 @@ class InvalidMeasurementSet(ValueError):
   """Raised when the Measurement Set is invalid in some way"""
 
 
-class ComplexMeasuremetSet(ValueError):
+class ComplexMeasurementSet(ValueError):
   """Raised when complexity in the Measurement Set prevents processing"""
 
 

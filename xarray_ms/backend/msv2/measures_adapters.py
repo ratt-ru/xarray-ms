@@ -17,7 +17,7 @@ from xarray_ms.casa_types import (
   UvwMeasures,
 )
 from xarray_ms.errors import (
-  ComplexMeasuremetSet,
+  ComplexMeasurementSet,
   InvalidMeasurementSet,
   MissingMeasuresInfo,
   MissingQuantumUnits,
@@ -69,7 +69,7 @@ def raise_on_measinfo_indirection(column_name: str, measinfo: Dict[str, Any]):
     return False
 
   if check():
-    raise ComplexMeasuremetSet(
+    raise ComplexMeasurementSet(
       f"The MEASINFO in column {column_name} {measinfo} "
       f"contains indirection in the form of `VarRefCol` "
       f"or `RefCol*` entries. "
