@@ -6,6 +6,7 @@ Changelog
 X.Y.Z (DD-MM-YYYY)
 ------------------
 * Correct exception name from ComplexMeasuremetSet to ComplexMeasurementSet (:pr:`143`)
+* Remove poetry-specific installation documentation (:pr:`140`)
 
 0.3.8 (17-10-2025)
 ------------------
