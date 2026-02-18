@@ -3,7 +3,7 @@
 Changelog
 =========
 
-X.Y.Z (DD-MM-YYYY)
+0.3.9 (18-02-2026)
 ------------------
 * Define and use an ``OnMissingLiteralType`` (:pr:`144`)
 * Correct exception name from ComplexMeasuremetSet to ComplexMeasurementSet (:pr:`143`)
