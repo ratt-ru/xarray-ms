@@ -17,7 +17,7 @@ from xarray_ms.casa_types import (
   UvwMeasures,
 )
 from xarray_ms.errors import (
-  ComplexMeasuremetSet,
+  ComplexMeasurementSet,
   InvalidMeasurementSet,
   MissingMeasuresInfo,
   MissingQuantumUnits,
@@ -59,19 +59,8 @@ def raise_on_measinfo_indirection(column_name: str, measinfo: Dict[str, Any]):
   i.e. if it has a ``VarRefCol`` for defining a per-row frame or
   ``RefOff*`` keywords for defining offsets.
   """
-
-  def check() -> bool:
-    for k in measinfo:
-      if "VarRefCol" in k:
-        return True
-
-      if k.startswith("RefOff"):
-        return True
-
-    return False
-
-  if check():
-    raise ComplexMeasuremetSet(
+  if any("VarRefCol" in k or k.startswith("RefOff") for k in measinfo):
+    raise ComplexMeasurementSet(
       f"The MEASINFO in column {column_name} {measinfo} "
       f"contains indirection in the form of `VarRefCol` "
       f"or `RefCol*` entries. "
