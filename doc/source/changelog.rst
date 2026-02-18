@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Define and use an ``OnMissingLiteralType`` (:pr:`144`)
 * Correct exception name from ComplexMeasuremetSet to ComplexMeasurementSet (:pr:`143`)
 * Remove poetry-specific installation documentation (:pr:`140`)
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, Literal, Sequence, overload
+from typing import TYPE_CHECKING, Any, Dict, Literal, Sequence, get_args, overload
 
 import numpy as np
 
@@ -28,6 +28,8 @@ from xarray_ms.errors import (
 if TYPE_CHECKING:
   import pyarrow as pa
 
+OnMissingType = Literal["none", "raise"]
+
 
 @dataclass
 class MeasuresData:
@@ -45,9 +47,9 @@ CASA_MEASURES_MAP = {
 }
 
 
-def raise_invalid_on_missing(on_missing: Literal["none", "raise"]):
-  if on_missing not in {"none", "raise"}:
-    raise ValueError(f"'on_missing' {on_missing} not in {{'none', 'raise'}}")
+def raise_invalid_on_missing(on_missing: OnMissingType):
+  if on_missing not in get_args(OnMissingType):
+    raise ValueError(f"'on_missing' {on_missing} not in {get_args(OnMissingType)}")
 
 
 def raise_on_measinfo_indirection(column_name: str, measinfo: Dict[str, Any]):
@@ -82,7 +84,7 @@ class MeasuresMixin:
   ) -> Dict[str, Any]: ...
 
   def extract_measinfo(
-    self, column_desc: ColumnDesc, on_missing: Literal["none", "raise"] = "none"
+    self, column_desc: ColumnDesc, on_missing: OnMissingType = "none"
   ) -> Dict[str, Any] | None:
     """Extracts the MEASINFO keyword from the column descriptor, if present"""
     try:
@@ -107,7 +109,7 @@ class MeasuresMixin:
   ) -> str: ...
 
   def extract_quantum_unit(
-    self, column_desc: ColumnDesc, on_missing: Literal["none", "raise"] = "none"
+    self, column_desc: ColumnDesc, on_missing: OnMissingType = "none"
   ) -> str | None:
     """Attempts to extract a single quantum unit from the keywords
     of the column descriptor.
@@ -153,7 +155,7 @@ class MeasuresMixin:
   ) -> str: ...
 
   def extract_msv2_type(
-    self, column_desc: ColumnDesc, on_missing: Literal["none", "raise"] = "none"
+    self, column_desc: ColumnDesc, on_missing: OnMissingType = "none"
   ) -> str | None:
     """Returns the msv2 measures type, derived from the 'type' keyword
     in the column descriptor keywords"""
@@ -191,7 +193,7 @@ class MeasuresMixin:
   ) -> str: ...
 
   def extract_msv4_type(
-    self, column_desc: ColumnDesc, on_missing: Literal["none", "raise"] = "none"
+    self, column_desc: ColumnDesc, on_missing: OnMissingType = "none"
   ) -> str | None:
     """Returns the msv4 measures type, derived from the 'type' keyword
     in the column descriptor keywords"""
@@ -238,26 +240,26 @@ class AbstractMeasuresAdapter(ABC):
   def msv2_frame(self, on_missing: Literal["raise"]) -> str: ...
 
   @abstractmethod
-  def msv2_frame(self, on_missing: Literal["none", "raise"] = "none") -> str | None:
+  def msv2_frame(self, on_missing: OnMissingType = "none") -> str | None:
     """Returns the MSv2 Measures frame.
 
     This corresponds to ``MEASINFO['Ref']`` or possibly ``MEASINFO['VarRefCol']``"""
     raise NotImplementedError
 
   @abstractmethod
-  def msv2_type(self, on_missing: Literal["none", "raise"] = "none") -> str | None:
+  def msv2_type(self, on_missing: OnMissingType = "none") -> str | None:
     """Returns the MSv2 Measures type.
 
     This corresponds to ``MEASINFO['type']`` in the column descriptor keywords"""
     raise NotImplementedError
 
   @abstractmethod
-  def msv4_type(self, on_missing: Literal["none", "raise"] = "none") -> str | None:
+  def msv4_type(self, on_missing: OnMissingType = "none") -> str | None:
     """Return the MSv4 Measures type"""
     raise NotImplementedError
 
   @abstractmethod
-  def quantum_unit(self, on_missing: Literal["none", "raise"] = "none") -> str | None:
+  def quantum_unit(self, on_missing: OnMissingType = "none") -> str | None:
     """Returns a single unit associated with this measure.
 
     This corresponds to ``MEASINFO['QuantumUnits']`` in the
@@ -289,13 +291,13 @@ class ColumnDescMeasuresAdapter(AbstractMeasuresAdapter, MeasuresMixin):
   def column_name(self) -> str:
     return self._column_desc.name
 
-  def quantum_unit(self, on_missing: Literal["none", "raise"] = "none") -> str | None:
+  def quantum_unit(self, on_missing: OnMissingType = "none") -> str | None:
     return self.extract_quantum_unit(self._column_desc, on_missing=on_missing)
 
-  def msv2_type(self, on_missing: Literal["none", "raise"] = "none"):
+  def msv2_type(self, on_missing: OnMissingType = "none"):
     return self.extract_msv2_type(self._column_desc, on_missing=on_missing)
 
-  def msv4_type(self, on_missing: Literal["none", "raise"] = "none") -> str | None:
+  def msv4_type(self, on_missing: OnMissingType = "none") -> str | None:
     return self.extract_msv4_type(self._column_desc, on_missing=on_missing)
 
   @overload
@@ -304,7 +306,7 @@ class ColumnDescMeasuresAdapter(AbstractMeasuresAdapter, MeasuresMixin):
   @overload
   def msv2_frame(self, on_missing: Literal["raise"]) -> str: ...
 
-  def msv2_frame(self, on_missing: Literal["none", "raise"] = "none") -> str | None:
+  def msv2_frame(self, on_missing: OnMissingType = "none") -> str | None:
     if (
       measinfo := self.extract_measinfo(self._column_desc, on_missing=on_missing)
     ) is None:
@@ -348,7 +350,7 @@ class ArrowTableMeasuresAdapter(ColumnDescMeasuresAdapter, MeasuresMixin):
   @overload
   def msv2_frame(self, on_missing: Literal["raise"]) -> str: ...
 
-  def msv2_frame(self, on_missing: Literal["none", "raise"] = "none") -> str | None:
+  def msv2_frame(self, on_missing: OnMissingType = "none") -> str | None:
     if (
       measinfo := self.extract_measinfo(self._column_desc, on_missing=on_missing)
     ) is None:
