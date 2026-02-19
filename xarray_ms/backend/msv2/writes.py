@@ -239,7 +239,7 @@ def promote_write_variables(variables: WriteVariablesT) -> Dict[str, str]:
     return result
 
   if isinstance(variables, list):
-    return {src: dest for v in variables for src, dest in check_var(v)}
+    return {src: dest for src, dest in map(check_var, variables)}
 
   if isinstance(variables, dict):
     for k, v in variables.items():
@@ -283,12 +283,14 @@ def sync_msv2(dt: DataTree, variables: WriteVariablesT):
   table_factory = msv2_store_from_dataset(next(iter(vis_datasets)).ds)._table_factory
   table_desc = table_factory.instance.tabledesc()
 
-  write_var_map = promote_write_variables(variables)
+  # write_var_map = promote_write_variables(variables)
 
-  if variables is None:
-    columns = table_factory.instance.columns()
+  # if variables is None:
+  #   columns = table_factory.instance.columns()
 
-  list_var_names = [variables] if isinstance(variables, str) else list(variables)
+  list_var_names: List[Any] = (
+    [variables] if isinstance(variables, str) else list(variables)
+  )
   set_var_names = set(list_var_names)
 
   if len(set_var_names) == 0:
