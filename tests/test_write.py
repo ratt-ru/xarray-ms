@@ -99,6 +99,7 @@ def test_store_region(monkeypatch, simmed_ms):
 def test_distributed_write(simmed_ms, monkeypatch, processes, nworkers, chunks):
   monkeypatch.setattr(Dataset, "to_msv2", dataset_to_msv2, raising=False)
   monkeypatch.setattr(DataTree, "to_msv2", datatree_to_msv2, raising=False)
+  monkeypatch.setattr(DataTree, "sync_msv2", sync_msv2, raising=False)
   da = pytest.importorskip("dask.array")
   distributed = pytest.importorskip("dask.distributed")
 
@@ -121,6 +122,7 @@ def test_distributed_write(simmed_ms, monkeypatch, processes, nworkers, chunks):
         assert len(node.encoding) > 0
 
     # Create the new MS columns
+    dt.sync_msv2("CORRECTED")
     dt.to_msv2(["CORRECTED"], compute=False)
 
     for node in dt.subtree:
@@ -143,6 +145,7 @@ def test_indexed_write(monkeypatch, simmed_ms):
   and then try write that sub-selection out"""
   monkeypatch.setattr(Dataset, "to_msv2", dataset_to_msv2, raising=False)
   monkeypatch.setattr(DataTree, "to_msv2", datatree_to_msv2, raising=False)
+  monkeypatch.setattr(DataTree, "sync_msv2", sync_msv2, raising=False)
   dt = xarray.open_datatree(simmed_ms)
   assert len(dt.children) == 1
 
@@ -151,6 +154,7 @@ def test_indexed_write(monkeypatch, simmed_ms):
       ds = node.ds.assign(CORRECTED=xarray.full_like(node.VISIBILITY, 1 + 2j))
       dt[node.path] = DataTree(ds)
 
+  dt.sync_msv2("CORRECTED")
   dt.to_msv2(["CORRECTED"], compute=False)
 
   for node in dt.subtree:
