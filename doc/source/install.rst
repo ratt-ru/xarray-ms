@@ -16,40 +16,31 @@ they must be installed separately.
 Development
 ===========
 
-Firstly, install Python `Poetry <poetry_>`_.
-
-.. _poetry: https://python-poetry.org/
-
-Then, the following commands will install the required dependencies,
-optional testing dependencies, documentation and development dependencies
-in a suitable virtual environment:
+Create a virtual environment and install with the dev, doc and testing
+dependencies:
 
 .. code-block:: bash
 
-  $ cd /code/arcae
-  $ poetry env use 3.11
-  $ poetry install -E testing --with doc --with dev
-  $ poetry run pre-commit install
-  $ poetry shell
+
+  $ virtualenv -p python3.12 /tmp/xms
+  $ source xms/bin/activate
+  (xms) $ pip install -e .[dev,doc,testing]
 
 The pre-commit hooks can be manually executed as follows:
 
 .. code-block:: bash
 
-  $ poetry run pre-commit run -a
-
+  (xms) $ pre-commit run -a
 
 Test Suite
 ----------
 
-Run the following command within the arcae source code directory to
-execute the test suite
+After creating the virtual environment above, run the following command
+within the xarray-ms source code directory to execute the test suite:
 
 .. code-block:: bash
 
-  $ cd /code/arcae
-  $ poetry install -E testing --with dev
-  $ poetry run py.test -s -vvv tests/
+  (xms) $ py.test -s -vvv tests/
 
 
 Documentation
@@ -60,15 +51,8 @@ build the Sphinx documentation
 
 .. code-block:: bash
 
-  $ cd /code/arcae
-  $ poetry install --with doc
-  $ poetry shell
-  $ cd doc
-  $ make html
-
-.. _cubed: https://cubed-dev.github.io/cubed/
-.. _dask: https://www.dask.org/
-.. _zarr: https://zarr.dev/
+  (xms) $ cd doc
+  (xms) $ make html
 
 Release Process
 ---------------
@@ -88,3 +72,7 @@ on the ``main`` branch:
    .. code-block:: bash
 
       $ tbump 0.2.0
+
+.. _cubed: https://cubed-dev.github.io/cubed/
+.. _dask: https://www.dask.org/
+.. _zarr: https://zarr.dev/

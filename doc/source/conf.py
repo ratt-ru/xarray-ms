@@ -11,12 +11,13 @@
 project = "xarray-ms"
 copyright = "2024 - 2025 NRF (SARAO) and Rhodes University (RATT) Centre"
 author = "Simon Perkins"
-release = "0.3.5"
+release = "0.3.9"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = [
+  "sphinxcontrib.spelling",
   "sphinx.ext.autodoc",
   "sphinx.ext.autosummary",
   "sphinx.ext.extlinks",

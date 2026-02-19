@@ -24,8 +24,7 @@ def test_imputed_observation_metadata(simmed_ms):
       if node.attrs.get("type") in CORRELATED_DATASET_TYPES:
         assert node.observation_info == {
           "observer": ["unknown"],
-          "project": "unknown",
-          "intents": ["CALIBRATE_AMPL#OFF_SOURCE"],
+          "project_UID": "unknown",
           "release_date": "1978-10-09T08:00:00+00:00",
         }
 

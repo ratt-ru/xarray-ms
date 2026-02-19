@@ -727,13 +727,13 @@ class MSv2Structure(Mapping):
         )
 
         # Unique partition key values
-        ufield_ids = time_coord(
+        time_field_ids = time_coord(
           "FIELD_ID", dkey, partition["FIELD_ID"], utime, time_ids
         )
-        usubscan_nrs = time_coord(
+        time_subscan_nrs = time_coord(
           "SUB_SCAN_NUMBER", dkey, partition["SUB_SCAN_NUMBER"], utime, time_ids
         )
-        uscan_nrs = time_coord(
+        time_scan_nrs = time_coord(
           "SCAN_NUMBER", dkey, partition["SCAN_NUMBER"], utime, time_ids
         )
         ustate_ids = get_uid_column("STATE_ID", dkey, partition["STATE_ID"])
@@ -791,8 +791,8 @@ class MSv2Structure(Mapping):
             msg.append(f"Multiple feeds {ufeeds} are present")
           if len(ustate_ids) > 1:
             msg.append(f"Multiple STATE_ID {ustate_ids} are present")
-          if len(ufield_ids) > 1:
-            msg.append(f"Multiple FIELD_ID {ufield_ids}  are present")
+          if len(time_field_ids) > 1:
+            msg.append(f"Multiple FIELD_ID {time_field_ids}  are present")
 
           msg_str = "\n  ".join(msg)
 
@@ -826,12 +826,12 @@ class MSv2Structure(Mapping):
           pol_id=pol_id,
           antenna_ids=feed_antennas,
           feed_ids=ufeeds,
-          field_ids=ufield_ids,
-          scan_numbers=uscan_nrs,
+          field_ids=time_field_ids,
+          scan_numbers=time_scan_nrs,
           source_ids=usource_ids,
           state_ids=ustate_ids,
           obs_mode=str(dkey["OBS_MODE"]),
-          sub_scan_numbers=usubscan_nrs,
+          sub_scan_numbers=time_subscan_nrs,
           row_map=row_map.reshape(utime.size, nbl),
         )
 

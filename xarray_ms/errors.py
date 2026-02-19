@@ -2,17 +2,17 @@ class IrregularGridWarning(UserWarning):
   """Base Warning for irregular grids"""
 
 
-class IrregularTimeGridWarning(UserWarning):
+class IrregularTimeGridWarning(IrregularGridWarning):
   """Warning raised when the intervals associated
   with each timestep are not homogenous"""
 
 
-class IrregularBaselineGridWarning(UserWarning):
+class IrregularBaselineGridWarning(IrregularGridWarning):
   """Warning raised when missing baselines are
   present in the Measurement Set"""
 
 
-class IrregularChannelGridWarning(UserWarning):
+class IrregularChannelGridWarning(IrregularGridWarning):
   """Warning raised when an irregular channel grid
   is encountered"""
 
@@ -36,7 +36,11 @@ class FrameConversionWarning(UserWarning):
 
 
 class InvalidMeasurementSet(ValueError):
-  """Raised when the Measurement Set foreign key indexing is invalid"""
+  """Raised when the Measurement Set is invalid in some way"""
+
+
+class ComplexMeasurementSet(ValueError):
+  """Raised when complexity in the Measurement Set prevents processing"""
 
 
 class InvalidPartitionKey(ValueError):

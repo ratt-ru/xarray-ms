@@ -328,6 +328,7 @@ class MSv2EntryPoint(BackendEntrypoint):
   ]
   description = "Opens v2 CASA Measurement Sets in Xarray"
   url = "https://xarray-ms.readthedocs.io/"
+  supports_groups = True
 
   def guess_can_open(
     self, filename_or_obj: str | os.PathLike[Any] | BufferedIOBase | AbstractDataStore
@@ -369,6 +370,7 @@ class MSv2EntryPoint(BackendEntrypoint):
       drop_variables: Variables to drop from the dataset.
       partition_schema: The columns to use for partitioning the Measurement set.
         Defaults to :code:`{DEFAULT_PARTITION_COLUMNS}`.
+        See :ref:`partitioning-guide` for more further information.
       partition_key: A key corresponding to an individual partition.
         For example :code:`(('DATA_DESC_ID', 0), ('FIELD_ID', 0))`.
         If :code:`None`, the first partition will be opened.
@@ -448,6 +450,7 @@ class MSv2EntryPoint(BackendEntrypoint):
       drop_variables: Variables to drop from the dataset.
       partition_schema: The columns to use for partitioning the Measurement set.
         Defaults to :code:`{DEFAULT_PARTITION_COLUMNS}`.
+        See :ref:`partitioning-guide` for more further information.
       auto_corrs: Include/Exclude auto-correlations.
       ninstances: The number of Measurement Set instances to open for parallel I/O.
       epoch: A string uniquely identifying this Dataset.

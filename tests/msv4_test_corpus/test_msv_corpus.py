@@ -5,6 +5,14 @@ import xarray
 
 import xarray_ms  # noqa
 
+# If present, use xradio to perform schema checking
+try:
+  import xradio  # noqa
+  import xradio.measurement_set  # noqa. Required to register types for check_datatree
+  from xradio.schema.check import check_datatree
+except ImportError:
+  xradio = None
+
 pmx = pytest.mark.xfail
 
 
@@ -72,4 +80,7 @@ def test_msv4_corpus(msv4_corpus_dataset, partition_schema):
   name, path = msv4_corpus_dataset
   for ps in partition_schema:
     dt = xarray.open_datatree(f"{path}{os.path.sep}{name}", partition_schema=ps)
+    if xradio:
+      issues = list(check_datatree(dt))
+      assert not issues
     dt.load()

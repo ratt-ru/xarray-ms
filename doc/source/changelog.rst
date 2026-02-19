@@ -3,6 +3,41 @@
 Changelog
 =========
 
+0.3.9 (18-02-2026)
+------------------
+* Define and use an ``OnMissingLiteralType`` (:pr:`144`)
+* Correct exception name from ComplexMeasuremetSet to ComplexMeasurementSet (:pr:`143`)
+* Remove poetry-specific installation documentation (:pr:`140`)
+
+0.3.8 (17-10-2025)
+------------------
+* Synchronise with v4.0.0 schema version (:pr:`139`)
+* Remove ``correlated_xds.scan_number`` coordinate (:pr:`139`)
+* Remove ``correlated_xds.sub_scan_number`` coordinate (:pr:`139`)
+* Add ``corelated_xds.scan_name`` coordinate (:pr:`139`)
+* Add ``correlated_xds.frequency.spectral_window_intents`` coordinate attribute (:pr:`139`)
+* Remove ``correlated_xds.observation_info["intents"]`` (:pr:`139`)
+* Rename ``correlated_xds.observation_info["project"]`` to ``"project_UID"`` (:pr:`139`)
+* Fix construction of ``field_and_source_xds`` to use unique partition field id values (:pr:`138`)
+* Formalise measures handling (:pr:`138`)
+* Remove xarray version restriction (:pr:`137`)
+
+0.3.7 (03-10-2025)
+------------------
+* Documentation updates (:pr:`134`)
+* Add ``MsV2EntryPoint.supports_groups=True`` (:pr:`136`)
+* Temporarily restrict xarray to \< 2025.9.1 (:pr:`136`) until
+  `xarray#10808 <https://github.com/pydata/xarray/issues/10808_>`_
+  is resolved.
+* Restrict arcae to \< 0.4.0 to prevent
+  API-breaking write support changes (:pr:`136`)
+* Provide a physically realistic SPECTRAL_WINDOW::REF_FREQUENCY in simulated data (:pr:`133`)
+
+0.3.6 (22-09-2025)
+------------------
+* Document Partitioning Strategies and Irregular Grid Handling (:pr:`132`)
+* Document MSv4 compliance and roadmap (:pr:`131`)
+
 0.3.5 (17-09-2025)
 ------------------
 * Remove deploy to test-pypi (:pr:`130`)
