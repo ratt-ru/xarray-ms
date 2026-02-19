@@ -1,12 +1,13 @@
 import warnings
 from collections import defaultdict
+from importlib.metadata import version as package_version
 from typing import Any, Dict, Iterable, List, Literal, Mapping, Set, Tuple
 
 import numpy as np
 import numpy.typing as npt
 from arcae.lib.arrow_tables import ms_descriptor
+from packaging.version import parse as parse_version
 from xarray import Dataset, DataTree
-from xarray.backends.api import _finalize_store, dump_to_store
 from xarray.backends.common import ArrayWriter
 
 from xarray_ms.backend.msv2.array import MAIN_PREFIX_DIMS
@@ -15,6 +16,13 @@ from xarray_ms.backend.msv2.entrypoint_utils import CommonStoreArgs
 from xarray_ms.casa_types import NUMPY_TO_CASA_MAP
 from xarray_ms.errors import MissingEncodingError
 from xarray_ms.msv4_types import CORRELATED_DATASET_TYPES
+
+# https://github.com/pydata/xarray/pull/10771
+if parse_version(package_version("xarray")) >= parse_version("2025.09.01"):
+  from xarray.backends.api import _finalize_store
+  from xarray.backends.writers import dump_to_store
+else:
+  from xarray.backends.api import _finalize_store, dump_to_store
 
 ShapeSetType = Set[Tuple[int, ...]]
 DTypeSetType = Set[npt.DTypeLike]
