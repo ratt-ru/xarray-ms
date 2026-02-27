@@ -23,7 +23,7 @@ from xarray_ms.backend.msv2.imputation import (
 from xarray_ms.backend.msv2.measures_encoders import (
   MSv2Coder,
   MSv2CoderFactory,
-  VisiblityCoder,
+  VisibilityCoder,
 )
 from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
 from xarray_ms.casa_types import ColumnDesc, Polarisations
@@ -57,7 +57,7 @@ MSV4_to_MSV2_COLUMN_SCHEMAS = {
   ),
   "FLAG": MSv2ColumnSchema("FLAG", ("frequency", "polarization"), 1, None),
   "VISIBILITY": MSv2ColumnSchema(
-    "DATA", ("frequency", "polarization"), np.nan + np.nan * 1j, VisiblityCoder()
+    "DATA", ("frequency", "polarization"), np.nan + np.nan * 1j, VisibilityCoder()
   ),
   "WEIGHT_ROW": MSv2ColumnSchema(
     "WEIGHT",
