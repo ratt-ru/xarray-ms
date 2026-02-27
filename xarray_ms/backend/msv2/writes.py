@@ -10,12 +10,11 @@ from packaging.version import parse as parse_version
 from xarray import Dataset, DataTree
 from xarray.backends.common import ArrayWriter
 
-from xarray_ms.backend.msv2.array import MAIN_PREFIX_DIMS
 from xarray_ms.backend.msv2.entrypoint import MSv2Store
 from xarray_ms.backend.msv2.entrypoint_utils import CommonStoreArgs
 from xarray_ms.casa_types import NUMPY_TO_CASA_MAP
 from xarray_ms.errors import MissingEncodingError
-from xarray_ms.msv4_types import CORRELATED_DATASET_TYPES
+from xarray_ms.msv4_types import CORRELATED_DATASET_TYPES, MAIN_PREFIX_DIMS
 
 # https://github.com/pydata/xarray/pull/10771
 if parse_version(package_version("xarray")) >= parse_version("2025.09.01"):

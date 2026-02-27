@@ -16,6 +16,7 @@ from xarray.core.indexing import (
 )
 
 from xarray_ms.errors import MismatchedWriteRegion
+from xarray_ms.msv4_types import MAIN_PREFIX_DIMS
 
 if TYPE_CHECKING:
   import numpy.typing as npt
@@ -24,8 +25,6 @@ if TYPE_CHECKING:
   from xarray_ms.multiton import Multiton
 
   TransformerT = Callable[[npt.NDArray], npt.NDArray]
-
-MAIN_PREFIX_DIMS = ("time", "baseline_id")
 
 DATA_COLUMN_DIM_MISMATCH_RE = re.compile(
   r"Number of data dimensions (?P<data>\d+) does not "
