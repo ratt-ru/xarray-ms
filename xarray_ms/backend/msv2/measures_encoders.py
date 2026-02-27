@@ -107,21 +107,6 @@ class MeasuresCoder(MSv2Coder):
     self.measures_adapter = measures_adapter
 
 
-class QuantityCoder(MeasuresCoder):
-  """Encodes a quantum unit"""
-
-  def encode(self, variable: Variable, name: T_Name = None) -> Variable:
-    dims, data, attrs, encoding = unpack_for_encoding(variable)
-    attrs = {k: v for k, v in attrs.items() if k not in {"type", "units"}}
-    return Variable(dims, data, attrs, encoding, fastpath=True)
-
-  def decode(self, variable: Variable, name: T_Name = None) -> Variable:
-    dims, data, attrs, encoding = unpack_for_decoding(variable)
-    attrs["type"] = "quantity"
-    attrs["units"] = self.measures_adapter.quantum_unit("raise")
-    return Variable(dims, data, attrs, encoding, fastpath=True)
-
-
 class SuppliedAttributesCoder(MSv2Coder):
   """Adds and removes the supplied attributes during decoding and encoding"""
 
