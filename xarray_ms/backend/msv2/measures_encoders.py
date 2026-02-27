@@ -149,7 +149,7 @@ class SuppliedQuantityCoder(SuppliedAttributesCoder):
     super().__init__({"type": "quantity", "units": units})
 
 
-class VisiblityCoder(SuppliedQuantityCoder):
+class VisibilityCoder(SuppliedQuantityCoder):
   """Visibility coder"""
 
   def __init__(self):
