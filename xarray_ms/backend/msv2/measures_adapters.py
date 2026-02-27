@@ -380,7 +380,11 @@ class ArrowTableMeasuresAdapter(ColumnDescMeasuresAdapter, MeasuresMixin):
       # The measures information may contain it's own reference types and codes
       if isinstance(tab_ref_types := measinfo.get("TabRefTypes"), Sequence):
         if isinstance(tab_ref_codes := measinfo.get("TabRefCodes"), Sequence):
-          assert len(tab_ref_types) == len(tab_ref_codes)
+          if len(tab_ref_types) != len(tab_ref_codes):
+            raise InvalidMeasurementSet(
+              f"TabRefTypes {tab_ref_types} and TabRefCodes {tab_ref_codes} "
+              f"have different lengths in {self.column_name} MEASINFO"
+            )
         else:
           tab_ref_codes = [MeasuresEnum[t].value for t in tab_ref_types]
 
