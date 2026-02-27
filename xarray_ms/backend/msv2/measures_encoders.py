@@ -212,7 +212,7 @@ class EpochCoder(MeasuresCoder):
 
   def decode(self, variable: Variable, name: T_Name = None) -> Variable:
     dims, data, attrs, encoding = unpack_for_decoding(variable)
-    attrs["type"] = self.measures_adapter.msv4_type()
+    attrs["type"] = self.measures_adapter.msv4_type("raise")
     attrs["units"] = self.measures_adapter.quantum_unit("raise")
     attrs["format"] = "unix"
     if (msv2_frame := self.measures_adapter.msv2_frame("raise")) == "UTC":
