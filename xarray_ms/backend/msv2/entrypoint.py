@@ -314,6 +314,11 @@ class MSv2Store(AbstractWritableDataStore):
 
     self._write_region = expanded_region
 
+  @property
+  def table_factory(self) -> Multiton:
+    """Return the table factory associated with this store"""
+    return self._table_factory
+
 
 class MSv2EntryPoint(BackendEntrypoint):
   open_dataset_parameters = [

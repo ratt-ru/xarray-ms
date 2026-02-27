@@ -288,7 +288,8 @@ def sync_msv2(dt: DataTree, variables: WriteVariablesT):
     warnings.warn("No visibility datasets were found on the DataTree")
     return
 
-  table_factory = msv2_store_from_dataset(next(iter(vis_datasets)).ds)._table_factory
+  # Get a table factory from the MSv2Store
+  table_factory = msv2_store_from_dataset(next(iter(vis_datasets)).ds).table_factory
   table_desc = table_factory.instance.tabledesc()
 
   # write_var_map = promote_write_variables(variables)
