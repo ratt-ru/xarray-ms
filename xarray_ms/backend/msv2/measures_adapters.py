@@ -390,7 +390,15 @@ class ArrowTableMeasuresAdapter(ColumnDescMeasuresAdapter, MeasuresMixin):
         code_frame_map = {m.value: m.name for m in MeasuresEnum}
 
       # Try and find a unique frame
-      if len(frames := {code_frame_map[c] for c in var_ref_col}) == 0:
+      try:
+        frames = {code_frame_map[c] for c in var_ref_col}
+      except KeyError as e:
+        raise InvalidMeasurementSet(
+          f"Code {e.args[0]} in {var_ref_col_name} is not in the "
+          f"code frame map {code_frame_map} for column {self.column_name}"
+        ) from e
+
+      if len(frames) == 0:
         return None
 
       if len(frames) > 1:
