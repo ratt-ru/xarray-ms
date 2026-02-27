@@ -107,21 +107,6 @@ class MeasuresCoder(MSv2Coder):
     self.measures_adapter = measures_adapter
 
 
-class QuantityCoder(MeasuresCoder):
-  """Encodes a quantum unit"""
-
-  def encode(self, variable: Variable, name: T_Name = None) -> Variable:
-    dims, data, attrs, encoding = unpack_for_encoding(variable)
-    attrs = {k: v for k, v in attrs.items() if k not in {"type", "units"}}
-    return Variable(dims, data, attrs, encoding, fastpath=True)
-
-  def decode(self, variable: Variable, name: T_Name = None) -> Variable:
-    dims, data, attrs, encoding = unpack_for_decoding(variable)
-    attrs["type"] = "quantity"
-    attrs["units"] = self.measures_adapter.quantum_unit("raise")
-    return Variable(dims, data, attrs, encoding, fastpath=True)
-
-
 class SuppliedAttributesCoder(MSv2Coder):
   """Adds and removes the supplied attributes during decoding and encoding"""
 
@@ -149,7 +134,7 @@ class SuppliedQuantityCoder(SuppliedAttributesCoder):
     super().__init__({"type": "quantity", "units": units})
 
 
-class VisiblityCoder(SuppliedQuantityCoder):
+class VisibilityCoder(SuppliedQuantityCoder):
   """Visibility coder"""
 
   def __init__(self):
@@ -227,7 +212,7 @@ class EpochCoder(MeasuresCoder):
 
   def decode(self, variable: Variable, name: T_Name = None) -> Variable:
     dims, data, attrs, encoding = unpack_for_decoding(variable)
-    attrs["type"] = self.measures_adapter.msv4_type()
+    attrs["type"] = self.measures_adapter.msv4_type("raise")
     attrs["units"] = self.measures_adapter.quantum_unit("raise")
     attrs["format"] = "unix"
     if (msv2_frame := self.measures_adapter.msv2_frame("raise")) == "UTC":
