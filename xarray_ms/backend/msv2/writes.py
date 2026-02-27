@@ -395,6 +395,9 @@ def dataset_to_msv2(
   if compute:
     _finalize_store(writes, msv2_store)
   else:
-    import dask
-
-    return dask.delayed(_finalize_store)(writes, msv2_store)
+    # NOTE: Within xarray to_xxx implementations
+    # return delayed_close_after_writes(...)
+    # would be typically in this code path.
+    # We return None here as this introduces a strict
+    # dependency on dask
+    return msv2_store.close()
