@@ -4,19 +4,19 @@ import arcae
 import numpy as np
 import pytest
 import xarray
-from xarray import Dataset, DataTree
+from xarray import DataTree
 
-from xarray_ms.backend.msv2.writes import dataset_to_msv2, datatree_to_msv2, sync_msv2
+import xarray_ms
 from xarray_ms.errors import MismatchedWriteRegion
 from xarray_ms.msv4_types import CORRELATED_DATASET_TYPES
 
 
-@pytest.mark.parametrize("simmed_ms", [{"name": "test_store.ms"}], indirect=True)
-def test_store(monkeypatch, simmed_ms):
-  monkeypatch.setattr(Dataset, "to_msv2", dataset_to_msv2, raising=False)
-  monkeypatch.setattr(DataTree, "to_msv2", datatree_to_msv2, raising=False)
-  monkeypatch.setattr(DataTree, "sync_msv2", sync_msv2, raising=False)
+def test_write_support():
+  assert xarray_ms.multithreaded_writes()
 
+
+@pytest.mark.parametrize("simmed_ms", [{"name": "test_store.ms"}], indirect=True)
+def test_store(simmed_ms):
   read = written = False
 
   with xarray.open_datatree(simmed_ms, auto_corrs=True) as xdt:
@@ -52,11 +52,7 @@ def test_store(monkeypatch, simmed_ms):
 
 
 @pytest.mark.parametrize("simmed_ms", [{"name": "test_store_region.ms"}], indirect=True)
-def test_store_region(monkeypatch, simmed_ms):
-  monkeypatch.setattr(Dataset, "to_msv2", dataset_to_msv2, raising=False)
-  monkeypatch.setattr(DataTree, "to_msv2", datatree_to_msv2, raising=False)
-  monkeypatch.setattr(DataTree, "sync_msv2", sync_msv2, raising=False)
-
+def test_store_region(simmed_ms):
   region = {"time": slice(0, 2), "frequency": slice(2, 4)}
 
   with xarray.open_datatree(simmed_ms, auto_corrs=True) as xdt:
@@ -96,10 +92,7 @@ def test_store_region(monkeypatch, simmed_ms):
 @pytest.mark.parametrize("simmed_ms", [{"name": "distributed-write.ms"}], indirect=True)
 @pytest.mark.parametrize("nworkers", [4])
 @pytest.mark.parametrize("processes", [True, False])
-def test_distributed_write(simmed_ms, monkeypatch, processes, nworkers, chunks):
-  monkeypatch.setattr(Dataset, "to_msv2", dataset_to_msv2, raising=False)
-  monkeypatch.setattr(DataTree, "to_msv2", datatree_to_msv2, raising=False)
-  monkeypatch.setattr(DataTree, "sync_msv2", sync_msv2, raising=False)
+def test_distributed_write(simmed_ms, processes, nworkers, chunks):
   da = pytest.importorskip("dask.array")
   distributed = pytest.importorskip("dask.distributed")
 
@@ -140,12 +133,9 @@ def test_distributed_write(simmed_ms, monkeypatch, processes, nworkers, chunks):
 
 
 @pytest.mark.parametrize("simmed_ms", [{"name": "indexed-write.ms"}], indirect=True)
-def test_indexed_write(monkeypatch, simmed_ms):
+def test_indexed_write(simmed_ms):
   """Check that we throw if we select a variable out with an integer index
   and then try write that sub-selection out"""
-  monkeypatch.setattr(Dataset, "to_msv2", dataset_to_msv2, raising=False)
-  monkeypatch.setattr(DataTree, "to_msv2", datatree_to_msv2, raising=False)
-  monkeypatch.setattr(DataTree, "sync_msv2", sync_msv2, raising=False)
   dt = xarray.open_datatree(simmed_ms)
   assert len(dt.children) == 1
 
