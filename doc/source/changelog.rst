@@ -3,14 +3,13 @@
 Changelog
 =========
 
-X.Y.Z (DD-MM-YYYY)
+0.5.0 (02-03-2026)
 ------------------
 * Fix ``VisibilityCoder`` typo (:pr:`145`)
 * Raise an exception if no MSv4 Frame Type is available in ``EpochCoder.decode`` (:pr:`145`)
 * Replace an assert with an ``InvalidMeasurementSet`` exception if the
   number of ``TabRefTypes`` doesn't match the ``TabRefCodes`` (:pr:`145`)
 * Guard frame inference in a dictionary with a KeyError (:pr:`145`)
-
 
 0.3.9 (18-02-2026)
 ------------------
