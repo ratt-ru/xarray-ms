@@ -4,7 +4,7 @@ version = "0.5.0"
 description = "xarray MSv4 views over MSv2 Measurement Sets"
 authors = [{name = "Simon Perkins", email = "simon.perkins@gmail.com"}]
 readme = "README.rst"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "xarray>=2025.0",
     "cacheout>=0.16.0",
