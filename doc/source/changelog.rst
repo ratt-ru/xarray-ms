@@ -3,6 +3,10 @@
 Changelog
 =========
 
+Unreleased
+----------
+* Fix dask unpickling error when broadcasting the MSv2 WEIGHT column to its full MSv4 shape
+
 0.5.0 (02-03-2026)
 ------------------
 * Fix ``VisibilityCoder`` typo (:pr:`145`)

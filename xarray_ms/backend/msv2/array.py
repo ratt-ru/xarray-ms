@@ -176,6 +176,10 @@ class BroadcastMSv2Array(MSv2Array):
   def dtype(self):
     return self._low_res_array.dtype
 
+  @dtype.setter
+  def dtype(self, value: npt.DTypeLike) -> None:
+    self._low_res_array.dtype = value
+
   @property
   def transform(self) -> TransformerT | None:
     return self._low_res_array.transform
