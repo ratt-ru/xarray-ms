@@ -41,7 +41,7 @@ class MSv2Array(BackendArray):
   shape: Tuple[int, ...]
   dtype: npt.DTypeLike
 
-  def __init__(self, shape: Tuple[int, ...], dtype: npt.NDTypeLike):
+  def __init__(self, shape: Tuple[int, ...], dtype: npt.DTypeLike):
     self.shape = shape
     self.dtype = dtype
 
