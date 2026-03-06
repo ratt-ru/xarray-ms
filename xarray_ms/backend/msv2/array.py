@@ -160,7 +160,6 @@ class BroadcastMSv2Array(MSv2Array):
 
   _low_res_array: MSv2Array
   _low_res_index: Tuple[slice | npt.NDArray | None, ...]
-  shape: Tuple[int, ...]
 
   def __init__(
     self,
@@ -168,13 +167,9 @@ class BroadcastMSv2Array(MSv2Array):
     low_res_index: Tuple[slice | npt.NDArray | None, ...],
     high_res_shape: Tuple[int, ...],
   ):
+    super().__init__(high_res_shape, low_res_array.dtype)
     self._low_res_array = low_res_array
     self._low_res_index = low_res_index
-    self.shape = high_res_shape
-
-  @property
-  def dtype(self):
-    return self._low_res_array.dtype
 
   @property
   def transform(self) -> TransformerT | None:
