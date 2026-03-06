@@ -45,7 +45,7 @@ class MSv2Array(BackendArray):
     self.shape = shape
     self.dtype = dtype
 
-  def __getitem__(self, key):
+  def __getitem__(self, key) -> npt.NDArray:
     raise NotImplementedError
 
   @property
@@ -72,8 +72,6 @@ class MainMSv2Array(MSv2Array):
     "_transform",
   )
 
-  shape: Tuple[int, ...]
-  dtype: npt.DTypeLike
   _table_factory: Multiton
   _structure_factory: MSv2StructureFactory
   _partition: PartitionKeyT
