@@ -3,7 +3,7 @@
 Changelog
 =========
 
-X.Y.Z (DD-MM-YYYY)
+0.5.1 (06-03-2026)
 ------------------
 * Correct ``BroadcastMSv2Array`` initialisation of ``MSv2Array`` base class
   which resulted in unpickleable ``BroadcastMSv2Array`` instances. (:pr:`147`)
