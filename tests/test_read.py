@@ -1,3 +1,4 @@
+import pickle
 from contextlib import nullcontext
 from functools import reduce
 from operator import mul
@@ -294,6 +295,27 @@ def test_low_resolution_read(simmed_ms):
     assert_array_equal(
       np.broadcast_to(values, (ntime, nbl, nfreq, npol)), node.WEIGHT.values
     )
+
+
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [
+    {
+      "name": "backend.ms",
+      "data_description": [(8, ["XX", "XY", "YX", "YY"]), (4, ["RR", "LL"])],
+      "table_desc": {"__remove_columns__": ["WEIGHT_SPECTRUM"]},
+      "transform_data": _remove_weight_spectrum_add_weight,
+    }
+  ],
+  indirect=True,
+)
+def test_datatree_pickleable(simmed_ms):
+  """Test that the resulting datatree is pickleable.
+
+  WEIGHT_SPECTRUM is replaced with WEIGHT to test
+  https://github.com/ratt-ru/xarray-ms/pull/146"""
+  dt = xarray.open_datatree(simmed_ms, auto_corrs=True)
+  xarray.testing.assert_identical(dt, pickle.loads(pickle.dumps(dt)))
 
 
 @pytest.mark.parametrize(

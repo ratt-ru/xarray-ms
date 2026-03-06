@@ -34,19 +34,18 @@ def slice_length(s: npt.NDArray | slice, max_len) -> int:
 
 
 class MSv2Array(BackendArray):
-  """Base MSv2Array backend array class,
-  containing required shape and data type"""
+  """Base MSv2Array backend array class"""
 
   __slots__ = ("shape", "dtype")
 
   shape: Tuple[int, ...]
   dtype: npt.DTypeLike
 
-  def __init__(self, shape: Tuple[int, ...], dtype: npt.DTypeLike):
+  def __init__(self, shape: Tuple[int, ...], dtype: npt.NDTypeLike):
     self.shape = shape
     self.dtype = dtype
 
-  def __getitem__(self, key) -> npt.NDArray:
+  def __getitem__(self, key):
     raise NotImplementedError
 
   @property
@@ -73,6 +72,8 @@ class MainMSv2Array(MSv2Array):
     "_transform",
   )
 
+  shape: Tuple[int, ...]
+  dtype: npt.DTypeLike
   _table_factory: Multiton
   _structure_factory: MSv2StructureFactory
   _partition: PartitionKeyT
@@ -160,7 +161,6 @@ class BroadcastMSv2Array(MSv2Array):
 
   _low_res_array: MSv2Array
   _low_res_index: Tuple[slice | npt.NDArray | None, ...]
-  shape: Tuple[int, ...]
 
   def __init__(
     self,
@@ -168,13 +168,9 @@ class BroadcastMSv2Array(MSv2Array):
     low_res_index: Tuple[slice | npt.NDArray | None, ...],
     high_res_shape: Tuple[int, ...],
   ):
+    super().__init__(high_res_shape, low_res_array.dtype)
     self._low_res_array = low_res_array
     self._low_res_index = low_res_index
-    self.shape = high_res_shape
-
-  @property
-  def dtype(self):
-    return self._low_res_array.dtype
 
   @property
   def transform(self) -> TransformerT | None:
