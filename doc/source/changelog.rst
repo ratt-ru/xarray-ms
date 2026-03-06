@@ -3,6 +3,10 @@
 Changelog
 =========
 
+X.Y.Z (DD-MM-YYYY)
+------------------
+* Depend on xradio to test xarray-ms MSv4 Datatree compliance (:pr:`148`)
+
 0.5.0 (02-03-2026)
 ------------------
 * Fix ``VisibilityCoder`` typo (:pr:`145`)
