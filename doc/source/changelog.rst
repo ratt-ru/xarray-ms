@@ -3,6 +3,12 @@
 Changelog
 =========
 
+0.5.1 (06-03-2026)
+------------------
+* Correct ``BroadcastMSv2Array`` initialisation of ``MSv2Array`` base class
+  which resulted in unpickleable ``BroadcastMSv2Array`` instances. (:pr:`147`)
+* Depend on xradio to test xarray-ms MSv4 Datatree compliance (:pr:`148`)
+
 0.5.0 (02-03-2026)
 ------------------
 * Fix ``VisibilityCoder`` typo (:pr:`145`)
