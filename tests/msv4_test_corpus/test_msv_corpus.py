@@ -1,4 +1,5 @@
 import os.path
+import warnings
 
 import pytest
 import xarray
@@ -7,9 +8,15 @@ import xarray_ms  # noqa
 
 # If present, use xradio to perform schema checking
 try:
-  import xradio  # noqa
-  import xradio.measurement_set  # noqa. Required to register types for check_datatree
-  from xradio.schema.check import check_datatree
+  with warnings.catch_warnings():
+    warnings.filterwarnings(
+      "ignore",
+      category=UserWarning,
+      message="Could not import the function to convert from MSv2 to MSv4.",
+    )
+    import xradio  # noqa
+    import xradio.measurement_set  # noqa. Required to register types for check_datatree
+    from xradio.schema.check import check_datatree
 except ImportError:
   xradio = None
 
@@ -17,6 +24,9 @@ pmx = pytest.mark.xfail
 
 
 @pytest.mark.msv4_test_corpus
+@pytest.mark.filterwarnings(
+  "ignore:Could not import the function to convert from MSv2 to MSv4"
+)
 @pytest.mark.filterwarnings("ignore::xarray_ms.errors.FrameConversionWarning")
 @pytest.mark.filterwarnings("ignore::xarray_ms.errors.ImputedMetadataWarning")
 @pytest.mark.filterwarnings("ignore::xarray_ms.errors.IrregularTimeGridWarning")
