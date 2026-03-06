@@ -34,7 +34,8 @@ def slice_length(s: npt.NDArray | slice, max_len) -> int:
 
 
 class MSv2Array(BackendArray):
-  """Base MSv2Array backend array class"""
+  """Base MSv2Array backend array class,
+  containing required shape and data type"""
 
   __slots__ = ("shape", "dtype")
 
