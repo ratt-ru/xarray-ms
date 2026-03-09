@@ -1,7 +1,8 @@
 import warnings
 from collections import defaultdict
+from dataclasses import dataclass
 from importlib.metadata import version as package_version
-from typing import Any, Dict, Iterable, List, Literal, Mapping, Set, Tuple
+from typing import Any, Dict, List, Literal, Mapping, Set, Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -25,7 +26,40 @@ else:
 
 ShapeSetType = Set[Tuple[int, ...]]
 DTypeSetType = Set[npt.DTypeLike]
-ShapeAndDTypeType = Dict[Tuple[str, str], Tuple[ShapeSetType, DTypeSetType]]
+
+
+@dataclass
+class DataVariableInfo:
+  counts: int
+  shapes: ShapeSetType
+  dtypes: DTypeSetType
+
+
+DataVariableInfoMap = Dict[Tuple[str, str], DataVariableInfo]
+
+
+MSV4_WRITE_MAP = {
+  "UVW": "UVW",
+  "VISIBILITY": "DATA",
+  "WEIGHT": "WEIGHT_SPECTRUM",
+  "FLAG": "FLAG",
+}
+
+
+# MSv4 variables that will not be written back to
+# the MSv2 as they are effectively metadata
+IGNORED_VARIABLES = [
+  # Standard MSv4 variables
+  "EFFECTIVE_INTEGRATION_TIME",
+  "TIME_CENTROID",
+  "TIME_CENTROID_EXTRA_PRECISION",
+  "EFFECTIVE_CHANNEL_WIDTH",
+  "FREQUENCY_CENTROID",
+  # Added by Correlated Factory if grids are irregular
+  "TIME",
+  "INTEGRATION_TIME",
+  "CHANNEL_WIDTH",
+]
 
 
 def validate_column_desc(
@@ -100,7 +134,7 @@ def fit_tile_shape(shape: Tuple[int, ...], dtype: npt.DTypeLike) -> Dict[str, np
 
 def generate_column_descriptor(
   table_desc: Dict[str, Any],
-  shapes_and_dtypes: ShapeAndDTypeType,
+  data_var_map: DataVariableInfoMap,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
   """
   Synthesises a column descriptor from:
@@ -113,9 +147,8 @@ def generate_column_descriptor(
   Args:
     table_desc: Table descriptor containing existing
       column definitions.
-    shapes_and_dtypes: A :code:`{var_name: (set(shapes), set(dtypes))}`
-      mapping of shapes and data types associated with each xarray
-      Variable.
+    data_var_map: A mapping of shapes and data types
+      associated with each xarray Variable.
 
   Returns:
     A (descriptor, dminfo) tuple containing any columns
@@ -125,23 +158,22 @@ def generate_column_descriptor(
   actual_desc = {}
   dm_groups = []
 
-  for (var_name, column), (shapes, dtypes) in shapes_and_dtypes.items():
+  for (var_name, msv2_column), data_var_info in data_var_map.items():
     # If there are existing descriptors, either for
     # columns present on the table, or in the canonical definition
     # validate that the variable shape matches the column
-    if column_desc := table_desc.get(column):
-      validate_column_desc(var_name, column, shapes, column_desc)
-    elif column_desc := canonical_table_desc.get(column):
-      validate_column_desc(var_name, column, shapes, column_desc)
+    if column_desc := table_desc.get(msv2_column):
+      validate_column_desc(var_name, msv2_column, data_var_info.shapes, column_desc)
+    elif column_desc := canonical_table_desc.get(msv2_column):
+      validate_column_desc(var_name, msv2_column, data_var_info.shapes, column_desc)
     else:
-      # Construct a column descriptor and possibly an
-      # associated data manager
+      # Construct a column descriptor and possibly an associated data manager
       # Unify variable numpy types
-      dtype = np.result_type(*dtypes)
+      dtype = np.result_type(*data_var_info.dtypes)
 
       if dtype is object:
         raise NotImplementedError(
-          f"Types of variable {var_name} ({list(dtypes)}) "
+          f"Types of variable {var_name} ({list(data_var_info.dtypes)}) "
           f"resolves to an object. "
           f"Writing of objects is not supported"
         )
@@ -155,21 +187,21 @@ def generate_column_descriptor(
 
       column_desc = {"valueType": casa_type, "option": 0}
 
-      if len(shapes) == 1:
+      if len(data_var_info.shapes) == 1:
         # If the shape is fixed, Tile the column
         # column descriptor shapes are fortran ordered
-        fixed_shape = tuple(reversed(next(iter(shapes))))
+        fixed_shape = tuple(reversed(next(iter(data_var_info.shapes))))
         row_only = len(fixed_shape) == 0
         if not row_only:
           column_desc["option"] |= 4
           column_desc["shape"] = list(fixed_shape)
           column_desc["ndim"] = len(fixed_shape)
-        column_desc["dataManagerGroup"] = dm_group = f"{column}_GROUP"
+        column_desc["dataManagerGroup"] = dm_group = f"{msv2_column}_GROUP"
         column_desc["dataManagerType"] = dm_type = "TiledColumnStMan"
 
         dm_groups.append(
           {
-            "COLUMNS": [column],
+            "COLUMNS": [msv2_column],
             "NAME": dm_group,
             "TYPE": dm_type,
             "SPEC": fit_tile_shape(fixed_shape, dtype),
@@ -182,7 +214,7 @@ def generate_column_descriptor(
         column_desc["dataManagerGroup"] = "StandardStMan"
         column_desc["dataManagerType"] = "StandardStMan"
 
-      actual_desc[column] = column_desc
+      actual_desc[msv2_column] = column_desc
 
   dminfo = {f"*{i + 1}": g for i, g in enumerate(dm_groups)}
   return actual_desc, dminfo
@@ -216,68 +248,39 @@ def msv2_store_from_dataset(ds: Dataset, region="auto") -> MSv2Store:
   )
 
 
-WriteVariablesT = str | Tuple[str, str] | List[str | Tuple[str, str]] | Dict[str, str]
+WriteMapT = Tuple[str, str] | List[Tuple[str, str]] | Dict[str, str] | None
 
 
-def promote_write_variables(variables: WriteVariablesT) -> Dict[str, str]:
+def promote_write_map(variables: WriteMapT) -> Dict[str, str]:
+  """Promotes the supplied write variable mapping into a Dict[str, str]"""
   type_except = TypeError(
     f"{variables} should be one of:\n"
-    f"1. a str representing a variable\n"
-    f"2. a Tuple[str, str] variable -> column mapping\n"
-    f"3. A List containing either 1. or 2.\n"
-    f"4. A Dict[str, str] variable -> column mapping"
+    f"1. a Tuple[str, str] variable -> column mapping\n"
+    f"2. An Iterable[Tuple[str, str]].\n"
+    f"3. A Dict[str, str] variable -> column mapping"
   )
 
-  def check_var(var, on_type_error="raise"):
-    if isinstance(var, str):
-      return (var, var)
-    elif isinstance(var, tuple):
-      if not len(var) == 2 and all(isinstance(v, str) for v in var):
-        raise type_except
+  def check_tuple(tup: Tuple[str, str]) -> Tuple[str, str]:
+    if (
+      isinstance(tup, tuple) and len(tup) == 2 and all(isinstance(t, str) for t in tup)
+    ):
+      return tup
 
-      return (var[0], var[1])
+    raise type_except
 
-    if on_type_error == "raise":
-      raise type_except
-
-    return None
-
-  if result := check_var(variables, on_type_error="none"):
-    return result
-
-  if isinstance(variables, list):
-    return {src: dest for src, dest in map(check_var, variables)}
-
-  if isinstance(variables, dict):
-    for k, v in variables.items():
-      if not isinstance(k, str) or not isinstance(v, str):
-        raise type_except
-
-  raise type_except
+  if variables is None:
+    return {}
+  elif isinstance(variables, dict):
+    return variables
+  elif isinstance(variables, tuple):
+    return dict([check_tuple(variables)])
+  elif isinstance(variables, (list, set)):
+    return dict([check_tuple(v) for v in variables])
+  else:
+    raise type_except
 
 
-IGNORED_VARIABLES = [
-  # Standard MSv4 variables
-  # spectrum_xds
-  "SPECTRUM",
-  # visibility_xds
-  "VISIBILITY",
-  "FLAG",
-  "WEIGHT",
-  "UVW",
-  "EFFECTIVE_INTEGRATION_TIME",
-  "TIME_CENTROID",
-  "TIME_CENTROID_EXTRA_PRECISION",
-  "EFFECTIVE_CHANNEL_WIDTH",
-  "FREQUENCY_CENTROID",
-  # Added by Correlated Factory if grids are irregular
-  "TIME",
-  "INTEGRATION_TIME",
-  "CHANNEL_WIDTH",
-]
-
-
-def sync_msv2(dt: DataTree, variables: WriteVariablesT):
+def sync_msv2(dt: DataTree, write_map: WriteMapT = None):
   assert isinstance(dt, DataTree)
   vis_datasets = [
     n for n in dt.subtree if n.attrs.get("type") in CORRELATED_DATASET_TYPES
@@ -291,61 +294,56 @@ def sync_msv2(dt: DataTree, variables: WriteVariablesT):
   table_factory = msv2_store_from_dataset(next(iter(vis_datasets)).ds).table_factory
   table_desc = table_factory.instance.tabledesc()
 
-  # write_var_map = promote_write_variables(variables)
-
-  # if variables is None:
-  #   columns = table_factory.instance.columns()
-
-  list_var_names: List[Any] = (
-    [variables] if isinstance(variables, str) else list(variables)
+  write_map = {**MSV4_WRITE_MAP, **promote_write_map(write_map)}
+  var_info_map: DataVariableInfoMap = defaultdict(
+    lambda: DataVariableInfo(0, set(), set())
   )
-  set_var_names = set(list_var_names)
 
-  if len(set_var_names) == 0:
-    warnings.warn("Empty 'variables'")
-    return
-
-  shapes_and_dtypes: ShapeAndDTypeType = defaultdict(lambda: (set(), set()))
-
-  for node in vis_datasets:
+  for nodes_visited, node in enumerate(vis_datasets, 1):
     assert isinstance(node, DataTree)
-    if not set_var_names.issubset(node.data_vars.keys()):
-      raise ValueError(
-        f"{set_var_names} are not present in all visibility DataTree nodes"
-      )
+    for name, var in node.data_vars.items():
+      if name in IGNORED_VARIABLES:
+        continue
 
-    for n in set_var_names:
-      var = node.data_vars[n]
-
+      # Don't try to create anything that doesn't translate
+      # to a MAIN MSv2 row dimension
       if var.dims[: len(MAIN_PREFIX_DIMS)] != MAIN_PREFIX_DIMS:
-        raise ValueError(
-          f"{n} dimensions {var.dims} do not start with {MAIN_PREFIX_DIMS}"
+        warnings.warn(
+          f"Ignoring {name} in {node.path}  "
+          f"dimensions {var.dims} do not begin with {MAIN_PREFIX_DIMS}",
+          UserWarning,
         )
+        continue
 
-      shapes, dtypes = shapes_and_dtypes[(n, n)]
-      shapes.add(var.shape[len(MAIN_PREFIX_DIMS) :])
-      dtypes.add(var.dtype)
+      entry = var_info_map[(name, write_map.get(name, name))]
+      entry.counts += 1
+      entry.shapes.add(var.shape[len(MAIN_PREFIX_DIMS) :])
+      entry.dtypes.add(var.dtype)
 
-  table_factory = msv2_store_from_dataset(next(iter(vis_datasets)).ds)._table_factory
-  table_desc = table_factory.instance.tabledesc()
-  column_descs, dminfo = generate_column_descriptor(table_desc, shapes_and_dtypes)
+  # Ensure that the identified variables are universally
+  # defined across all DataTree.
+  for key, entry in list(var_info_map.items()):
+    if entry.counts != nodes_visited:
+      warnings.warn(
+        f"Ignoring {key[0]} which does not appear in all "
+        f"visibility datasets {list(dt.children)}",
+        UserWarning,
+      )
+      var_info_map.pop(key)
+
+  # Generate column descriptors and add the columns
+  column_descs, dminfo = generate_column_descriptor(table_desc, var_info_map)
   table_factory.instance.addcols(column_descs, dminfo)
   assert set(column_descs.keys()).issubset(table_factory.instance.columns())
 
 
 def datatree_to_msv2(
   dt: DataTree,
-  variables: str | Iterable[str],
+  write_map: WriteMapT = None,
   compute: Literal[True] = True,
   write_inherited_coords: bool = False,
-):
+) -> None:
   assert isinstance(dt, DataTree)
-  list_var_names = [variables] if isinstance(variables, str) else list(variables)
-  set_var_names = set(list_var_names)
-
-  if len(set_var_names) == 0:
-    warnings.warn("Empty 'variables'")
-    return
 
   if (
     len(
@@ -363,32 +361,32 @@ def datatree_to_msv2(
   for node in vis_datasets:
     at_root = node is dt.root
     ds = node.to_dataset(inherit=write_inherited_coords or at_root)
-    dataset_to_msv2(ds, list_var_names, compute)
+    dataset_to_msv2(ds, write_map=write_map, compute=compute)
 
 
 def dataset_to_msv2(
   ds: Dataset,
-  variables: str | Iterable[str],
+  write_map: WriteMapT = None,
   compute: Literal[True] = True,
   region: Mapping[str, slice | Literal["auto"]] | Literal["auto"] = "auto",
-):
+) -> None:
   assert isinstance(ds, Dataset)
-  list_vars = [variables] if isinstance(variables, str) else list(variables)
-
-  if len(list_vars) == 0:
-    return
 
   # Strip out
-  # 1. variables that will not be written
+  # 1. ancilliary variables
   # 2. coordinates
   # 3. attributes
-  ignored_vars = set(ds.data_vars) - set(list_vars)
-  ds = ds.drop_vars(ignored_vars | set(ds.coords)).drop_attrs()
+  write_map = {**MSV4_WRITE_MAP, **promote_write_map(write_map)}
+  ignored = set(IGNORED_VARIABLES) & set(ds.data_vars)
+  write_ds = ds.drop_vars(ignored | set(ds.coords)).drop_attrs()
+  write_ds = write_ds.rename_vars(
+    {k: v for k, v in write_map.items() if k in write_ds.data_vars}
+  )
 
-  msv2_store = msv2_store_from_dataset(ds, region)
-  msv2_store.set_write_region(ds)
+  msv2_store = msv2_store_from_dataset(write_ds, region)
+  msv2_store.set_write_region(write_ds)
   writer = ArrayWriter()
-  dump_to_store(ds, msv2_store, writer)
+  dump_to_store(write_ds, msv2_store, writer)
   writes = writer.sync(compute=compute)
 
   if compute:

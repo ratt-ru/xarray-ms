@@ -31,8 +31,8 @@ def test_store(simmed_ms):
         xdt[node.path] = DataTree(ds)
         assert len(node.encoding) > 0
 
-    xdt.sync_msv2(["CORRECTED"])
-    xdt.to_msv2(["UVW", "CORRECTED"])
+    xdt.sync_msv2()
+    xdt.to_msv2()
     written = written or True
 
   with xarray.open_datatree(simmed_ms, auto_corrs=True) as xdt:
@@ -64,7 +64,7 @@ def test_store_region(simmed_ms):
         assert len(node.encoding) > 0
 
     # Create the new MS columns
-    xdt.sync_msv2("CORRECTED")
+    xdt.sync_msv2()
 
     for node in xdt.subtree:
       if node.attrs.get("type") in CORRELATED_DATASET_TYPES:
@@ -72,7 +72,7 @@ def test_store_region(simmed_ms):
         ds = ds.isel(**region)
         ds = ds.assign(CORRECTED=xarray.full_like(ds.CORRECTED, 1 + 2j))
         # Now write it out
-        ds.to_msv2(["CORRECTED"], compute=False, region=region)
+        ds.to_msv2(compute=False, region=region)
 
   # We can check that CORRECTED has been written correctly
   with arcae.table(simmed_ms) as T:
@@ -115,12 +115,12 @@ def test_distributed_write(simmed_ms, processes, nworkers, chunks):
         assert len(node.encoding) > 0
 
     # Create the new MS columns
-    dt.sync_msv2("CORRECTED")
-    dt.to_msv2(["CORRECTED"], compute=False)
+    dt.sync_msv2()
+    dt.to_msv2(compute=False)
 
     for node in dt.subtree:
       if node.attrs.get("type") in CORRELATED_DATASET_TYPES:
-        node.ds.to_msv2(["CORRECTED"], compute=True)
+        node.ds.to_msv2(compute=True)
 
   with arcae.table(simmed_ms) as T:
     corrected = T.getcol("CORRECTED")
@@ -144,11 +144,11 @@ def test_indexed_write(simmed_ms):
       ds = node.ds.assign(CORRECTED=xarray.full_like(node.VISIBILITY, 1 + 2j))
       dt[node.path] = DataTree(ds)
 
-  dt.sync_msv2("CORRECTED")
-  dt.to_msv2(["CORRECTED"], compute=False)
+  dt.sync_msv2()
+  dt.to_msv2(compute=False)
 
   for node in dt.subtree:
     if node.attrs.get("type") in CORRELATED_DATASET_TYPES:
       ds = node.ds.isel(time=slice(0, 2), baseline_id=slice(0, 2), frequency=1)
       with pytest.raises(MismatchedWriteRegion):
-        ds.to_msv2(["CORRECTED"], compute=True)
+        ds.to_msv2(compute=True)
