@@ -3,6 +3,14 @@
 Changelog
 =========
 
+X.Y.Z (DD-MM-YYYY)
+------------------
+* Handle duplicate antenna name (:pr:`151`)
+* Deprecate python 3.10 support (:pr:`150`)
+* Add python 3.14 to CI testing matrix (:pr:`150`)
+* Test more comprehensively in pull requests (:pr:`150`)
+* Depend on arcae ``>= 0.5.1, < 0.6.0`` (:pr:`149`)
+
 0.5.1 (06-03-2026)
 ------------------
 * Correct ``BroadcastMSv2Array`` initialisation of ``MSv2Array`` base class
