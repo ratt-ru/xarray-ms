@@ -4,6 +4,8 @@ import pytest
 import xarray
 from arcae.lib.arrow_tables import Table, ms_descriptor
 
+from xarray_ms.errors import DuplicateAntennaNameWarning
+
 NANTENNA = 6
 
 
@@ -138,3 +140,52 @@ def test_antenna_feed_join(simmed_ms, auto_corrs):
   npt.assert_array_equal(
     p1["antenna_xds"].antenna_name, np.array(["ANTENNA-0", "ANTENNA-2"], dtype=object)
   )
+
+
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [{"name": "dup.ms", "nantenna": 3, "auto_corrs": True}],
+  indirect=True,
+)
+def test_duplicate_antenna_names(simmed_ms):
+  """When ANTENNA::NAME contains duplicates, names are made unique and a
+  warning is emitted.  The names in antenna_xds and the baseline coordinate
+  must be consistent with each other."""
+
+  # Overwrite ANTENNA::NAME so that antenna 0 and antenna 1 share a name.
+  with Table.from_filename(f"{simmed_ms}::ANTENNA") as T:
+    T.putcol("NAME", np.asarray(["SAME", "SAME", "OTHER"]))
+
+  with pytest.warns(DuplicateAntennaNameWarning, match="SAME"):
+    dt = xarray.open_datatree(simmed_ms, auto_corrs=True).load()
+
+  partition = dt[list(dt.children)[0]]
+  antenna_xds = partition["antenna_xds"]
+
+  # All antenna_name coordinate values must be unique
+  ant_names = antenna_xds.antenna_name.values.tolist()
+  assert len(ant_names) == len(set(ant_names)), "antenna_name coordinate has duplicates"
+
+  # Duplicated base names get -N suffixes; unique names are unchanged
+  assert "SAME-1" in ant_names
+  assert "SAME-2" in ant_names
+  assert "OTHER" in ant_names
+
+  # Every baseline antenna name must appear in antenna_xds.antenna_name
+  ant_name_set = set(ant_names)
+  assert set(partition.baseline_antenna1_name.values.tolist()) <= ant_name_set
+  assert set(partition.baseline_antenna2_name.values.tolist()) <= ant_name_set
+
+
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [{"name": "nodup.ms", "nantenna": 3, "auto_corrs": True}],
+  indirect=True,
+)
+def test_unique_antenna_names_no_warning(simmed_ms):
+  """When all antenna names are already unique no warning should be emitted."""
+  import warnings
+
+  with warnings.catch_warnings():
+    warnings.simplefilter("error", DuplicateAntennaNameWarning)
+    xarray.open_datatree(simmed_ms, auto_corrs=True).load()

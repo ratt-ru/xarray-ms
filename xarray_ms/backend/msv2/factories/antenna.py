@@ -4,6 +4,7 @@ from xarray import Dataset, Variable
 from xarray_ms.backend.msv2.factories.core import DatasetFactory
 from xarray_ms.backend.msv2.imputation import maybe_impute_observation_table
 from xarray_ms.backend.msv2.measures_encoders import MSv2CoderFactory
+from xarray_ms.backend.msv2.table_utils import unique_antenna_names
 from xarray_ms.errors import InvalidMeasurementSet
 
 RELOCATABLE_ARRAY = {"ALMA", "VLA", "NOEMA", "EVLA"}
@@ -53,7 +54,10 @@ class AntennaFactory(DatasetFactory):
       )
 
     ant_coder_factory = MSv2CoderFactory.from_arrow_table(filtered_ants)
-    antenna_names = filtered_ants["NAME"].to_numpy().astype(str)
+    # Deduplicate against the full ANTENNA table so suffix assignments are
+    # consistent with those produced in the correlated dataset factory.
+    all_ant_names = unique_antenna_names(ants["NAME"].to_numpy().astype(str))
+    antenna_names = all_ant_names[feed_ant_id[mask]]
     telescope_names = np.asarray([telescope_name] * len(antenna_names), dtype=str)
     position = pac.list_flatten(filtered_ants["POSITION"]).to_numpy().reshape(-1, 3)
     diameter = filtered_ants["DISH_DIAMETER"].to_numpy()
