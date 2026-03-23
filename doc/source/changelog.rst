@@ -3,6 +3,10 @@
 Changelog
 =========
 
+X.Y.Z (DD-MM-YYYY)
+------------------
+* Depend on arcae ``>= 0.5.1, < 0.6.0`` (:pr:`149`)
+
 0.5.1 (06-03-2026)
 ------------------
 * Correct ``BroadcastMSv2Array`` initialisation of ``MSv2Array`` base class
