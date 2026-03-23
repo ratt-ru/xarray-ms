@@ -30,6 +30,11 @@ class ImputedMetadataWarning(MissingMetadataWarning):
   if the original metadata is missing"""
 
 
+class DuplicateAntennaNameWarning(UserWarning):
+  """Warning raised when duplicate antenna names are found in the ANTENNA table
+  and are made unique by appending a numeric suffix"""
+
+
 class FrameConversionWarning(UserWarning):
   """Warning raised if there's no defined conversion from a CASA
   to astropy reference frame"""

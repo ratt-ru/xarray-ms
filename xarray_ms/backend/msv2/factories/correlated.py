@@ -26,6 +26,7 @@ from xarray_ms.backend.msv2.measures_encoders import (
   VisibilityCoder,
 )
 from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
+from xarray_ms.backend.msv2.table_utils import unique_antenna_names
 from xarray_ms.casa_types import ColumnDesc, Polarisations
 from xarray_ms.errors import (
   ColumnShapeImputationWarning,
@@ -266,7 +267,7 @@ class CorrelatedFactory(DatasetFactory):
     assert (partition.nbl,) == ant1.shape
 
     antenna = self._subtable_factories["ANTENNA"].instance
-    ant_names = antenna["NAME"].to_numpy().astype(str)
+    ant_names = unique_antenna_names(antenna["NAME"].to_numpy().astype(str))
     ant1_names = ant_names[ant1]
     ant2_names = ant_names[ant2]
 

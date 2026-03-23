@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Handle duplicate antenna name (:pr:`151`)
 * Deprecate python 3.10 support (:pr:`150`)
 * Add python 3.14 to CI testing matrix (:pr:`150`)
 * Test more comprehensively in pull requests (:pr:`150`)
