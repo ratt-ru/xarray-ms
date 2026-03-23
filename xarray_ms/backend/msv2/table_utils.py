@@ -17,8 +17,7 @@ def unique_antenna_names(names: np.ndarray) -> np.ndarray:
   emitted when any renaming is performed.
   """
   unique, counts = np.unique(names, return_counts=True)
-  duplicates = set(unique[counts > 1].tolist())
-  if not duplicates:
+  if not (duplicates := set(unique[counts > 1].tolist())):
     return names
 
   warnings.warn(
@@ -28,13 +27,15 @@ def unique_antenna_names(names: np.ndarray) -> np.ndarray:
     DuplicateAntennaNameWarning,
     stacklevel=2,
   )
-  result = names.copy()
+  # Build as a Python list to avoid numpy fixed-width string truncation,
+  # then convert back to an array with a wide enough dtype.
+  result = names.tolist()
   counters: Dict[str, int] = {}
-  for i, name in enumerate(names.tolist()):
+  for i, name in enumerate(result):
     if name in duplicates:
       counters[name] = counters.get(name, 0) + 1
       result[i] = f"{name}-{counters[name]}"
-  return result
+  return np.array(result, dtype=str)
 
 
 def extract_table_desc(table: pa.Table) -> Dict[str, Any]:
