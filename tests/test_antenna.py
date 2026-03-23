@@ -163,7 +163,7 @@ def test_duplicate_antenna_names(simmed_ms):
   antenna_xds = partition["antenna_xds"]
 
   # All antenna_name coordinate values must be unique
-  ant_names = antenna_xds.antenna_name.values.tolist()
+  ant_names = antenna_xds.antenna_name.values
   assert len(ant_names) == len(set(ant_names)), "antenna_name coordinate has duplicates"
 
   # Duplicated base names get -N suffixes; unique names are unchanged
@@ -171,10 +171,18 @@ def test_duplicate_antenna_names(simmed_ms):
   assert "SAME-2" in ant_names
   assert "OTHER" in ant_names
 
-  # Every baseline antenna name must appear in antenna_xds.antenna_name
-  ant_name_set = set(ant_names)
-  assert set(partition.baseline_antenna1_name.values.tolist()) <= ant_name_set
-  assert set(partition.baseline_antenna2_name.values.tolist()) <= ant_name_set
+  # correlated dataset baseline_antenna{i}_name maps
+  # appropriately to the antenna dataset antenna names.
+  concat_ant_names = np.concatenate(
+    [partition.baseline_antenna1_name, partition.baseline_antenna2_name]
+  )
+  unique_ant_names, inv = np.unique(concat_ant_names, return_inverse=True)
+  _, lookup = np.where(unique_ant_names[:, None] == ant_names[None, :])
+  ant1 = lookup[inv[: len(inv) // 2]]
+  ant2 = lookup[inv[len(inv) // 2 :]]
+
+  np.testing.assert_array_equal(partition.baseline_antenna1_name, ant_names[ant1])
+  np.testing.assert_array_equal(partition.baseline_antenna2_name, ant_names[ant2])
 
 
 @pytest.mark.parametrize(
