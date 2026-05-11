@@ -176,11 +176,16 @@ class CorrelatedFactory(DatasetFactory):
     from arcae.lib.arrow_tables import ms_descriptor
 
     # Ignore all standard msv2 columns, except
-    # for CORRECTED_DATA and CORRECTED_WEIGHT_SPECTRUM
+    # for CORRECTED_DATA, CORRECTED_WEIGHT_SPECTRUM, FLOAT_DATA and MODEL_DATA
     ignored_msv2_column_set = {
       c for c in ms_descriptor("MAIN", complete=True).keys() if not c.startswith("_")
     }
-    ignored_msv2_column_set -= {"CORRECTED_DATA", "CORRECTED_WEIGHT_SPECTRUM"}
+    ignored_msv2_column_set -= {
+      "CORRECTED_DATA",
+      "CORRECTED_WEIGHT_SPECTRUM",
+      "MODEL_DATA",
+      "FLOAT_DATA",
+    }
     remaining_columns = set(self._ms_factory.instance.columns())
     remaining_columns -= ignored_msv2_column_set
     remaining_columns -= processed_columns
