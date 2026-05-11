@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Expand standard msv2 columns supported during reads (:pr:`153`)
 * Handle duplicate antenna name (:pr:`151`)
 * Deprecate python 3.10 support (:pr:`150`)
 * Add python 3.14 to CI testing matrix (:pr:`150`)
