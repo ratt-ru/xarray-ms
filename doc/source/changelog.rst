@@ -3,7 +3,7 @@
 Changelog
 =========
 
-0.5.2 (11-05-2026)
+0.5.3 (11-05-2026)
 ------------------
 * Expand standard msv2 columns supported during reads (:pr:`153`)
 * Handle duplicate antenna name (:pr:`151`)
