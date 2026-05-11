@@ -415,6 +415,30 @@ NONSTANDARD_TABLE_DESC = {
     # 'shape': ...,  # Variably shaped
     "valueType": "COMPLEX",
   },
+  "MODEL_DATA": {
+    "_c_order": True,
+    "comment": "MODEL_DATA column",
+    "dataManagerGroup": "StandardStMan",
+    "dataManagerType": "StandardStMan",
+    "keywords": {},
+    "maxlen": 0,
+    "ndim": 2,
+    "option": 0,
+    # 'shape': ...,  # Variably shaped
+    "valueType": "COMPLEX",
+  },
+  "FLOAT_DATA": {
+    "_c_order": True,
+    "comment": "FLOAT_DATA column",
+    "dataManagerGroup": "StandardStMan",
+    "dataManagerType": "StandardStMan",
+    "keywords": {},
+    "maxlen": 0,
+    "ndim": 2,
+    "option": 0,
+    # 'shape': ...,  # Variably shaped
+    "valueType": "FLOAT",
+  },
   "CORRELATED_WEIGHT_SPECTRUM": {
     "_c_order": True,
     "comment": "CORRELATED_WEIGHT_SPECTRUM column",
@@ -432,6 +456,8 @@ NONSTANDARD_TABLE_DESC = {
 
 def _add_non_standard_columns(chunk_desc, data_dict):
   data_dict["CORRELATED_DATA"] = data_dict["DATA"]
+  data_dict["MODEL_DATA"] = data_dict["DATA"]
+  data_dict["FLOAT_DATA"] = (data_dict["DATA"][0], data_dict["DATA"][1].real)
   return data_dict
 
 
@@ -463,3 +489,18 @@ def test_additional_columns(simmed_ms):
         "polarization",
       )
       assert node["CORRELATED_DATA"].equals(node["VISIBILITY"])
+      assert node["FLOAT_DATA"].dims == (
+        "time",
+        "baseline_id",
+        "frequency",
+        "polarization",
+      )
+      assert node["FLOAT_DATA"].equals(node["VISIBILITY"].real)
+
+      assert node["MODEL_DATA"].dims == (
+        "time",
+        "baseline_id",
+        "frequency",
+        "polarization",
+      )
+      assert node["MODEL_DATA"].equals(node["VISIBILITY"])

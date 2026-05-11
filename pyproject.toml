@@ -77,11 +77,11 @@ tag_template = "{new_version}"
 # tbump.toml location.
 [[tool.tbump.file]]
 src = "pyproject.toml"
-search = "^(current|version)\\s*=\\s*\"{current_version}\""
+search = 'version = "{current_version}"'
 
 [[tool.tbump.file]]
 src = "doc/source/conf.py"
-search = "^release\\s*=\\s*\"{current_version}\""
+search = 'release = "{current_version}"'
 
 # You can specify a list of commands to
 # run after the files have been patched
