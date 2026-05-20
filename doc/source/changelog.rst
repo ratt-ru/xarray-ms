@@ -3,7 +3,7 @@
 Changelog
 =========
 
-X.Y.Z (DD-MM-YYYY)
+0.5.4 (20-05-2026)
 ------------------
 * Allow unsupported arguments in entrypoint methods (:pr:`154`)
 
