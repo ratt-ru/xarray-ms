@@ -3,6 +3,10 @@
 Changelog
 =========
 
+X.Y.Z (DD-MM-YYYY)
+------------------
+* Allow unsupported arguments in entrypoint methods (:pr:`154`)
+
 0.5.3 (11-05-2026)
 ------------------
 * Expand standard msv2 columns supported during reads (:pr:`153`)
