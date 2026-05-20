@@ -36,9 +36,7 @@ def subtable_factory(
   name: str, on_missing: Literal["raise", "empty_table"] = "empty_table"
 ) -> pa.Table:
   try:
-    return Table.from_filename(
-      name, ninstances=1, readonly=True, lockoptions="nolock"
-    ).to_arrow()
+    return Table.from_filename(name, ninstances=1, readonly=True).to_arrow()
   except pa.lib.ArrowInvalid as e:
     e_str = str(e)
     if "subtable" in e_str and "is invalid" in e_str:
@@ -97,11 +95,7 @@ class CommonStoreArgs:
     self.partition_schema = partition_schema or DEFAULT_PARTITION_COLUMNS
     self.preferred_chunks = preferred_chunks or {}
     self.ms_factory = ms_factory or Multiton(
-      Table.from_filename,
-      self.ms,
-      ninstances=self.ninstances,
-      readonly=True,
-      lockoptions="nolock",
+      Table.from_filename, self.ms, ninstances=self.ninstances, readonly=True
     )
     self.subtable_factories = subtable_factories or {
       subtable: Multiton(subtable_factory, f"{ms}::{subtable}")
