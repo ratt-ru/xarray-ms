@@ -7,6 +7,7 @@ import xarray.testing as xt
 from numpy.testing import assert_array_equal
 
 from xarray_ms.backend.msv2.entrypoint import MSv2EntryPoint
+from xarray_ms.errors import IgnoredArgument
 from xarray_ms.testing.utils import id_string, prune_datetime_structures
 
 
@@ -237,3 +238,14 @@ def test_open_datatree_chunking(simmed_ms):
   }
 
   assert ncdt.identical(prune_datetime_structures(dt))
+
+
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [{"name": "ignored_kwargs.ms"}],
+  indirect=True,
+)
+def test_ignored_kwargs_warning(simmed_ms):
+  with pytest.warns(IgnoredArgument, match="unsupported_kwarg"):
+    dt = xarray.open_datatree(simmed_ms, unsupported_kwarg=True)
+  assert isinstance(dt, xarray.DataTree)
