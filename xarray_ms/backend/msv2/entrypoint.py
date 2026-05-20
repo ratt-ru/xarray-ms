@@ -26,7 +26,11 @@ from xarray_ms.backend.msv2.structure import (
   MSv2Structure,
   MSv2StructureFactory,
 )
-from xarray_ms.errors import FrameConversionWarning, InvalidPartitionKey
+from xarray_ms.errors import (
+  FrameConversionWarning,
+  IgnoredArgument,
+  InvalidPartitionKey,
+)
 from xarray_ms.msv4_types import CORRELATED_DATASET_TYPES
 from xarray_ms.multiton import Multiton
 from xarray_ms.utils import format_docstring
@@ -560,6 +564,13 @@ class MSv2EntryPoint(BackendEntrypoint):
     """Create a dictionary of :class:`~xarray.Dataset` presenting an MSv4 view
     over a partition of a MSv2 CASA Measurement Set"""
 
+    if kwargs:
+      warnings.warn(
+        f"xarray-ms does not support the following arguments and will ignore them: "
+        f"{sorted(kwargs)}",
+        IgnoredArgument,
+      )
+
     if isinstance(filename_or_obj, os.PathLike):
       ms = str(filename_or_obj)
     elif isinstance(filename_or_obj, str):
@@ -600,7 +611,6 @@ class MSv2EntryPoint(BackendEntrypoint):
         ninstances=store_args.ninstances,
         epoch=store_args.epoch,
         structure_factory=store_args.structure_factory,
-        **kwargs,
       )
 
       antenna_factory = AntennaFactory(
