@@ -11,7 +11,7 @@
 project = "xarray-ms"
 copyright = "2024 - 2025 NRF (SARAO) and Rhodes University (RATT) Centre"
 author = "Simon Perkins"
-release = "0.5.3"
+release = "0.5.4"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
