@@ -310,7 +310,6 @@ class MSv2EntryPoint(BackendEntrypoint):
     auto_corrs: bool = False,
     ninstances: int = 8,
     epoch: str | None = None,
-    **kwargs,
   ) -> DataTree:
     """Create a :class:`~xarray.core.datatree.DataTree` presenting an MSv4 view
     over multiple partitions of a MSv2 CASA Measurement Set.
@@ -366,7 +365,6 @@ class MSv2EntryPoint(BackendEntrypoint):
       auto_corrs=auto_corrs,
       ninstances=ninstances,
       epoch=epoch,
-      **kwargs,
     )
 
     dt = DataTree.from_dict(groups_dict)
@@ -447,7 +445,6 @@ class MSv2EntryPoint(BackendEntrypoint):
     ninstances: int = 8,
     epoch: str | None = None,
     structure_factory: MSv2StructureFactory | None = None,
-    **kwargs,
   ) -> Dict[str, Dataset]:
     """Create a dictionary of :class:`~xarray.Dataset` presenting an MSv4 view
     over a partition of a MSv2 CASA Measurement Set"""
@@ -492,7 +489,6 @@ class MSv2EntryPoint(BackendEntrypoint):
         ninstances=store_args.ninstances,
         epoch=store_args.epoch,
         structure_factory=store_args.structure_factory,
-        **kwargs,
       )
 
       antenna_factory = AntennaFactory(
