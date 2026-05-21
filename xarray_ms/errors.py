@@ -1,7 +1,3 @@
-class IgnoredArgument(UserWarning):
-  """Issued when keyword arguments are passed that this backend does not support."""
-
-
 class IrregularGridWarning(UserWarning):
   """Base Warning for irregular grids"""
 
