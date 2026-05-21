@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Remove ``*kwargs`` from ``MSv2EntryPoint`` methods (:pr:`156`)
 * Revert: Allow unsupported arguments in entrypoint methods (#154) (:pr:`155`)
 
 0.5.4 (20-05-2026)
