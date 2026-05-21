@@ -3,6 +3,10 @@
 Changelog
 =========
 
+X.Y.Z (DD-MM-YYYY)
+------------------
+* Revert: Allow unsupported arguments in entrypoint methods (#154) (:pr:`155`)
+
 0.5.4 (20-05-2026)
 ------------------
 * Allow unsupported arguments in entrypoint methods (:pr:`154`)
