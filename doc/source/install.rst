@@ -24,7 +24,7 @@ dependencies:
 
   $ virtualenv -p python3.12 /tmp/xms
   $ source xms/bin/activate
-  (xms) $ pip install -e .[dev,doc,testing]
+  (xms) $ pip install --group dev --group test --group doc -e .
 
 The pre-commit hooks can be manually executed as follows:
 
