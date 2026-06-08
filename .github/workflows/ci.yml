@@ -62,7 +62,7 @@ jobs:
       - name: Install xarray-ms
         run: |
           source .venv/bin/activate
-          pip install .[testing]
+          pip install --group test .
 
       - name: Test xarray-ms
         run: |

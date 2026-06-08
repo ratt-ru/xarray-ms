@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Move development dependencies in dependency groups (:pr:`158`)
 * Remove ``*kwargs`` from ``MSv2EntryPoint`` methods (:pr:`156`)
 * Revert: Allow unsupported arguments in entrypoint methods (#154) (:pr:`155`)
 
