@@ -9,6 +9,7 @@ from rarg_python_patterns.multiton import Multiton
 from xarray_ms.backend.msv2.structure import (
   DEFAULT_PARTITION_COLUMNS,
   MainTableFactory,
+  MSv2Structure,
   MSv2StructureFactory,
   SubtableFactory,
 )
@@ -109,7 +110,8 @@ class CommonStoreArgs:
       subtable: Multiton(subtable_factory, f"{ms}::{subtable}")
       for subtable in (DEFAULT_SUBTABLES + EXTRA_SUBTABLES)
     }
-    self.structure_factory = structure_factory or MSv2StructureFactory(
+    self.structure_factory = structure_factory or Multiton(
+      MSv2Structure,
       self.ms_factory,
       self.subtable_factories,
       self.partition_schema,

@@ -11,7 +11,7 @@ from rarg_python_patterns.multiton import Multiton
 
 from xarray_ms.backend.msv2.structure import (
   MainTableFactory,
-  MSv2StructureFactory,
+  MSv2Structure,
   SubtableFactory,
   TablePartitioner,
   baseline_id,
@@ -43,13 +43,13 @@ def test_structure_factory(simmed_ms, epoch):
     st: Multiton(subtable_factory, f"{simmed_ms}::{st}")
     for st in ("DATA_DESCRIPTION", "FEED", "FIELD", "STATE")
   }
-  structure_factory = MSv2StructureFactory(
-    table_factory, subtables, partition_schema, epoch, True
+  structure_factory = Multiton(
+    MSv2Structure, table_factory, subtables, partition_schema, epoch, True
   )
   assert pickle.loads(pickle.dumps(structure_factory)) == structure_factory
 
-  structure_factory2 = MSv2StructureFactory(
-    table_factory, subtables, partition_schema, epoch, True
+  structure_factory2 = Multiton(
+    MSv2Structure, table_factory, subtables, partition_schema, epoch, True
   )
   assert structure_factory.instance is structure_factory2.instance
 
@@ -124,26 +124,32 @@ def test_epoch(simmed_ms):
     for st in ("DATA_DESCRIPTION", "FEED", "FIELD", "STATE")
   }
 
-  structure_factory = MSv2StructureFactory(
-    table_factory, subtables, partition_schema, "abc", True
+  structure_factory = Multiton(
+    MSv2Structure, table_factory, subtables, partition_schema, "abc", True
   )
-  structure_factory2 = MSv2StructureFactory(
-    table_factory, subtables, partition_schema, "abc", True
+  structure_factory2 = Multiton(
+    MSv2Structure, table_factory, subtables, partition_schema, "abc", True
   )
 
   assert structure_factory.instance is structure_factory2.instance
 
-  structure_factory3 = MSv2StructureFactory(
-    table_factory, subtables, partition_schema, "def", True
+  structure_factory3 = Multiton(
+    MSv2Structure, table_factory, subtables, partition_schema, "def", True
   )
 
   assert structure_factory.instance is not structure_factory3.instance
 
 
 def test_msv2_structure_release(simmed_ms):
-  assert len(MSv2StructureFactory._STRUCTURE_CACHE) == 0
+  def ncached_structures():
+    return sum(
+      isinstance(obj, MSv2Structure)
+      for obj, _, _, _ in Multiton._INSTANCE_CACHE.values()
+    )
+
+  assert ncached_structures() == 0
 
   with xarray.open_datatree(simmed_ms):
-    assert len(MSv2StructureFactory._STRUCTURE_CACHE) > 0
+    assert ncached_structures() > 0
 
-  assert len(MSv2StructureFactory._STRUCTURE_CACHE) == 0
+  assert ncached_structures() == 0
