@@ -8,7 +8,9 @@ from rarg_python_patterns.multiton import Multiton
 
 from xarray_ms.backend.msv2.structure import (
   DEFAULT_PARTITION_COLUMNS,
+  MainTableFactory,
   MSv2StructureFactory,
+  SubtableFactory,
 )
 
 # These tables should always be present on an MS
@@ -59,8 +61,8 @@ class CommonStoreArgs:
   epoch: str
   partition_schema: List[str]
   preferred_chunks: Dict[str, int]
-  ms_factory: Multiton
-  subtable_factories: Dict[str, Multiton]
+  ms_factory: MainTableFactory
+  subtable_factories: Dict[str, SubtableFactory]
   structure_factory: MSv2StructureFactory
 
   __slots__ = (
@@ -83,8 +85,8 @@ class CommonStoreArgs:
     epoch: str | None = None,
     partition_schema: List[str] | None = None,
     preferred_chunks: Dict[str, int] | None = None,
-    ms_factory: Multiton | None = None,
-    subtable_factories: Dict[str, Multiton] | None = None,
+    ms_factory: MainTableFactory | None = None,
+    subtable_factories: Dict[str, SubtableFactory] | None = None,
     structure_factory: MSv2StructureFactory | None = None,
   ):
     if not os.path.exists(ms):

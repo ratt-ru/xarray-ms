@@ -7,7 +7,6 @@ from importlib.metadata import version as importlib_version
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping
 
 import xarray
-from rarg_python_patterns.multiton import Multiton
 from xarray.backends import BackendEntrypoint
 from xarray.backends.common import AbstractWritableDataStore, _normalize_path
 from xarray.backends.store import StoreBackendEntrypoint
@@ -35,7 +34,12 @@ if TYPE_CHECKING:
 
   from xarray.backends.common import AbstractDataStore
 
-  from xarray_ms.backend.msv2.structure import DEFAULT_PARTITION_COLUMNS, PartitionKeyT
+  from xarray_ms.backend.msv2.structure import (
+    DEFAULT_PARTITION_COLUMNS,
+    MainTableFactory,
+    PartitionKeyT,
+    SubtableFactory,
+  )
 
 
 def promote_chunks(
@@ -86,8 +90,8 @@ class MSv2Store(AbstractWritableDataStore):
     "_epoch",
   )
 
-  _table_factory: Multiton
-  _subtable_factories: Dict[str, Multiton]
+  _table_factory: MainTableFactory
+  _subtable_factories: Dict[str, SubtableFactory]
   _structure_factory: MSv2StructureFactory
   _partition_schema: List[str]
   _partition_key: PartitionKeyT
@@ -98,8 +102,8 @@ class MSv2Store(AbstractWritableDataStore):
 
   def __init__(
     self,
-    table_factory: Multiton,
-    subtable_factories: Dict[str, Multiton],
+    table_factory: MainTableFactory,
+    subtable_factories: Dict[str, SubtableFactory],
     structure_factory: MSv2StructureFactory,
     partition_schema: List[str],
     partition_key: PartitionKeyT,

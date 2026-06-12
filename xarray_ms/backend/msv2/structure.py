@@ -19,6 +19,7 @@ from typing import (
   Sequence,
   Set,
   Tuple,
+  TypeAlias,
 )
 
 import numpy as np
@@ -40,6 +41,12 @@ from xarray_ms.errors import (
 )
 
 logger = logging.getLogger(__name__)
+
+MainTableFactory: TypeAlias = Multiton[Table]
+"""Multiton producing an arcae main-table :class:`~arcae.lib.arrow_tables.Table`."""
+
+SubtableFactory: TypeAlias = Multiton[pa.Table]
+"""Multiton producing a pyarrow :class:`~pyarrow.Table` subtable."""
 
 
 def nr_of_baselines(na: int, auto_corrs: bool = True) -> int:
@@ -237,8 +244,8 @@ class MSv2StructureFactory:
   """Hashable, callable and picklable factory class
   for creating and caching an MSv2Structure"""
 
-  _ms_factory: Multiton
-  _subtable_factories: Dict[str, Multiton]
+  _ms_factory: MainTableFactory
+  _subtable_factories: Dict[str, SubtableFactory]
   _partition_schema: List[str]
   _epoch: str
   _auto_corrs: bool
@@ -248,8 +255,8 @@ class MSv2StructureFactory:
 
   def __init__(
     self,
-    ms: Multiton,
-    subtables: Dict[str, Multiton],
+    ms: MainTableFactory,
+    subtables: Dict[str, SubtableFactory],
     partition_schema: List[str],
     epoch: str,
     auto_corrs: bool,
@@ -315,8 +322,8 @@ class MSv2StructureFactory:
 class MSv2Structure(Mapping):
   """Holds structural information about an MSv2 dataset"""
 
-  _ms_factory: Multiton
-  _subtable_factories: Dict[str, Multiton]
+  _ms_factory: MainTableFactory
+  _subtable_factories: Dict[str, SubtableFactory]
   _partition_columns: List[str]
   _subtable_partition_columns: List[str]
   _partitions: Mapping[PartitionKeyT, PartitionData]
@@ -606,8 +613,8 @@ class MSv2Structure(Mapping):
 
   def __init__(
     self,
-    ms: Multiton,
-    subtable_factories: Dict[str, Multiton],
+    ms: MainTableFactory,
+    subtable_factories: Dict[str, SubtableFactory],
     partition_schema: List[str],
     auto_corrs: bool,
   ):

@@ -10,7 +10,9 @@ from numpy.testing import assert_array_equal, assert_equal
 from rarg_python_patterns.multiton import Multiton
 
 from xarray_ms.backend.msv2.structure import (
+  MainTableFactory,
   MSv2StructureFactory,
+  SubtableFactory,
   TablePartitioner,
   baseline_id,
 )
@@ -34,10 +36,10 @@ def test_structure_factory(simmed_ms, epoch):
     "OBSERVATION_ID",
     "OBS_MODE",
   ]
-  table_factory = Multiton(Table.from_filename, simmed_ms)
+  table_factory: MainTableFactory = Multiton(Table.from_filename, simmed_ms)
   from xarray_ms.backend.msv2.entrypoint_utils import subtable_factory
 
-  subtables = {
+  subtables: dict[str, SubtableFactory] = {
     st: Multiton(subtable_factory, f"{simmed_ms}::{st}")
     for st in ("DATA_DESCRIPTION", "FEED", "FIELD", "STATE")
   }
@@ -114,10 +116,10 @@ def test_table_partitioner():
 
 def test_epoch(simmed_ms):
   partition_schema = ["FIELD_ID", "DATA_DESC_ID", "OBSERVATION_ID"]
-  table_factory = Multiton(Table.from_filename, simmed_ms)
+  table_factory: MainTableFactory = Multiton(Table.from_filename, simmed_ms)
   from xarray_ms.backend.msv2.entrypoint_utils import subtable_factory
 
-  subtables = {
+  subtables: dict[str, SubtableFactory] = {
     st: Multiton(subtable_factory, f"{simmed_ms}::{st}")
     for st in ("DATA_DESCRIPTION", "FEED", "FIELD", "STATE")
   }
