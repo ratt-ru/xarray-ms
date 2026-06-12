@@ -9,7 +9,7 @@ dependencies = [
     "xarray>=2025.0",
     "arcae>=0.5.1, < 0.6.0",
     "typing-extensions>=4.12.2",
-    "rarg-python-patterns>=0.0.2",
+    "rarg-python-patterns>=0.0.3",
 ]
 
 [dependency-groups]
