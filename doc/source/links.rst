@@ -17,3 +17,4 @@
 .. _xarray_indexing_and_selecting: https://docs.xarray.dev/en/latest/user-guide/indexing.html
 .. _xarray_chunked_arrays: https://docs.xarray.dev/en/latest/internals/chunked-arrays.html
 .. _zarr: https://zarr.dev/
+.. _uv: https://docs.astral.sh/uv/

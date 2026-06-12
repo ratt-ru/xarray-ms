@@ -43,7 +43,7 @@ is that it can represent overlapped or disjoint measurements in time and frequen
 for one or more baselines.
 However, most observational data is well-behaved:
 Measurements are commonly ordered by ``TIME, ANTENNA1, ANTENNA2``
-and ``CHAN_FREQ`` commonly increases monotically with
+and ``CHAN_FREQ`` commonly increases monotonically with
 equidistant values (i.e. ``CHAN_WIDTH`` values are uniform) but this cannot
 always be assumed.
 Any regularity in an MSv2 MS is achieved through convention rather
@@ -86,7 +86,7 @@ Partitioning in time
 Compared to frequency, achieving regularity in time requires more thought
 as it depends on identifying partitions of MSv2 where data:
 
-1. contains monotically increasing ``TIME`` (after ordering).
+1. contains monotonically increasing ``TIME`` (after ordering).
 2. is dumped with a uniform ``INTERVAL``.
 3. ideally contains no gaps: i.e. ``(TIME - INTERVAL)[1:] == (TIME + INTERVAL)[:-1]``.
 

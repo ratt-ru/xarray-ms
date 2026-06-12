@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Documentation fixes (:pr:`160`)
 * Replace ``xarray_ms.multiton.Multiton`` with ``rarg-python-patterns.multiton.Multiton`` (:pr:`159`)
 * Move development dependencies in dependency groups (:pr:`158`)
 * Remove ``*kwargs`` from ``MSv2EntryPoint`` methods (:pr:`156`)
@@ -48,7 +49,7 @@ X.Y.Z (DD-MM-YYYY)
 * Synchronise with v4.0.0 schema version (:pr:`139`)
 * Remove ``correlated_xds.scan_number`` coordinate (:pr:`139`)
 * Remove ``correlated_xds.sub_scan_number`` coordinate (:pr:`139`)
-* Add ``corelated_xds.scan_name`` coordinate (:pr:`139`)
+* Add ``correlated_xds.scan_name`` coordinate (:pr:`139`)
 * Add ``correlated_xds.frequency.spectral_window_intents`` coordinate attribute (:pr:`139`)
 * Remove ``correlated_xds.observation_info["intents"]`` (:pr:`139`)
 * Rename ``correlated_xds.observation_info["project"]`` to ``"project_UID"`` (:pr:`139`)

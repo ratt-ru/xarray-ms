@@ -55,7 +55,7 @@ with a lazy view over the data.
 xarray has extensive functionality for
 `indexing and selecting data <xarray_indexing_and_selecting_>`_.
 
-For example, one could select select some specific dimensions out:
+For example, one could select some specific dimensions out:
 
 .. ipython:: python
 
