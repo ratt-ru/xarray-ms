@@ -18,7 +18,7 @@ In particular, it loads the MSv2 dataset present in the
 `Measurement Set v4 test suite <msv4-test-suite_>`_ except for:
 
 - ALMA Measurement Sets which sometimes do not correctly link
-  the ANTENNNA and MAIN table via the FEED table.
+  the ANTENNA and MAIN table via the FEED table.
   This will need to be addressed heuristically.
 - Single-dish Measurement Sets.
   This is not difficult as it involves loading in
