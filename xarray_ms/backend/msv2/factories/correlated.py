@@ -25,7 +25,12 @@ from xarray_ms.backend.msv2.measures_encoders import (
   MSv2CoderFactory,
   VisibilityCoder,
 )
-from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
+from xarray_ms.backend.msv2.structure import (
+  MainTableFactory,
+  MSv2StructureFactory,
+  PartitionKeyT,
+  SubtableFactory,
+)
 from xarray_ms.backend.msv2.table_utils import unique_antenna_names
 from xarray_ms.casa_types import ColumnDesc, Polarisations
 from xarray_ms.errors import (
@@ -35,7 +40,6 @@ from xarray_ms.errors import (
   IrregularChannelGridWarning,
   IrregularTimeGridWarning,
 )
-from xarray_ms.multiton import Multiton
 
 
 @dataclasses.dataclass
@@ -82,11 +86,11 @@ class CorrelatedFactory(DatasetFactory):
   for a partition of the Measurement Set"""
 
   _preferred_chunks: Dict[str, int]
-  _ms_factory: Multiton
-  _antenna_factory: Multiton
-  _spw_factory: Multiton
-  _pol_factory: Multiton
-  _obs_factory: Multiton
+  _ms_factory: MainTableFactory
+  _antenna_factory: SubtableFactory
+  _spw_factory: SubtableFactory
+  _pol_factory: SubtableFactory
+  _obs_factory: SubtableFactory
   _main_table_desc: Dict[str, Collection[str]]
   _coder_factory: MSv2CoderFactory
 
@@ -94,8 +98,8 @@ class CorrelatedFactory(DatasetFactory):
     self,
     partition_key: PartitionKeyT,
     preferred_chunks: Dict[str, int],
-    ms_factory: Multiton,
-    subtable_factories: Dict[str, Multiton],
+    ms_factory: MainTableFactory,
+    subtable_factories: Dict[str, SubtableFactory],
     structure_factory: MSv2StructureFactory,
   ):
     super().__init__(partition_key, structure_factory, subtable_factories)

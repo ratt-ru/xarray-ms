@@ -7,13 +7,15 @@ import pytest
 import xarray
 from arcae.lib.arrow_tables import Table
 from numpy.testing import assert_array_equal, assert_equal
+from rarg_python_patterns.multiton import Multiton
 
 from xarray_ms.backend.msv2.structure import (
-  MSv2StructureFactory,
+  MainTableFactory,
+  MSv2Structure,
+  SubtableFactory,
   TablePartitioner,
   baseline_id,
 )
-from xarray_ms.multiton import Multiton
 
 
 @pytest.mark.parametrize("na", [1, 2, 3, 4, 7])
@@ -34,20 +36,20 @@ def test_structure_factory(simmed_ms, epoch):
     "OBSERVATION_ID",
     "OBS_MODE",
   ]
-  table_factory = Multiton(Table.from_filename, simmed_ms)
+  table_factory: MainTableFactory = Multiton(Table.from_filename, simmed_ms)
   from xarray_ms.backend.msv2.entrypoint_utils import subtable_factory
 
-  subtables = {
+  subtables: dict[str, SubtableFactory] = {
     st: Multiton(subtable_factory, f"{simmed_ms}::{st}")
     for st in ("DATA_DESCRIPTION", "FEED", "FIELD", "STATE")
   }
-  structure_factory = MSv2StructureFactory(
-    table_factory, subtables, partition_schema, epoch, True
+  structure_factory = Multiton(
+    MSv2Structure, table_factory, subtables, partition_schema, epoch, True
   )
   assert pickle.loads(pickle.dumps(structure_factory)) == structure_factory
 
-  structure_factory2 = MSv2StructureFactory(
-    table_factory, subtables, partition_schema, epoch, True
+  structure_factory2 = Multiton(
+    MSv2Structure, table_factory, subtables, partition_schema, epoch, True
   )
   assert structure_factory.instance is structure_factory2.instance
 
@@ -114,34 +116,40 @@ def test_table_partitioner():
 
 def test_epoch(simmed_ms):
   partition_schema = ["FIELD_ID", "DATA_DESC_ID", "OBSERVATION_ID"]
-  table_factory = Multiton(Table.from_filename, simmed_ms)
+  table_factory: MainTableFactory = Multiton(Table.from_filename, simmed_ms)
   from xarray_ms.backend.msv2.entrypoint_utils import subtable_factory
 
-  subtables = {
+  subtables: dict[str, SubtableFactory] = {
     st: Multiton(subtable_factory, f"{simmed_ms}::{st}")
     for st in ("DATA_DESCRIPTION", "FEED", "FIELD", "STATE")
   }
 
-  structure_factory = MSv2StructureFactory(
-    table_factory, subtables, partition_schema, "abc", True
+  structure_factory = Multiton(
+    MSv2Structure, table_factory, subtables, partition_schema, "abc", True
   )
-  structure_factory2 = MSv2StructureFactory(
-    table_factory, subtables, partition_schema, "abc", True
+  structure_factory2 = Multiton(
+    MSv2Structure, table_factory, subtables, partition_schema, "abc", True
   )
 
   assert structure_factory.instance is structure_factory2.instance
 
-  structure_factory3 = MSv2StructureFactory(
-    table_factory, subtables, partition_schema, "def", True
+  structure_factory3 = Multiton(
+    MSv2Structure, table_factory, subtables, partition_schema, "def", True
   )
 
   assert structure_factory.instance is not structure_factory3.instance
 
 
 def test_msv2_structure_release(simmed_ms):
-  assert len(MSv2StructureFactory._STRUCTURE_CACHE) == 0
+  def ncached_structures():
+    return sum(
+      isinstance(obj, MSv2Structure)
+      for obj, _, _, _ in Multiton._INSTANCE_CACHE.values()
+    )
+
+  assert ncached_structures() == 0
 
   with xarray.open_datatree(simmed_ms):
-    assert len(MSv2StructureFactory._STRUCTURE_CACHE) > 0
+    assert ncached_structures() > 0
 
-  assert len(MSv2StructureFactory._STRUCTURE_CACHE) == 0
+  assert ncached_structures() == 0

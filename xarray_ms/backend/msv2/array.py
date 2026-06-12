@@ -15,8 +15,11 @@ from xarray.core.indexing import (
 if TYPE_CHECKING:
   import numpy.typing as npt
 
-  from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
-  from xarray_ms.multiton import Multiton
+  from xarray_ms.backend.msv2.structure import (
+    MainTableFactory,
+    MSv2StructureFactory,
+    PartitionKeyT,
+  )
 
   TransformerT = Callable[[npt.NDArray], npt.NDArray]
 
@@ -73,7 +76,7 @@ class MainMSv2Array(MSv2Array):
     "_transform",
   )
 
-  _table_factory: Multiton
+  _table_factory: MainTableFactory
   _structure_factory: MSv2StructureFactory
   _partition: PartitionKeyT
   _column: str
@@ -82,7 +85,7 @@ class MainMSv2Array(MSv2Array):
 
   def __init__(
     self,
-    table_factory: Multiton,
+    table_factory: MainTableFactory,
     structure_factory: MSv2StructureFactory,
     partition: PartitionKeyT,
     column: str,
