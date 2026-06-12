@@ -3,7 +3,7 @@
 Changelog
 =========
 
-X.Y.Z (DD-MM-YYYY)
+0.5.5 (12-06-2026)
 ------------------
 * Upgrade to arcae 0.5.2 (:pr:`161`)
 * Documentation fixes (:pr:`160`)
