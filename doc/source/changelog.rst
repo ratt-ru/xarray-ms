@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Upgrade to arcae 0.5.2 (:pr:`161`)
 * Documentation fixes (:pr:`160`)
 * Replace ``xarray_ms.multiton.Multiton`` with ``rarg-python-patterns.multiton.Multiton`` (:pr:`159`)
 * Move development dependencies in dependency groups (:pr:`158`)
