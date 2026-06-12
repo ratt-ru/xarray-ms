@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Replace ``xarray_ms.multiton.Multiton`` with ``rarg-python-patterns.multiton.Multiton`` (:pr:`159`)
 * Move development dependencies in dependency groups (:pr:`158`)
 * Remove ``*kwargs`` from ``MSv2EntryPoint`` methods (:pr:`156`)
 * Revert: Allow unsupported arguments in entrypoint methods (#154) (:pr:`155`)
