@@ -7,6 +7,7 @@ from importlib.metadata import version as importlib_version
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping
 
 import xarray
+from rarg_python_patterns.multiton import Multiton
 from xarray.backends import BackendEntrypoint
 from xarray.backends.common import AbstractWritableDataStore, _normalize_path
 from xarray.backends.store import StoreBackendEntrypoint
@@ -27,7 +28,6 @@ from xarray_ms.backend.msv2.structure import (
 )
 from xarray_ms.errors import FrameConversionWarning, InvalidPartitionKey
 from xarray_ms.msv4_types import CORRELATED_DATASET_TYPES
-from xarray_ms.multiton import Multiton
 from xarray_ms.utils import format_docstring
 
 if TYPE_CHECKING:

@@ -14,9 +14,9 @@ from xarray.core.indexing import (
 
 if TYPE_CHECKING:
   import numpy.typing as npt
+  from rarg_python_patterns.multiton import Multiton
 
   from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
-  from xarray_ms.multiton import Multiton
 
   TransformerT = Callable[[npt.NDArray], npt.NDArray]
 

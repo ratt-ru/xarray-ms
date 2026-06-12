@@ -1,7 +1,8 @@
 from typing import Dict
 
+from rarg_python_patterns.multiton import Multiton
+
 from xarray_ms.backend.msv2.structure import MSv2StructureFactory, PartitionKeyT
-from xarray_ms.multiton import Multiton
 
 
 class DatasetFactory:

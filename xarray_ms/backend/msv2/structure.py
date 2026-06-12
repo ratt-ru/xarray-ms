@@ -26,6 +26,7 @@ import numpy.typing as npt
 import pyarrow as pa
 from arcae.lib.arrow_tables import Table
 from cacheout import Cache
+from rarg_python_patterns.multiton import Multiton
 
 from xarray_ms.backend.msv2.imputation import (
   maybe_impute_field_table,
@@ -37,7 +38,6 @@ from xarray_ms.errors import (
   InvalidPartitionKey,
   PartitioningError,
 )
-from xarray_ms.multiton import Multiton
 
 logger = logging.getLogger(__name__)
 

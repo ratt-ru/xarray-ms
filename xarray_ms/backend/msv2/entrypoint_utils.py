@@ -4,12 +4,12 @@ from uuid import uuid4
 
 import pyarrow as pa
 from arcae.lib.arrow_tables import Table
+from rarg_python_patterns.multiton import Multiton
 
 from xarray_ms.backend.msv2.structure import (
   DEFAULT_PARTITION_COLUMNS,
   MSv2StructureFactory,
 )
-from xarray_ms.multiton import Multiton
 
 # These tables should always be present on an MS
 DEFAULT_SUBTABLES = [

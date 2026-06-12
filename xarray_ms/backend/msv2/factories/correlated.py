@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Any, Collection, Dict, List, Mapping, Set, Tuple
 
 import numpy as np
+from rarg_python_patterns.multiton import Multiton
 from xarray import Variable
 from xarray.coding.variables import unpack_for_decoding
 from xarray.core.indexing import LazilyIndexedArray
@@ -35,7 +36,6 @@ from xarray_ms.errors import (
   IrregularChannelGridWarning,
   IrregularTimeGridWarning,
 )
-from xarray_ms.multiton import Multiton
 
 
 @dataclasses.dataclass

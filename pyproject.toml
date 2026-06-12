@@ -10,6 +10,7 @@ dependencies = [
     "cacheout>=0.16.0",
     "arcae>=0.5.1, < 0.6.0",
     "typing-extensions>=4.12.2",
+    "rarg-python-patterns>=0.0.2",
 ]
 
 [dependency-groups]

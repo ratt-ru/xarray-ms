@@ -7,13 +7,13 @@ import pytest
 import xarray
 from arcae.lib.arrow_tables import Table
 from numpy.testing import assert_array_equal, assert_equal
+from rarg_python_patterns.multiton import Multiton
 
 from xarray_ms.backend.msv2.structure import (
   MSv2StructureFactory,
   TablePartitioner,
   baseline_id,
 )
-from xarray_ms.multiton import Multiton
 
 
 @pytest.mark.parametrize("na", [1, 2, 3, 4, 7])

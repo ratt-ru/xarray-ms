@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 from arcae.lib.arrow_tables import Table, ms_descriptor
+from rarg_python_patterns.multiton import Multiton
 
 from xarray_ms.backend.msv2.structure import MSv2StructureFactory
-from xarray_ms.multiton import Multiton
 from xarray_ms.testing.simulator import DEFAULT_SIM_PARAMS, MSStructureSimulator
 
 MSV4_TEST_CORPUS = "msv4_test_corpus"
