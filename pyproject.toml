@@ -14,7 +14,7 @@ dependencies = [
 
 [dependency-groups]
 test = [
-    "pytest>=8.0.0",
+    "pytest>=8.0.0,!=9.1.0",
     "dask>=2024.5.0",
     "distributed>=2024.5.0",
     "zarr>=2.18.3, <3.0.0",
