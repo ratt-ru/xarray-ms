@@ -3,9 +3,8 @@ import gc
 import numpy as np
 import pytest
 from arcae.lib.arrow_tables import Table, ms_descriptor
+from rarg_python_patterns.multiton import Multiton
 
-from xarray_ms.backend.msv2.structure import MSv2StructureFactory
-from xarray_ms.multiton import Multiton
 from xarray_ms.testing.simulator import DEFAULT_SIM_PARAMS, MSStructureSimulator
 
 MSV4_TEST_CORPUS = "msv4_test_corpus"
@@ -40,10 +39,8 @@ def pytest_collection_modifyitems(config, items):
 @pytest.fixture(autouse=True)
 def clear_caches():
   yield
-
-  # Structure Factories have references to Multitons
-  MSv2StructureFactory._STRUCTURE_CACHE.clear()
   Multiton._INSTANCE_CACHE.clear()
+  Multiton._EXPIRY_HEAP.clear()
   gc.collect()
 
 

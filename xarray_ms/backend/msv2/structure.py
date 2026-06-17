@@ -10,7 +10,6 @@ from functools import partial
 from numbers import Integral
 from typing import (
   Any,
-  ClassVar,
   Dict,
   Iterator,
   List,
@@ -19,13 +18,14 @@ from typing import (
   Sequence,
   Set,
   Tuple,
+  TypeAlias,
 )
 
 import numpy as np
 import numpy.typing as npt
 import pyarrow as pa
 from arcae.lib.arrow_tables import Table
-from cacheout import Cache
+from rarg_python_patterns.multiton import Multiton
 
 from xarray_ms.backend.msv2.imputation import (
   maybe_impute_field_table,
@@ -37,9 +37,17 @@ from xarray_ms.errors import (
   InvalidPartitionKey,
   PartitioningError,
 )
-from xarray_ms.multiton import Multiton
 
 logger = logging.getLogger(__name__)
+
+MainTableFactory: TypeAlias = Multiton[Table]
+"""Multiton producing an arcae main-table :class:`~arcae.lib.arrow_tables.Table`."""
+
+SubtableFactory: TypeAlias = Multiton[pa.Table]
+"""Multiton producing a pyarrow :class:`~pyarrow.Table` subtable."""
+
+MSv2StructureFactory: TypeAlias = Multiton["MSv2Structure"]
+"""Multiton producing an :class:`MSv2Structure`."""
 
 
 def nr_of_baselines(na: int, auto_corrs: bool = True) -> int:
@@ -227,96 +235,14 @@ class PartitionData:
     return aids[a1], aids[a2]
 
 
-def on_get_keep_alive(key, value, exists):
-  """Reinsert to refresh the TTL for the entry on get operations"""
-  if exists:
-    MSv2StructureFactory._STRUCTURE_CACHE._set(key, value)
-
-
-class MSv2StructureFactory:
-  """Hashable, callable and picklable factory class
-  for creating and caching an MSv2Structure"""
-
-  _ms_factory: Multiton
-  _subtable_factories: Dict[str, Multiton]
-  _partition_schema: List[str]
-  _epoch: str
-  _auto_corrs: bool
-  _STRUCTURE_CACHE: ClassVar[Cache] = Cache(
-    maxsize=100, ttl=5 * 60, on_get=on_get_keep_alive
-  )
-
-  def __init__(
-    self,
-    ms: Multiton,
-    subtables: Dict[str, Multiton],
-    partition_schema: List[str],
-    epoch: str,
-    auto_corrs: bool,
-  ):
-    self._ms_factory = ms
-    self._subtable_factories = subtables
-    self._partition_schema = partition_schema
-    self._epoch = epoch
-    self._auto_corrs = auto_corrs
-
-  def __eq__(self, other: Any) -> bool:
-    if not isinstance(other, MSv2StructureFactory):
-      return NotImplemented
-
-    return (
-      self._ms_factory == other._ms_factory
-      and self._subtable_factories == other._subtable_factories
-      and self._partition_schema == other._partition_schema
-      and self._epoch == other._epoch
-      and self._auto_corrs == other._auto_corrs
-    )
-
-  def __hash__(self):
-    return hash(
-      (
-        self._ms_factory,
-        frozenset(self._subtable_factories.items()),
-        tuple(self._partition_schema),
-        self._epoch,
-        self._auto_corrs,
-      )
-    )
-
-  def __reduce__(self):
-    return (
-      MSv2StructureFactory,
-      (
-        self._ms_factory,
-        self._subtable_factories,
-        self._partition_schema,
-        self._epoch,
-        self._auto_corrs,
-      ),
-    )
-
-  @staticmethod
-  def _create_instance(self):
-    return MSv2Structure(
-      self._ms_factory,
-      self._subtable_factories,
-      self._partition_schema,
-      self._auto_corrs,
-    )
-
-  @property
-  def instance(self) -> MSv2Structure:
-    return self._STRUCTURE_CACHE.get(self, self._create_instance)
-
-  def release(self) -> bool:
-    return self._STRUCTURE_CACHE.delete(self) > 0
-
-
 class MSv2Structure(Mapping):
   """Holds structural information about an MSv2 dataset"""
 
-  _ms_factory: Multiton
-  _subtable_factories: Dict[str, Multiton]
+  _ms_factory: MainTableFactory
+  _subtable_factories: Dict[str, SubtableFactory]
+  # Not used internally, but distinguishes Multiton keys so that
+  # different epochs force regeneration of the same structure
+  _epoch: str
   _partition_columns: List[str]
   _subtable_partition_columns: List[str]
   _partitions: Mapping[PartitionKeyT, PartitionData]
@@ -606,9 +532,10 @@ class MSv2Structure(Mapping):
 
   def __init__(
     self,
-    ms: Multiton,
-    subtable_factories: Dict[str, Multiton],
+    ms: MainTableFactory,
+    subtable_factories: Dict[str, SubtableFactory],
     partition_schema: List[str],
+    epoch: str,
     auto_corrs: bool,
   ):
     import time as modtime
@@ -621,6 +548,7 @@ class MSv2Structure(Mapping):
 
     self._ms_factory = ms
     self._subtable_factories = subtable_factories
+    self._epoch = epoch
     self._partition_columns = partition_columns
     self._subtable_partition_columns = subtable_columns
 

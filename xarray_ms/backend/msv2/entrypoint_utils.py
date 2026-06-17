@@ -4,12 +4,15 @@ from uuid import uuid4
 
 import pyarrow as pa
 from arcae.lib.arrow_tables import Table
+from rarg_python_patterns.multiton import Multiton
 
 from xarray_ms.backend.msv2.structure import (
   DEFAULT_PARTITION_COLUMNS,
+  MainTableFactory,
+  MSv2Structure,
   MSv2StructureFactory,
+  SubtableFactory,
 )
-from xarray_ms.multiton import Multiton
 
 # These tables should always be present on an MS
 DEFAULT_SUBTABLES = [
@@ -57,8 +60,8 @@ class CommonStoreArgs:
   epoch: str
   partition_schema: List[str]
   preferred_chunks: Dict[str, int]
-  ms_factory: Multiton
-  subtable_factories: Dict[str, Multiton]
+  ms_factory: MainTableFactory
+  subtable_factories: Dict[str, SubtableFactory]
   structure_factory: MSv2StructureFactory
 
   __slots__ = (
@@ -81,8 +84,8 @@ class CommonStoreArgs:
     epoch: str | None = None,
     partition_schema: List[str] | None = None,
     preferred_chunks: Dict[str, int] | None = None,
-    ms_factory: Multiton | None = None,
-    subtable_factories: Dict[str, Multiton] | None = None,
+    ms_factory: MainTableFactory | None = None,
+    subtable_factories: Dict[str, SubtableFactory] | None = None,
     structure_factory: MSv2StructureFactory | None = None,
   ):
     if not os.path.exists(ms):
@@ -101,7 +104,8 @@ class CommonStoreArgs:
       subtable: Multiton(subtable_factory, f"{ms}::{subtable}")
       for subtable in (DEFAULT_SUBTABLES + EXTRA_SUBTABLES)
     }
-    self.structure_factory = structure_factory or MSv2StructureFactory(
+    self.structure_factory = structure_factory or Multiton(
+      MSv2Structure,
       self.ms_factory,
       self.subtable_factories,
       self.partition_schema,

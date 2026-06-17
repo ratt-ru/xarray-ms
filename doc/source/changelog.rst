@@ -3,6 +3,19 @@
 Changelog
 =========
 
+X.Y.Z (DD-MM-YYYY)
+------------------
+* Introduce ``pytest != 9.1.0`` version restriction (:pr:`162`)
+
+0.5.5 (12-06-2026)
+------------------
+* Upgrade to arcae 0.5.2 (:pr:`161`)
+* Documentation fixes (:pr:`160`)
+* Replace ``xarray_ms.multiton.Multiton`` with ``rarg-python-patterns.multiton.Multiton`` (:pr:`159`)
+* Move development dependencies in dependency groups (:pr:`158`)
+* Remove ``*kwargs`` from ``MSv2EntryPoint`` methods (:pr:`156`)
+* Revert: Allow unsupported arguments in entrypoint methods (#154) (:pr:`155`)
+
 0.5.4 (20-05-2026)
 ------------------
 * Allow unsupported arguments in entrypoint methods (:pr:`154`)
@@ -41,7 +54,7 @@ Changelog
 * Synchronise with v4.0.0 schema version (:pr:`139`)
 * Remove ``correlated_xds.scan_number`` coordinate (:pr:`139`)
 * Remove ``correlated_xds.sub_scan_number`` coordinate (:pr:`139`)
-* Add ``corelated_xds.scan_name`` coordinate (:pr:`139`)
+* Add ``correlated_xds.scan_name`` coordinate (:pr:`139`)
 * Add ``correlated_xds.frequency.spectral_window_intents`` coordinate attribute (:pr:`139`)
 * Remove ``correlated_xds.observation_info["intents"]`` (:pr:`139`)
 * Rename ``correlated_xds.observation_info["project"]`` to ``"project_UID"`` (:pr:`139`)

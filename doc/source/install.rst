@@ -16,31 +16,27 @@ they must be installed separately.
 Development
 ===========
 
-Create a virtual environment and install with the dev, doc and testing
-dependencies:
+Install with the dev, doc and testing dependencies using uv_:
 
 .. code-block:: bash
 
-
-  $ virtualenv -p python3.12 /tmp/xms
-  $ source xms/bin/activate
-  (xms) $ pip install -e .[dev,doc,testing]
+  $ uv sync --group dev --group test --group doc
 
 The pre-commit hooks can be manually executed as follows:
 
 .. code-block:: bash
 
-  (xms) $ pre-commit run -a
+  $ uv run --dev pre-commit run -a
 
 Test Suite
 ----------
 
-After creating the virtual environment above, run the following command
+After installing the dependencies above, run the following command
 within the xarray-ms source code directory to execute the test suite:
 
 .. code-block:: bash
 
-  (xms) $ py.test -s -vvv tests/
+  $ uv run --group test py.test tests/
 
 
 Documentation
@@ -51,8 +47,8 @@ build the Sphinx documentation
 
 .. code-block:: bash
 
-  (xms) $ cd doc
-  (xms) $ make html
+  $ cd doc
+  $ make html
 
 Release Process
 ---------------

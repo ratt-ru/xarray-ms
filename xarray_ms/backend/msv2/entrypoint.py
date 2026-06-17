@@ -26,21 +26,21 @@ from xarray_ms.backend.msv2.structure import (
   MSv2Structure,
   MSv2StructureFactory,
 )
-from xarray_ms.errors import (
-  FrameConversionWarning,
-  IgnoredArgument,
-  InvalidPartitionKey,
-)
+from xarray_ms.errors import FrameConversionWarning, InvalidPartitionKey
 from xarray_ms.msv4_types import CORRELATED_DATASET_TYPES
-from xarray_ms.multiton import Multiton
-from xarray_ms.utils import format_docstring
+from xarray_ms.utils import format_docstring, function_arguments
 
 if TYPE_CHECKING:
   from io import BufferedIOBase
 
   from xarray.backends.common import AbstractDataStore
 
-  from xarray_ms.backend.msv2.structure import DEFAULT_PARTITION_COLUMNS, PartitionKeyT
+  from xarray_ms.backend.msv2.structure import (
+    DEFAULT_PARTITION_COLUMNS,
+    MainTableFactory,
+    PartitionKeyT,
+    SubtableFactory,
+  )
 
 
 WriteRegionT = Mapping[str, slice | Literal["auto"]] | Literal["auto"]
@@ -95,8 +95,8 @@ class MSv2Store(AbstractWritableDataStore):
     "_write_region",
   )
 
-  _table_factory: Multiton
-  _subtable_factories: Dict[str, Multiton]
+  _table_factory: MainTableFactory
+  _subtable_factories: Dict[str, SubtableFactory]
   _structure_factory: MSv2StructureFactory
   _partition_schema: List[str]
   _partition_key: PartitionKeyT
@@ -108,8 +108,8 @@ class MSv2Store(AbstractWritableDataStore):
 
   def __init__(
     self,
-    table_factory: Multiton,
-    subtable_factories: Dict[str, Multiton],
+    table_factory: MainTableFactory,
+    subtable_factories: Dict[str, SubtableFactory],
     structure_factory: MSv2StructureFactory,
     partition_schema: List[str],
     partition_key: PartitionKeyT,
@@ -236,7 +236,8 @@ class MSv2Store(AbstractWritableDataStore):
     of the Measurement Set.
 
     Overrides AbstractDataStore.get_encoding"""
-    table_args = self._table_factory.arguments()
+    multiton = self._table_factory
+    table_args = function_arguments(multiton._factory, multiton._args, multiton._kw)
 
     return {
       "common_store_args": {
@@ -319,7 +320,7 @@ class MSv2Store(AbstractWritableDataStore):
     self._write_region = expanded_region
 
   @property
-  def table_factory(self) -> Multiton:
+  def table_factory(self) -> MainTableFactory:
     """Return the table factory associated with this store"""
     return self._table_factory
 
@@ -422,7 +423,6 @@ class MSv2EntryPoint(BackendEntrypoint):
     auto_corrs: bool = False,
     ninstances: int = 8,
     epoch: str | None = None,
-    **kwargs,
   ) -> DataTree:
     """Create a :class:`~xarray.core.datatree.DataTree` presenting an MSv4 view
     over multiple partitions of a MSv2 CASA Measurement Set.
@@ -478,7 +478,6 @@ class MSv2EntryPoint(BackendEntrypoint):
       auto_corrs=auto_corrs,
       ninstances=ninstances,
       epoch=epoch,
-      **kwargs,
     )
 
     dt = DataTree.from_dict(groups_dict)
@@ -559,17 +558,9 @@ class MSv2EntryPoint(BackendEntrypoint):
     ninstances: int = 8,
     epoch: str | None = None,
     structure_factory: MSv2StructureFactory | None = None,
-    **kwargs,
   ) -> Dict[str, Dataset]:
     """Create a dictionary of :class:`~xarray.Dataset` presenting an MSv4 view
     over a partition of a MSv2 CASA Measurement Set"""
-
-    if kwargs:
-      warnings.warn(
-        f"xarray-ms does not support the following arguments and will ignore them: "
-        f"{sorted(kwargs)}",
-        IgnoredArgument,
-      )
 
     if isinstance(filename_or_obj, os.PathLike):
       ms = str(filename_or_obj)

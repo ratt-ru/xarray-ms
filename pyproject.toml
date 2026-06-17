@@ -7,14 +7,14 @@ readme = "README.rst"
 requires-python = ">=3.11"
 dependencies = [
     "xarray>=2025.0",
-    "cacheout>=0.16.0",
     "arcae>=0.4.0a4, < 0.5.0",
     "typing-extensions>=4.12.2",
+    "rarg-python-patterns>=0.0.3",
 ]
 
-[project.optional-dependencies]
-testing = [
-    "pytest>=8.0.0",
+[dependency-groups]
+test = [
+    "pytest>=8.0.0,!=9.1.0",
     "dask>=2024.5.0",
     "distributed>=2024.5.0",
     "zarr>=2.18.3, <3.0.0",
