@@ -3,7 +3,7 @@
 Changelog
 =========
 
-X.Y.Z (DD-MM-YYYY)
+0.5.6 (26-06-2026)
 ------------------
 * Resolve ``file://`` URIs to local filesystem paths (:pr:`164`)
 * Introduce ``pytest != 9.1.0`` version restriction (:pr:`162`)
