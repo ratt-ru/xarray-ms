@@ -5,10 +5,13 @@ import warnings
 from datetime import datetime, timezone
 from importlib.metadata import version as importlib_version
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping
+from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 import xarray
 from xarray.backends import BackendEntrypoint
-from xarray.backends.common import AbstractWritableDataStore, _normalize_path
+from xarray.backends.common import AbstractWritableDataStore
+from xarray.backends.common import _normalize_path as _xr_normalize_path
 from xarray.backends.store import StoreBackendEntrypoint
 from xarray.core.dataset import Dataset
 from xarray.core.datatree import DataTree
@@ -73,6 +76,26 @@ def promote_chunks(
       return_chunks.update((k, v) for k in rkeys)
 
   return return_chunks
+
+
+def _normalize_path(
+  filename_or_obj: str | os.PathLike[Any] | BufferedIOBase | AbstractDataStore,
+):
+  """Normalize the input path, additionally converting ``file://`` URIs
+  into local filesystem paths.
+
+  CASA Measurement Sets are local directories, so a ``file://`` URI
+  is resolved to the path it refers to before being handed to the backend.
+  """
+  if isinstance(filename_or_obj, str):
+    parsed = urlparse(filename_or_obj)
+    if parsed.scheme == "file":
+      # An empty or "localhost" netloc refers to the local machine.
+      # A non-empty netloc denotes a host (e.g. a Windows UNC path).
+      netloc = "" if parsed.netloc == "localhost" else parsed.netloc
+      filename_or_obj = url2pathname(netloc + parsed.path)
+
+  return _xr_normalize_path(filename_or_obj)
 
 
 class MSv2Store(AbstractWritableDataStore):
@@ -453,10 +476,8 @@ class MSv2EntryPoint(BackendEntrypoint):
     """Create a dictionary of :class:`~xarray.Dataset` presenting an MSv4 view
     over a partition of a MSv2 CASA Measurement Set"""
 
-    if isinstance(filename_or_obj, os.PathLike):
-      ms = str(filename_or_obj)
-    elif isinstance(filename_or_obj, str):
-      ms = filename_or_obj
+    if isinstance(filename_or_obj, (str, os.PathLike)):
+      ms = _normalize_path(filename_or_obj)
     else:
       raise ValueError("Measurement Set paths must be strings")
 
