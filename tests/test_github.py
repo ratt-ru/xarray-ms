@@ -1,6 +1,23 @@
 import xarray
 
 
+def test_gh157(simmed_ms):
+  """Tests that #157 is fixed
+
+  ``file://`` URIs are resolved to local filesystem paths.
+
+  https://github.com/ratt-ru/xarray-ms/issues/157
+  """
+  reference = xarray.open_datatree(simmed_ms)
+
+  for uri in (f"file://{simmed_ms}", f"file://localhost{simmed_ms}"):
+    dt = xarray.open_datatree(uri)
+    assert dt.children.keys() == reference.children.keys()
+
+    ds = xarray.open_dataset(uri)
+    assert ds.sizes == reference[next(iter(reference.children))].ds.sizes
+
+
 def test_gh116(simmed_ms):
   """Tests that #116 is fixed
 
