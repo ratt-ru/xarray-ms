@@ -1,5 +1,6 @@
 import concurrent.futures as cf
 import pickle
+from itertools import product
 
 import numpy as np
 import pyarrow as pa
@@ -153,3 +154,27 @@ def test_msv2_structure_release(simmed_ms):
     assert ncached_structures() > 0
 
   assert ncached_structures() == 0
+
+
+def test_memory_footprint(simmed_ms):
+  time_chunk = 10
+  freq_chunk = 10
+
+  with xarray.open_datatree(simmed_ms, engine="xarray-ms:msv2") as dt:
+    cache_size_after_open = len(Multiton._INSTANCE_CACHE)
+    assert cache_size_after_open > 0
+
+    for node in dt.children.values():
+      ntime = node.sizes["time"]
+      nfreq = node.sizes["frequency"]
+      for t, f in product(
+        range(0, ntime, time_chunk),
+        range(0, nfreq, freq_chunk),
+      ):
+        sub = node.isel(
+          time=slice(t, min(t + time_chunk, ntime)),
+          frequency=slice(f, min(f + freq_chunk, nfreq)),
+        )
+        sub.load()
+
+    assert len(Multiton._INSTANCE_CACHE) == cache_size_after_open
