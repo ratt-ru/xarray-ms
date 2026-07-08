@@ -153,3 +153,40 @@ def test_msv2_structure_release(simmed_ms):
     assert ncached_structures() > 0
 
   assert ncached_structures() == 0
+
+
+def test_epoch_cache_stability(simmed_ms):
+  """Sequential open→pickle→close→load tasks must not ratchet MSv2Structures.
+
+  Each task simulates the pfb-imaging distribution pattern: the driver opens
+  the datatree, pickles a sub-dataset for dispatch, then closes. The worker
+  unpickles and loads without calling close(). The driver's close() releases
+  its Multiton entries; the worker's load() re-accesses the same
+  structure_factory key and rebuilds one MSv2Structure.
+
+  With a per-open unique epoch (the old behaviour), each task's payload carries
+  a distinct Multiton key, so every worker load adds a fresh MSv2Structure to
+  the cache: after N tasks, N structures are cached and each sits there until
+  its 300s inactivity TTL expires — the source of the pfb-imaging RSS ratchet.
+
+  With a fixed default epoch, all tasks share one key and the cache stays at 1.
+  """
+
+  def ncached_structures():
+    return sum(
+      isinstance(obj, MSv2Structure)
+      for obj, _, _, _ in Multiton._INSTANCE_CACHE.values()
+    )
+
+  NTASKS = 5
+
+  for _ in range(NTASKS):
+    # driver: open, pickle a node's dataset for dispatch, then close
+    dt = xarray.open_datatree(simmed_ms, engine="xarray-ms:msv2")
+    node = next(iter(dt.children.values()))
+    payload = pickle.dumps(node.ds)
+    dt.close()
+    # worker: load without ever calling close()
+    pickle.loads(payload).load()
+
+  assert ncached_structures() == 1
