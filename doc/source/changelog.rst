@@ -3,6 +3,11 @@
 Changelog
 =========
 
+0.5.7 (Unreleased)
+------------------
+* Default epoch to "" to avoid re-initialisation of MSv2Structures
+  on every xarray.open_datatree call (:pr:`167`)
+
 0.5.6 (26-06-2026)
 ------------------
 * Resolve ``file://`` URIs to local filesystem paths (:pr:`164`)
