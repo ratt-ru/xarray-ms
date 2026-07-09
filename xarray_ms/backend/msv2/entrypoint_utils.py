@@ -1,6 +1,5 @@
 import os.path
 from typing import Dict, List, Literal
-from uuid import uuid4
 
 import pyarrow as pa
 from arcae.lib.arrow_tables import Table
@@ -96,7 +95,7 @@ class CommonStoreArgs:
     self.ms = ms
     self.ninstances = ninstances
     self.auto_corrs = auto_corrs
-    self.epoch = epoch or uuid4().hex[:8]
+    self.epoch = epoch if epoch is not None else ""
     self.partition_schema = partition_schema or DEFAULT_PARTITION_COLUMNS
     self.preferred_chunks = preferred_chunks or {}
     self.ms_factory = ms_factory or Multiton(
