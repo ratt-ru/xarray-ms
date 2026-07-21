@@ -3,7 +3,7 @@
 Changelog
 =========
 
-0.5.7 (Unreleased)
+0.5.7 (21-07-2026)
 ------------------
 * Default epoch to "" to avoid re-initialisation of MSv2Structures
   on every xarray.open_datatree call (:pr:`167`)
