@@ -3,8 +3,14 @@
 Changelog
 =========
 
-X.Y.Z (DD-MM-YYYY)
+0.5.7 (21-07-2026)
 ------------------
+* Default epoch to "" to avoid re-initialisation of MSv2Structures
+  on every xarray.open_datatree call (:pr:`167`)
+
+0.5.6 (26-06-2026)
+------------------
+* Resolve ``file://`` URIs to local filesystem paths (:pr:`164`)
 * Introduce ``pytest != 9.1.0`` version restriction (:pr:`162`)
 
 0.5.5 (12-06-2026)
