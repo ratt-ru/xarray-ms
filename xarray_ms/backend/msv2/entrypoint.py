@@ -17,6 +17,7 @@ from xarray.core.dataset import Dataset
 from xarray.core.datatree import DataTree
 from xarray.core.utils import try_read_magic_number_from_file_or_path
 
+from xarray_ms.backend.msv2.array import MainMSv2Array
 from xarray_ms.backend.msv2.entrypoint_utils import (
   CommonStoreArgs,
   resolve_driver_kwargs,
@@ -33,7 +34,7 @@ from xarray_ms.backend.msv2.structure import (
 )
 from xarray_ms.errors import FrameConversionWarning, InvalidPartitionKey
 from xarray_ms.msv4_types import CORRELATED_DATASET_TYPES
-from xarray_ms.utils import format_docstring
+from xarray_ms.utils import format_docstring, function_arguments
 
 if TYPE_CHECKING:
   from io import BufferedIOBase
@@ -46,6 +47,9 @@ if TYPE_CHECKING:
     PartitionKeyT,
     SubtableFactory,
   )
+
+
+WriteRegionT = Mapping[str, slice | Literal["auto"]] | Literal["auto"]
 
 
 def promote_chunks(
@@ -115,6 +119,7 @@ class MSv2Store(AbstractWritableDataStore):
     "_driver",
     "_driver_kwargs",
     "_epoch",
+    "_write_region",
   )
 
   _table_factory: MainTableFactory
@@ -127,6 +132,7 @@ class MSv2Store(AbstractWritableDataStore):
   _driver: str
   _driver_kwargs: Dict[str, Any]
   _epoch: str
+  _write_region: WriteRegionT
 
   def __init__(
     self,
@@ -140,6 +146,7 @@ class MSv2Store(AbstractWritableDataStore):
     driver: str,
     driver_kwargs: Dict[str, Any],
     epoch: str,
+    write_region: WriteRegionT,
   ):
     self._table_factory = table_factory
     self._subtable_factories = subtable_factories
@@ -151,6 +158,7 @@ class MSv2Store(AbstractWritableDataStore):
     self._driver = driver
     self._driver_kwargs = driver_kwargs
     self._epoch = epoch
+    self._write_region = write_region
 
   @classmethod
   def open(
@@ -165,6 +173,7 @@ class MSv2Store(AbstractWritableDataStore):
     driver_kwargs: Dict[str, Any] | None = None,
     epoch: str | None = None,
     structure_factory: MSv2StructureFactory | None = None,
+    write_region: WriteRegionT = "auto",
   ):
     if not isinstance(ms, str):
       raise ValueError("Measurement Sets paths must be strings")
@@ -207,6 +216,7 @@ class MSv2Store(AbstractWritableDataStore):
       driver=store_args.driver,
       driver_kwargs=store_args.driver_kwargs,
       epoch=store_args.epoch,
+      write_region=write_region,
     )
 
   def close(self, **kwargs):
@@ -225,9 +235,11 @@ class MSv2Store(AbstractWritableDataStore):
     )
 
   def get_variables(self):
+    """Overrides AbstractDataStore.get_variables"""
     return self.main_dataset_factory().get_variables()
 
   def get_attrs(self):
+    """Overrides AbstractDataStore.get_attrs"""
     factory = self.main_dataset_factory()
 
     attrs = {
@@ -243,10 +255,108 @@ class MSv2Store(AbstractWritableDataStore):
     return dict(sorted({**attrs, **factory.get_attrs()}.items()))
 
   def get_dimensions(self):
-    return None
+    """Typically, this hook retrieves Dataset dimensions from the
+    underlying store, but in the MSv2Store implementation, these
+    are currently derived from the Dataset.
+
+    Overrides AbstractDataStore.get_dimensions.
+    """
+    return {}
 
   def get_encoding(self):
-    return {}
+    """Encodes the arguments used to create the MSv2Store,
+    as well as the partition key associated with this partition
+    of the Measurement Set.
+
+    Overrides AbstractDataStore.get_encoding"""
+    multiton = self._table_factory
+    table_args = function_arguments(multiton._factory, multiton._args, multiton._kw)
+
+    return {
+      "common_store_args": {
+        "ms": table_args["filename"],
+        "driver": self._driver,
+        "driver_kwargs": self._driver_kwargs,
+        "auto_corrs": self._auto_corrs,
+        "epoch": self._epoch,
+        "partition_schema": self._partition_schema,
+      },
+      "partition_key": self._partition_key,
+    }
+
+  def set_dimensions(self, variables, unlimited_dims=None):
+    """Set dimensions on the store, based on the variables.
+    This might be a good point to add columns to the Measurement Set,
+    but a store only references a partition of the MS so a complete
+    view of all the variables that would contribute to defining an
+    MS column are not available.
+
+    This logic must be performed at the higher DataTree level,
+    so we noop here.
+
+    Overrides AbstractWritableDataStore.set_dimensions.
+    """
+    pass
+
+  def set_variables(
+    self,
+    variables: dict[str, xarray.Variable],
+    check_encoding_set,
+    writer,
+    unlimited_dims=None,
+  ):
+    """Set variables for writing to the store
+
+    Overrides AbstractWritableDataStore.set_variables.
+    """
+    for n, v in variables.items():
+      target, source = self.prepare_variable(
+        n, v, n in check_encoding_set, unlimited_dims=unlimited_dims
+      )
+      write_region = {} if self._write_region == "auto" else self._write_region
+      region = tuple(write_region.get(d, slice(None)) for d in v.dims)
+      writer.add(source, target, region=region)
+
+  def prepare_variable(self, name, variable, check_encoding=False, unlimited_dims=None):
+    """Prepare variable for writing to the Measurement Set
+
+    Overrides AbstractWritableDataStore.prepare_variable.
+    """
+    target = MainMSv2Array(
+      self._table_factory,
+      self._structure_factory,
+      self._partition_key,
+      name,
+      variable.shape,
+      variable.dtype,
+    )
+    return target, variable.data
+
+  def set_write_region(self, ds: Dataset):
+    """Sets the region for writing on this store, given a source dataset"""
+
+    region: Dict[str, slice | Literal["auto"]] = dict.fromkeys(ds.dims, "auto")
+
+    if self._write_region == "auto":
+      pass
+    elif isinstance(self._write_region, dict):
+      region.update(self._write_region)
+    else:
+      raise TypeError(f"'region' ({type(region)}) should be a dict or \"auto\"")
+
+    try:
+      expanded_region = {
+        d: slice(0, ds.sizes[d]) if v == "auto" else v for d, v in region.items()
+      }
+    except KeyError as e:
+      raise ValueError(f"{e} is not a dataset dimension")
+
+    self._write_region = expanded_region
+
+  @property
+  def table_factory(self) -> MainTableFactory:
+    """Return the table factory associated with this store"""
+    return self._table_factory
 
 
 class MSv2EntryPoint(BackendEntrypoint):

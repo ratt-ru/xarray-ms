@@ -105,9 +105,7 @@ def subtable_factory(
   # Subtables are read once via to_arrow(); a single instance is sufficient.
   driver_kwargs.setdefault("ninstances", 1)
   try:
-    return Table.from_filename(
-      name, readonly=True, lockoptions="nolock", **driver_kwargs
-    ).to_arrow()
+    return Table.from_filename(name, **driver_kwargs).to_arrow()
   except pa.lib.ArrowInvalid as e:
     e_str = str(e)
     if "subtable" in e_str and "is invalid" in e_str:
@@ -174,8 +172,6 @@ class CommonStoreArgs:
     self.ms_factory = ms_factory or Multiton(
       Table.from_filename,
       self.ms,
-      readonly=True,
-      lockoptions="nolock",
       **table_driver_kwargs(self.driver_kwargs, MAIN_TABLE),
     )
     self.subtable_factories = subtable_factories or {

@@ -1,6 +1,6 @@
 import inspect
 from collections.abc import Callable, Hashable, Mapping, Sequence, Set
-from typing import Any, Tuple
+from typing import Any, Dict, Tuple
 
 from numpy import ndarray
 
@@ -51,7 +51,7 @@ class FrozenKey(Hashable):
 
 
 def normalise_args(
-  factory: Callable, args, kw
+  factory: Callable, args: Tuple, kw: Dict
 ) -> Tuple[Tuple[Any, ...], Mapping[str, Any]]:
   """Normalise args and kwargs into a hashable representation
 
@@ -64,18 +64,27 @@ def normalise_args(
     tuple containing the normalised positional arguments and keyword arguments
   """
   spec = inspect.getfullargspec(factory)
-  args = list(args)
+  list_args = list(args)
 
   for i, arg in enumerate(spec.args):
-    if i < len(args):
+    if i < len(list_args):
       continue
     elif arg in kw:
-      args.append(kw.pop(arg))
+      list_args.append(kw.pop(arg))
     elif spec.defaults and len(spec.args) - len(spec.defaults) <= i:
       default = spec.defaults[i - (len(spec.args) - len(spec.defaults))]
-      args.append(default)
+      list_args.append(default)
 
-  return tuple(args), kw
+  return tuple(list_args), kw
+
+
+def function_arguments(fn: Callable, args: Tuple, kw: Mapping) -> Dict[str, Any]:
+  """Given a callable and some arguments and keywords, return a dictionary
+  of argument values that would be applied to the function signature"""
+  signature = inspect.signature(fn)
+  bound_arguments = signature.bind(*args, **kw)
+  bound_arguments.apply_defaults()
+  return bound_arguments.arguments
 
 
 def format_docstring(**subs):
