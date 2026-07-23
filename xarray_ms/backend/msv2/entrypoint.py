@@ -18,7 +18,10 @@ from xarray.core.datatree import DataTree
 from xarray.core.utils import try_read_magic_number_from_file_or_path
 
 from xarray_ms.backend.msv2.array import MainMSv2Array
-from xarray_ms.backend.msv2.entrypoint_utils import CommonStoreArgs
+from xarray_ms.backend.msv2.entrypoint_utils import (
+  CommonStoreArgs,
+  resolve_driver_kwargs,
+)
 from xarray_ms.backend.msv2.factories import (
   AntennaFactory,
   CorrelatedFactory,
@@ -113,7 +116,8 @@ class MSv2Store(AbstractWritableDataStore):
     "_partition_key",
     "_preferred_chunks",
     "_auto_corrs",
-    "_ninstances",
+    "_driver",
+    "_driver_kwargs",
     "_epoch",
     "_write_region",
   )
@@ -125,7 +129,8 @@ class MSv2Store(AbstractWritableDataStore):
   _partition_key: PartitionKeyT
   _preferred_chunks: Dict[str, int]
   _autocorrs: bool
-  _ninstances: int
+  _driver: str
+  _driver_kwargs: Dict[str, Any]
   _epoch: str
   _write_region: WriteRegionT
 
@@ -138,7 +143,8 @@ class MSv2Store(AbstractWritableDataStore):
     partition_key: PartitionKeyT,
     preferred_chunks: Dict[str, int],
     auto_corrs: bool,
-    ninstances: int,
+    driver: str,
+    driver_kwargs: Dict[str, Any],
     epoch: str,
     write_region: WriteRegionT,
   ):
@@ -149,7 +155,8 @@ class MSv2Store(AbstractWritableDataStore):
     self._partition_key = partition_key
     self._preferred_chunks = preferred_chunks
     self._auto_corrs = auto_corrs
-    self._ninstances = ninstances
+    self._driver = driver
+    self._driver_kwargs = driver_kwargs
     self._epoch = epoch
     self._write_region = write_region
 
@@ -162,7 +169,8 @@ class MSv2Store(AbstractWritableDataStore):
     partition_key: PartitionKeyT | None = None,
     preferred_chunks: Dict[str, int] | None = None,
     auto_corrs: bool = False,
-    ninstances: int = 1,
+    driver: str = "arcae",
+    driver_kwargs: Dict[str, Any] | None = None,
     epoch: str | None = None,
     structure_factory: MSv2StructureFactory | None = None,
     write_region: WriteRegionT = "auto",
@@ -172,7 +180,8 @@ class MSv2Store(AbstractWritableDataStore):
 
     store_args = CommonStoreArgs(
       ms,
-      ninstances,
+      driver,
+      driver_kwargs,
       auto_corrs,
       epoch,
       partition_schema,
@@ -204,7 +213,8 @@ class MSv2Store(AbstractWritableDataStore):
       partition_key=partition_key,
       preferred_chunks=store_args.preferred_chunks,
       auto_corrs=store_args.auto_corrs,
-      ninstances=store_args.ninstances,
+      driver=store_args.driver,
+      driver_kwargs=store_args.driver_kwargs,
       epoch=store_args.epoch,
       write_region=write_region,
     )
@@ -355,6 +365,8 @@ class MSv2EntryPoint(BackendEntrypoint):
     "partition_key",
     "preferred_chunks",
     "auto_corrs",
+    "driver",
+    "driver_kwargs",
     "ninstances",
     "epoch",
     "structure_factory",
@@ -391,7 +403,9 @@ class MSv2EntryPoint(BackendEntrypoint):
     partition_key: PartitionKeyT | None = None,
     preferred_chunks: Dict[str, int] | None = None,
     auto_corrs: bool = False,
-    ninstances: int = 8,
+    driver: Literal["arcae"] = "arcae",
+    driver_kwargs: Dict[str, Any] | None = None,
+    ninstances: int | None = None,
     epoch: str | None = None,
     structure_factory: MSv2StructureFactory | None = None,
   ) -> Dataset:
@@ -409,7 +423,32 @@ class MSv2EntryPoint(BackendEntrypoint):
         If :code:`None`, the first partition will be opened.
       preferred_chunks: The preferred chunks for each partition.
       auto_corrs: Include/Exclude auto-correlations.
+      driver: The backend driver used to access the Measurement Set.
+        Only :code:`"arcae"` is currently supported.
+      driver_kwargs: Keyword arguments passed to the backend driver.
+        Defaults to :code:`{{"cache_size": 256}}`, bounding the tiled
+        storage-manager caches (in MiB) of every table. These kwargs apply
+        uniformly to the main table and all subtables. Per-table overrides may
+        be specified under the reserved :code:`"table_overrides"` key, addressing the
+        main table as :code:`"MAIN"` and subtables by name, e.g.
+
+        .. code-block:: python
+
+          {{
+            "cache_size": 256,                    # applied to every table
+            "table_overrides": {{
+              "MAIN": {{"ninstances": 4}},          # main table only
+              "POINTING": {{"cache_size": 512}},    # a large subtable
+            }},
+          }}
+
       ninstances: The number of Measurement Set instances to open for parallel I/O.
+
+        .. deprecated::
+          ``ninstances`` will not be respected in a future release. Pass it via
+          :code:`driver_kwargs={{"table_overrides": {{"MAIN": {{"ninstances": N}}}}}}`
+          instead.
+
       epoch: A unique string identifying the creation of this Dataset.
         This should not normally need to be set by the user
       structure_factory: A factory for creating MSv2Structure objects.
@@ -420,6 +459,7 @@ class MSv2EntryPoint(BackendEntrypoint):
       partition specified by :code:`partition_schema` and :code:`partition_key`.
     """
     filename_or_obj = _normalize_path(filename_or_obj)
+    driver_kwargs = resolve_driver_kwargs(driver, driver_kwargs, ninstances)
 
     store = MSv2Store.open(
       filename_or_obj,
@@ -428,7 +468,8 @@ class MSv2EntryPoint(BackendEntrypoint):
       partition_key=partition_key,
       preferred_chunks=preferred_chunks,
       auto_corrs=auto_corrs,
-      ninstances=ninstances,
+      driver=driver,
+      driver_kwargs=driver_kwargs,
       epoch=epoch,
       structure_factory=structure_factory,
     )
@@ -444,7 +485,9 @@ class MSv2EntryPoint(BackendEntrypoint):
     drop_variables: str | Iterable[str] | None = None,
     partition_schema: List[str] | None = None,
     auto_corrs: bool = False,
-    ninstances: int = 8,
+    driver: Literal["arcae"] = "arcae",
+    driver_kwargs: Dict[str, Any] | None = None,
+    ninstances: int | None = None,
     epoch: str | None = None,
   ) -> DataTree:
     """Create a :class:`~xarray.core.datatree.DataTree` presenting an MSv4 view
@@ -484,7 +527,32 @@ class MSv2EntryPoint(BackendEntrypoint):
         Defaults to :code:`{DEFAULT_PARTITION_COLUMNS}`.
         See :ref:`partitioning-guide` for more further information.
       auto_corrs: Include/Exclude auto-correlations.
+      driver: The backend driver used to access the Measurement Set.
+        Only :code:`"arcae"` is currently supported.
+      driver_kwargs: Keyword arguments passed to the backend driver.
+        Defaults to :code:`{{"cache_size": 256}}`, bounding the tiled
+        storage-manager caches (in MiB) of every table. These kwargs apply
+        uniformly to the main table and all subtables. Per-table overrides may
+        be specified under the reserved :code:`"table_overrides"` key, addressing the
+        main table as :code:`"MAIN"` and subtables by name, e.g.
+
+        .. code-block:: python
+
+          {{
+            "cache_size": 256,                    # applied to every table
+            "table_overrides": {{
+              "MAIN": {{"ninstances": 4}},          # main table only
+              "POINTING": {{"cache_size": 512}},    # a large subtable
+            }},
+          }}
+
       ninstances: The number of Measurement Set instances to open for parallel I/O.
+
+        .. deprecated::
+          ``ninstances`` will not be respected in a future release. Pass it via
+          :code:`driver_kwargs={{"table_overrides": {{"MAIN": {{"ninstances": N}}}}}}`
+          instead.
+
       epoch: A string uniquely identifying this Dataset.
         This should not normally be set by the user
 
@@ -493,13 +561,15 @@ class MSv2EntryPoint(BackendEntrypoint):
 
     .. _preferred_chunk_sizes: https://docs.xarray.dev/en/stable/internals/how-to-add-new-backend.html#preferred-chunk-sizes
     """
+    driver_kwargs = resolve_driver_kwargs(driver, driver_kwargs, ninstances)
     groups_dict = self.open_groups_as_dict(
       filename_or_obj,
       drop_variables=drop_variables,
       partition_schema=partition_schema,
       preferred_chunks=preferred_chunks,
       auto_corrs=auto_corrs,
-      ninstances=ninstances,
+      driver=driver,
+      driver_kwargs=driver_kwargs,
       epoch=epoch,
     )
 
@@ -578,7 +648,9 @@ class MSv2EntryPoint(BackendEntrypoint):
     partition_schema: List[str] | None = None,
     preferred_chunks: Dict[str, int] | None = None,
     auto_corrs: bool = False,
-    ninstances: int = 8,
+    driver: Literal["arcae"] = "arcae",
+    driver_kwargs: Dict[str, Any] | None = None,
+    ninstances: int | None = None,
     epoch: str | None = None,
     structure_factory: MSv2StructureFactory | None = None,
   ) -> Dict[str, Dataset]:
@@ -590,9 +662,12 @@ class MSv2EntryPoint(BackendEntrypoint):
     else:
       raise ValueError("Measurement Set paths must be strings")
 
+    driver_kwargs = resolve_driver_kwargs(driver, driver_kwargs, ninstances)
+
     store_args = CommonStoreArgs(
       ms,
-      ninstances,
+      driver,
+      driver_kwargs,
       auto_corrs,
       epoch,
       partition_schema,
@@ -620,7 +695,8 @@ class MSv2EntryPoint(BackendEntrypoint):
         if isinstance(pchunks, Mapping)
         else pchunks,
         auto_corrs=store_args.auto_corrs,
-        ninstances=store_args.ninstances,
+        driver=store_args.driver,
+        driver_kwargs=store_args.driver_kwargs,
         epoch=store_args.epoch,
         structure_factory=store_args.structure_factory,
       )
