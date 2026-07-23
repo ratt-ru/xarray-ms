@@ -31,25 +31,28 @@ def test_resolve_driver_kwargs_unsupported_driver():
 @pytest.mark.filterwarnings("ignore:.*?'ninstances' argument is deprecated")
 def test_resolve_driver_kwargs_does_not_mutate_input():
   """The returned dictionary is a deep copy safe to mutate downstream."""
-  user = {"cache_size": 256, "tables": {"POINTING": {"cache_size": 512}}}
+  user = {"cache_size": 256, "table_overrides": {"POINTING": {"cache_size": 512}}}
   resolved = resolve_driver_kwargs("arcae", user, ninstances=4)
-  resolved["tables"]["POINTING"]["cache_size"] = 0
-  assert user == {"cache_size": 256, "tables": {"POINTING": {"cache_size": 512}}}
+  resolved["table_overrides"]["POINTING"]["cache_size"] = 0
+  assert user == {
+    "cache_size": 256,
+    "table_overrides": {"POINTING": {"cache_size": 512}},
+  }
 
 
 def test_resolve_driver_kwargs_ninstances_deprecated():
   """A supplied ninstances warns and is folded into the main table scope."""
   with pytest.warns(DeprecationWarning, match="'ninstances' argument is deprecated"):
     resolved = resolve_driver_kwargs("arcae", None, ninstances=4)
-  assert resolved["tables"]["MAIN"]["ninstances"] == 4
+  assert resolved["table_overrides"]["MAIN"]["ninstances"] == 4
 
 
 def test_resolve_driver_kwargs_explicit_main_beats_deprecated():
   """An explicit main-table override wins over the deprecated ninstances."""
-  dk = {"tables": {"MAIN": {"ninstances": 2}}}
+  dk = {"table_overrides": {"MAIN": {"ninstances": 2}}}
   with pytest.warns(DeprecationWarning):
     resolved = resolve_driver_kwargs("arcae", dk, ninstances=8)
-  assert resolved["tables"]["MAIN"]["ninstances"] == 2
+  assert resolved["table_overrides"]["MAIN"]["ninstances"] == 2
 
 
 def test_table_driver_kwargs_main_defaults_ninstances():
@@ -65,7 +68,7 @@ def test_table_driver_kwargs_flat_applies_to_subtable():
 
 
 def test_table_driver_kwargs_per_table_override():
-  dk = {"cache_size": 256, "tables": {"POINTING": {"cache_size": 512}}}
+  dk = {"cache_size": 256, "table_overrides": {"POINTING": {"cache_size": 512}}}
   assert table_driver_kwargs(dk, "POINTING") == {"cache_size": 512}
   assert table_driver_kwargs(dk, "SPECTRAL_WINDOW") == {"cache_size": 256}
 
@@ -83,7 +86,10 @@ def test_common_store_args_default_cache(simmed_ms):
 
 def test_common_store_args_pointing_override(simmed_ms):
   """A per-subtable override reaches only that subtable."""
-  driver_kwargs = {"cache_size": 256, "tables": {"POINTING": {"cache_size": 512}}}
+  driver_kwargs = {
+    "cache_size": 256,
+    "table_overrides": {"POINTING": {"cache_size": 512}},
+  }
   store_args = CommonStoreArgs(simmed_ms, driver_kwargs=driver_kwargs)
 
   assert store_args.subtable_factories["POINTING"]._kw == {"cache_size": 512}

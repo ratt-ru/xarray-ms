@@ -21,7 +21,9 @@ SUPPORTED_DRIVERS = ("arcae",)
 DEFAULT_DRIVER_KWARGS: Dict[str, Any] = {"cache_size": 256}
 #: Default number of instances opened for the main table.
 DEFAULT_MAIN_NINSTANCES = 8
-#: Reserved key in ``driver_kwargs["tables"]`` addressing the main table.
+#: Reserved key in ``driver_kwargs`` holding per-table override dictionaries.
+TABLE_OVERRIDES = "table_overrides"
+#: Reserved key in ``driver_kwargs[TABLE_OVERRIDES]`` addressing the main table.
 MAIN_TABLE = "MAIN"
 
 # These tables should always be present on an MS
@@ -67,13 +69,13 @@ def resolve_driver_kwargs(
     warnings.warn(
       "The 'ninstances' argument is deprecated and will not be respected in "
       "a future release. Pass driver-specific options via "
-      "driver_kwargs={'tables': {'MAIN': {'ninstances': N}}} instead.",
+      "driver_kwargs={'table_overrides': {'MAIN': {'ninstances': N}}} instead.",
       DeprecationWarning,
       stacklevel=2,
     )
     # Historically ninstances only affected the main table. An explicit
     # driver_kwargs override for the main table takes precedence.
-    dk.setdefault("tables", {}).setdefault(MAIN_TABLE, {}).setdefault(
+    dk.setdefault(TABLE_OVERRIDES, {}).setdefault(MAIN_TABLE, {}).setdefault(
       "ninstances", ninstances
     )
 
@@ -85,11 +87,11 @@ def table_driver_kwargs(driver_kwargs: Dict[str, Any], name: str) -> Dict[str, A
 
   ``name`` is :data:`MAIN_TABLE` for the main table, or a subtable name (e.g.
   ``"POINTING"``). Flat kwargs apply to every table; per-table overrides under
-  the reserved ``"tables"`` key take precedence. The main table defaults to
-  :data:`DEFAULT_MAIN_NINSTANCES` instances when unspecified.
+  the reserved :data:`TABLE_OVERRIDES` key take precedence. The main table
+  defaults to :data:`DEFAULT_MAIN_NINSTANCES` instances when unspecified.
   """
-  base = {k: v for k, v in driver_kwargs.items() if k != "tables"}
-  resolved = {**base, **driver_kwargs.get("tables", {}).get(name, {})}
+  base = {k: v for k, v in driver_kwargs.items() if k != TABLE_OVERRIDES}
+  resolved = {**base, **driver_kwargs.get(TABLE_OVERRIDES, {}).get(name, {})}
   if name == MAIN_TABLE:
     resolved.setdefault("ninstances", DEFAULT_MAIN_NINSTANCES)
   return resolved

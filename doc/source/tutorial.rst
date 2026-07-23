@@ -126,21 +126,21 @@ The backend driver caches Measurement Set data in memory. By default,
 ``xarray-ms`` bounds these tiled storage-manager caches to 256 MiB per table
 via the ``driver_kwargs`` argument. The same kwargs apply to the main table and
 all subtables, but per-table overrides can be specified under the reserved
-``"tables"`` key. This is useful for large subtables such as ``POINTING``:
+``"table_overrides"`` key. This is useful for large subtables such as ``POINTING``:
 
 .. ipython:: python
 
   dt = xarray.open_datatree(ms, partition_schema=["FIELD_ID"],
     driver_kwargs={
       "cache_size": 256,                    # applied to every table
-      "tables": {
+      "table_overrides": {
         "MAIN": {"ninstances": 4},          # main table only
         "POINTING": {"cache_size": 512},    # a large subtable
       },
     })
 
 .. note:: The ``ninstances`` argument is deprecated. Specify it via
-  ``driver_kwargs={"tables": {"MAIN": {"ninstances": N}}}`` instead.
+  ``driver_kwargs={"table_overrides": {"MAIN": {"ninstances": N}}}`` instead.
 
 
 Writing a DataTree to Zarr

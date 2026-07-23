@@ -11,10 +11,10 @@ X.Y.Z (unreleased)
   ``open_datatree``. ``driver_kwargs`` defaults to ``{"cache_size": 256}``,
   bounding the caches of the main table and all subtables (including large
   subtables such as ``POINTING``), with per-table overrides under the reserved
-  ``"tables"`` key
+  ``"table_overrides"`` key (:pr:`167`)
 * Deprecate the ``ninstances`` argument in favour of
-  ``driver_kwargs={"tables": {"MAIN": {"ninstances": N}}}``. It is still
-  respected for now but will not be in a future release
+  ``driver_kwargs={"table_overrides": {"MAIN": {"ninstances": N}}}``. It is still
+  respected for now but will not be in a future release (:pr:`167`)
 
 0.5.7 (21-07-2026)
 ------------------

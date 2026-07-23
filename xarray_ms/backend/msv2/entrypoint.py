@@ -320,14 +320,14 @@ class MSv2EntryPoint(BackendEntrypoint):
         Defaults to :code:`{{"cache_size": 256}}`, bounding the tiled
         storage-manager caches (in MiB) of every table. These kwargs apply
         uniformly to the main table and all subtables. Per-table overrides may
-        be specified under the reserved :code:`"tables"` key, addressing the
+        be specified under the reserved :code:`"table_overrides"` key, addressing the
         main table as :code:`"MAIN"` and subtables by name, e.g.
 
         .. code-block:: python
 
           {{
             "cache_size": 256,                    # applied to every table
-            "tables": {{
+            "table_overrides": {{
               "MAIN": {{"ninstances": 4}},          # main table only
               "POINTING": {{"cache_size": 512}},    # a large subtable
             }},
@@ -337,7 +337,7 @@ class MSv2EntryPoint(BackendEntrypoint):
 
         .. deprecated::
           ``ninstances`` will not be respected in a future release. Pass it via
-          :code:`driver_kwargs={{"tables": {{"MAIN": {{"ninstances": N}}}}}}`
+          :code:`driver_kwargs={{"table_overrides": {{"MAIN": {{"ninstances": N}}}}}}`
           instead.
 
       epoch: A unique string identifying the creation of this Dataset.
@@ -424,14 +424,14 @@ class MSv2EntryPoint(BackendEntrypoint):
         Defaults to :code:`{{"cache_size": 256}}`, bounding the tiled
         storage-manager caches (in MiB) of every table. These kwargs apply
         uniformly to the main table and all subtables. Per-table overrides may
-        be specified under the reserved :code:`"tables"` key, addressing the
+        be specified under the reserved :code:`"table_overrides"` key, addressing the
         main table as :code:`"MAIN"` and subtables by name, e.g.
 
         .. code-block:: python
 
           {{
             "cache_size": 256,                    # applied to every table
-            "tables": {{
+            "table_overrides": {{
               "MAIN": {{"ninstances": 4}},          # main table only
               "POINTING": {{"cache_size": 512}},    # a large subtable
             }},
@@ -441,7 +441,7 @@ class MSv2EntryPoint(BackendEntrypoint):
 
         .. deprecated::
           ``ninstances`` will not be respected in a future release. Pass it via
-          :code:`driver_kwargs={{"tables": {{"MAIN": {{"ninstances": N}}}}}}`
+          :code:`driver_kwargs={{"table_overrides": {{"MAIN": {{"ninstances": N}}}}}}`
           instead.
 
       epoch: A string uniquely identifying this Dataset.
