@@ -3,6 +3,19 @@
 Changelog
 =========
 
+X.Y.Z (unreleased)
+------------------
+* Upgrade to arcae 0.5.4, which bounds the previously unbounded tiled
+  storage-manager caches (:pr:`169`)
+* Add ``driver`` and ``driver_kwargs`` arguments to ``open_dataset`` and
+  ``open_datatree``. ``driver_kwargs`` defaults to ``{"cache_size": 256}``,
+  bounding the caches of the main table and all subtables (including large
+  subtables such as ``POINTING``), with per-table overrides under the reserved
+  ``"table_overrides"`` key (:pr:`169`)
+* Deprecate the ``ninstances`` argument in favour of
+  ``driver_kwargs={"table_overrides": {"MAIN": {"ninstances": N}}}``. It is still
+  respected for now but will not be in a future release (:pr:`169`)
+
 0.5.7 (21-07-2026)
 ------------------
 * Default epoch to "" to avoid re-initialisation of MSv2Structures
