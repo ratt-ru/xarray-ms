@@ -3,7 +3,7 @@
 Changelog
 =========
 
-X.Y.Z (unreleased)
+0.5.8 (23-07-2026)
 ------------------
 * Upgrade to arcae 0.5.4, which bounds the previously unbounded tiled
   storage-manager caches (:pr:`169`)
