@@ -275,7 +275,8 @@ class MSv2Store(AbstractWritableDataStore):
     return {
       "common_store_args": {
         "ms": table_args["filename"],
-        "ninstances": self._ninstances,
+        "driver": self._driver,
+        "driver_kwargs": self._driver_kwargs,
         "auto_corrs": self._auto_corrs,
         "epoch": self._epoch,
         "partition_schema": self._partition_schema,
