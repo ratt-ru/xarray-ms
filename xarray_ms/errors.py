@@ -77,6 +77,11 @@ class MismatchedWriteRegion(ValueError):
   does not match the target column"""
 
 
+class NonCanonicalColumnWarning(UserWarning):
+  """Warning raised when a created column deviates from
+  the canonical Measurement Set v2 column definition"""
+
+
 class ColumnCreationError(ValueError):
   """Raised when columns required for writing are missing
   from the Measurement Set after column creation"""

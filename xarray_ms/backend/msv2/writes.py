@@ -17,6 +17,7 @@ from xarray_ms.casa_types import NUMPY_TO_CASA_MAP
 from xarray_ms.errors import (
   ColumnCreationError,
   MissingEncodingError,
+  NonCanonicalColumnWarning,
 )
 from xarray_ms.msv4_types import CORRELATED_DATASET_TYPES, MAIN_PREFIX_DIMS
 
@@ -135,6 +136,113 @@ def fit_tile_shape(shape: Tuple[int, ...], dtype: npt.DTypeLike) -> Dict[str, np
   return {"DEFAULTTILESHAPE": list(tile_shape[::-1])}
 
 
+def synthesise_column_desc(
+  var_name: str,
+  column: str,
+  data_var_info: DataVariableInfo,
+  canonical_desc: Dict[str, Any] | None,
+  dm_groups: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+  """Synthesises a descriptor for a column that is absent from the table,
+  appending any associated data manager group to :code:`dm_groups`.
+
+  Descriptive metadata (the comment and keywords such as MEASINFO and
+  QuantumUnits) is inherited from the canonical column definition, but the
+  storage layout is not: canonical definitions are frequently variably shaped
+  StandardStMan columns whose cells contain no array until they are written
+  in full, which defeats the partial writes that
+  :func:`dataset_to_msv2` performs.
+
+  Args:
+    var_name: Name of the xarray Variable.
+    column: Name of the MSv2 column that will be created.
+    data_var_info: Shapes and data types associated with the Variable.
+    canonical_desc: The canonical descriptor for :code:`column`,
+      or :code:`None` if casacore does not define the column.
+    dm_groups: List of data manager groups, appended to in-place.
+
+  Returns:
+    A column descriptor.
+  """
+  # Unify variable numpy types
+  dtype = np.result_type(*data_var_info.dtypes)
+
+  if dtype is object:
+    raise NotImplementedError(
+      f"Types of variable {var_name} ({list(data_var_info.dtypes)}) "
+      f"resolves to an object. "
+      f"Writing of objects is not supported"
+    )
+
+  try:
+    casa_type = NUMPY_TO_CASA_MAP[np.dtype(dtype).type]
+  except KeyError as e:
+    raise ValueError(
+      f"No CASA type matched NumPy dtype {dtype}\n{NUMPY_TO_CASA_MAP}"
+    ) from e
+
+  column_desc: Dict[str, Any] = {"valueType": casa_type, "option": 0}
+
+  if canonical_desc:
+    if comment := canonical_desc.get("comment"):
+      column_desc["comment"] = comment
+    if keywords := canonical_desc.get("keywords"):
+      column_desc["keywords"] = keywords
+
+    # The variable data type wins, but warn that the resulting
+    # column deviates from the canonical definition
+    canonical_type = canonical_desc.get("valueType")
+    if canonical_type and canonical_type.upper() != casa_type.upper():
+      warnings.warn(
+        f"Variable {var_name} has data type {dtype} ({casa_type}) but the "
+        f"canonical MSv2 definition of {column} specifies {canonical_type}. "
+        f"{column} will be created as a {casa_type} column",
+        NonCanonicalColumnWarning,
+      )
+
+  # Columns are created with a fixed dimensionality: a variable
+  # whose trailing shapes disagree on dimensionality has no
+  # sensible column representation
+  if len({len(s) for s in data_var_info.shapes}) > 1:
+    raise ValueError(
+      f"Variable {var_name} has trailing shapes {data_var_info.shapes} "
+      f"of differing dimensionality. A column of varying dimensionality "
+      f"cannot be created for {column}"
+    )
+
+  column_desc["dataManagerGroup"] = dm_group = f"{column}_GROUP"
+
+  if len(data_var_info.shapes) == 1:
+    # If the shape is fixed, Tile the column
+    # column descriptor shapes are fortran ordered
+    tile_shape = fixed_shape = tuple(reversed(next(iter(data_var_info.shapes))))
+    row_only = len(fixed_shape) == 0
+    if not row_only:
+      column_desc["option"] |= 4
+      column_desc["shape"] = list(fixed_shape)
+      column_desc["ndim"] = len(fixed_shape)
+    column_desc["dataManagerType"] = dm_type = "TiledColumnStMan"
+  else:
+    # Variably shaped. A TiledShapeStMan retains a tiled layout while
+    # allowing the cell shape to vary per row. Size the default tile
+    # against the largest cell the variables require.
+    shapes = data_var_info.shapes
+    tile_shape = tuple(reversed(tuple(map(max, zip(*shapes)))))
+    column_desc["ndim"] = len(tile_shape)
+    column_desc["dataManagerType"] = dm_type = "TiledShapeStMan"
+
+  dm_groups.append(
+    {
+      "COLUMNS": [column],
+      "NAME": dm_group,
+      "TYPE": dm_type,
+      "SPEC": fit_tile_shape(tile_shape, dtype),
+    }
+  )
+
+  return column_desc
+
+
 def generate_column_descriptor(
   table_desc: Dict[str, Any],
   data_var_map: DataVariableInfoMap,
@@ -158,66 +266,25 @@ def generate_column_descriptor(
     and data managers that should be created
   """
   canonical_table_desc = ms_descriptor("MAIN", complete=True)
-  actual_desc = {}
-  dm_groups = []
+  actual_desc: Dict[str, Any] = {}
+  dm_groups: List[Dict[str, Any]] = []
 
   for (var_name, msv2_column), data_var_info in data_var_map.items():
-    # If there are existing descriptors, either for
-    # columns present on the table, or in the canonical definition
-    # validate that the variable shape matches the column
+    # The column already exists on the table and needs no creation,
+    # but the variable shape must match the existing descriptor
     if column_desc := table_desc.get(msv2_column):
       validate_column_desc(var_name, msv2_column, data_var_info.shapes, column_desc)
-    elif column_desc := canonical_table_desc.get(msv2_column):
-      validate_column_desc(var_name, msv2_column, data_var_info.shapes, column_desc)
-    else:
-      # Construct a column descriptor and possibly an associated data manager
-      # Unify variable numpy types
-      dtype = np.result_type(*data_var_info.dtypes)
+      continue
 
-      if dtype is object:
-        raise NotImplementedError(
-          f"Types of variable {var_name} ({list(data_var_info.dtypes)}) "
-          f"resolves to an object. "
-          f"Writing of objects is not supported"
-        )
+    # The column is absent from the table. If casacore defines it, validate
+    # the variable against that definition, but synthesise a descriptor
+    # regardless: the canonical definition is not itself suitable for creation
+    if canonical_desc := canonical_table_desc.get(msv2_column):
+      validate_column_desc(var_name, msv2_column, data_var_info.shapes, canonical_desc)
 
-      try:
-        casa_type = NUMPY_TO_CASA_MAP[np.dtype(dtype).type]
-      except KeyError as e:
-        raise ValueError(
-          f"No CASA type matched NumPy dtype {dtype}\n{NUMPY_TO_CASA_MAP}"
-        ) from e
-
-      column_desc = {"valueType": casa_type, "option": 0}
-
-      if len(data_var_info.shapes) == 1:
-        # If the shape is fixed, Tile the column
-        # column descriptor shapes are fortran ordered
-        fixed_shape = tuple(reversed(next(iter(data_var_info.shapes))))
-        row_only = len(fixed_shape) == 0
-        if not row_only:
-          column_desc["option"] |= 4
-          column_desc["shape"] = list(fixed_shape)
-          column_desc["ndim"] = len(fixed_shape)
-        column_desc["dataManagerGroup"] = dm_group = f"{msv2_column}_GROUP"
-        column_desc["dataManagerType"] = dm_type = "TiledColumnStMan"
-
-        dm_groups.append(
-          {
-            "COLUMNS": [msv2_column],
-            "NAME": dm_group,
-            "TYPE": dm_type,
-            "SPEC": fit_tile_shape(fixed_shape, dtype),
-          }
-        )
-      else:
-        # Variably shaped, use a StandardStMan for now
-        # but consider a TiledCellStMan in future
-        column_desc["option"] = 0
-        column_desc["dataManagerGroup"] = "StandardStMan"
-        column_desc["dataManagerType"] = "StandardStMan"
-
-      actual_desc[msv2_column] = column_desc
+    actual_desc[msv2_column] = synthesise_column_desc(
+      var_name, msv2_column, data_var_info, canonical_desc, dm_groups
+    )
 
   dminfo = {f"*{i + 1}": g for i, g in enumerate(dm_groups)}
   return actual_desc, dminfo
