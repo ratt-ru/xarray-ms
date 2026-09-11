@@ -75,3 +75,8 @@ class MultipleQuantumUnits(ValueError):
 class MismatchedWriteRegion(ValueError):
   """Raised when attempting to write to a chunk of data whose dimensionality
   does not match the target column"""
+
+
+class ColumnCreationError(ValueError):
+  """Raised when columns required for writing are missing
+  from the Measurement Set after column creation"""

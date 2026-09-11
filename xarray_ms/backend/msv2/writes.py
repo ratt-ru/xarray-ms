@@ -14,7 +14,10 @@ from xarray.backends.common import ArrayWriter
 from xarray_ms.backend.msv2.entrypoint import MSv2Store
 from xarray_ms.backend.msv2.entrypoint_utils import CommonStoreArgs
 from xarray_ms.casa_types import NUMPY_TO_CASA_MAP
-from xarray_ms.errors import MissingEncodingError
+from xarray_ms.errors import (
+  ColumnCreationError,
+  MissingEncodingError,
+)
 from xarray_ms.msv4_types import CORRELATED_DATASET_TYPES, MAIN_PREFIX_DIMS
 
 # https://github.com/pydata/xarray/pull/10771
@@ -332,10 +335,21 @@ def sync_msv2(dt: DataTree, write_map: WriteMapT = None):
       )
       var_info_map.pop(key)
 
-  # Generate column descriptors and add the columns
+  # Generate column descriptors and add the columns.
+  # casacore's Table::addColumn accepts a single data manager
+  # specification per call, so add each column separately
   column_descs, dminfo = generate_column_descriptor(table_desc, var_info_map)
-  table_factory.instance.addcols(column_descs, dminfo)
-  assert set(column_descs.keys()).issubset(table_factory.instance.columns())
+  for group in dminfo.values():
+    (column,) = group["COLUMNS"]
+    table_factory.instance.addcols({column: column_descs[column]}, {"*1": group})
+
+  # Check every requested column, not just those created above
+  columns = set(table_factory.instance.columns())
+  if missing := sorted({c for _, c in var_info_map.keys()} - columns):
+    raise ColumnCreationError(
+      f"Columns {missing} are required for writing but are "
+      f"not present on the Measurement Set after column creation"
+    )
 
 
 def datatree_to_msv2(
