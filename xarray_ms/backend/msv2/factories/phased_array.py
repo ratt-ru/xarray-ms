@@ -14,7 +14,7 @@ class PhasedArray(DatasetFactory):
     antenna_name: DataArray,
     receptor_label: DataArray,
     polarization_type: DataArray,
-  ) -> Dataset:
+  ) -> Dataset | None:
     """Generate the phased_array_xds dataset for a partition of the Measurement Set.
 
     Parameters
@@ -31,13 +31,19 @@ class PhasedArray(DatasetFactory):
 
     Returns
     -------
-    Dataset
+    Dataset | None
         An xarray Dataset containing the phased array information for the specified
-        partition.
+        partition, or None if the PHASED_ARRAY subtable is not present.
     """
     import pyarrow.compute as pac
 
     phased_array = self._subtable_factories["PHASED_ARRAY"].instance
+
+    # MS does not contain the optional PHASED_ARRAY subtable,
+    # or it is empty -- happens for some OSKAR SKA Mid simulations.
+    if phased_array is None or len(phased_array) == 0:
+      return None
+
     coder_factory = MSv2CoderFactory.from_arrow_table(phased_array)
 
     # Coordinate axes
