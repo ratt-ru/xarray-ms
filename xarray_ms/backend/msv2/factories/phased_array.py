@@ -74,6 +74,7 @@ class PhasedArray(DatasetFactory):
     element_flag = (
       pac.list_flatten(phased_array["ELEMENT_FLAG"], recursive=True)
       .to_numpy()
+      .astype(bool)  # otherwise we get uint8 which is not schema-compliant
       .reshape(num_stations, 2, num_elements)
     )
     element_flag_var = Variable(
