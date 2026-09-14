@@ -3,6 +3,10 @@
 Changelog
 =========
 
+0.5.9 (DD-MM-YYYY)
+------------------
+* Fix ``arcae.Table`` file descriptor leaks (:pr:`172`).
+
 0.5.8 (23-07-2026)
 ------------------
 * Upgrade to arcae 0.5.4, which bounds the previously unbounded tiled
