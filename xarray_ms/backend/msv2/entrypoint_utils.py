@@ -105,9 +105,10 @@ def subtable_factory(
   # Subtables are read once via to_arrow(); a single instance is sufficient.
   driver_kwargs.setdefault("ninstances", 1)
   try:
-    return Table.from_filename(
+    with Table.from_filename(
       name, readonly=True, lockoptions="nolock", **driver_kwargs
-    ).to_arrow()
+    ) as table:
+      return table.to_arrow()
   except pa.lib.ArrowInvalid as e:
     e_str = str(e)
     if "subtable" in e_str and "is invalid" in e_str:
@@ -115,6 +116,8 @@ def subtable_factory(
         raise
       else:
         return pa.Table.from_pydict({})
+    # re-raise any other ArrowInvalid errors
+    raise
 
 
 class CommonStoreArgs:
