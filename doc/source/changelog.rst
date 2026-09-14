@@ -3,7 +3,7 @@
 Changelog
 =========
 
-0.5.9 (DD-MM-YYYY)
+0.5.9 (14-09-2026)
 ------------------
 * Fix ``arcae.Table`` file descriptor leaks (:pr:`172`).
 
