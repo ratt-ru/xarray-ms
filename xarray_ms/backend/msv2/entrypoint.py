@@ -25,6 +25,7 @@ from xarray_ms.backend.msv2.factories import (
   AntennaFactory,
   CorrelatedFactory,
   FieldAndSourceFactory,
+  PhasedArray,
 )
 from xarray_ms.backend.msv2.structure import (
   DEFAULT_PARTITION_COLUMNS,
@@ -602,10 +603,21 @@ class MSv2EntryPoint(BackendEntrypoint):
         partition_key, store_args.structure_factory, store_args.subtable_factories
       )
 
+      phased_array = PhasedArray(
+        partition_key, store_args.structure_factory, store_args.subtable_factories
+      )
+
       path = f"{ms_name}_partition_{p:03}"
       datasets[path] = ds
-      datasets[f"{path}/antenna_xds"] = antenna_factory.get_dataset()
+
+      antenna_ds = antenna_factory.get_dataset()
+      datasets[f"{path}/antenna_xds"] = antenna_ds
       datasets[f"{path}/field_and_source_xds"] = field_and_source.get_dataset()
+      datasets[f"{path}/phased_array_xds"] = phased_array.get_dataset(
+        antenna_name=antenna_ds["antenna_name"],
+        receptor_label=antenna_ds["receptor_label"],
+        polarization_type=antenna_ds["polarization_type"],
+      )
 
     self.postprocess_datasets(datasets)
 
