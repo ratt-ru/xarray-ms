@@ -3,6 +3,8 @@ from xarray import DataArray, Dataset, Variable
 
 from xarray_ms.backend.msv2.factories.core import DatasetFactory
 from xarray_ms.backend.msv2.measures_encoders import MSv2CoderFactory
+from xarray_ms.backend.msv2.table_utils import select_partition_antennas
+from xarray_ms.errors import InvalidMeasurementSet
 
 
 class PhasedArrayFactory(DatasetFactory):
@@ -44,7 +46,21 @@ class PhasedArrayFactory(DatasetFactory):
     if phased_array is None or len(phased_array) == 0:
       return None
 
-    coder_factory = MSv2CoderFactory.from_arrow_table(phased_array)
+    partition = self._structure_factory.instance[self._partition_key]
+    feed = self._subtable_factories["FEED"].instance
+
+    selection = select_partition_antennas(
+      feed, partition.spw_id, partition.feed_ids, partition.antenna_ids
+    )
+    row_mask = np.isin(phased_array["ANTENNA_ID"].to_numpy(), selection.antenna_ids)
+    row_indices = np.where(row_mask)[0]
+
+    phased_array = phased_array.take(row_indices)
+    if len(phased_array) == 0:
+      raise InvalidMeasurementSet(
+        f"No entries were found in PHASED_ARRAY matching "
+        f"antenna_ids = {selection.antenna_ids.tolist()}"
+      )
 
     # Coordinate axes
     coordinate_axes = (
@@ -82,6 +98,8 @@ class PhasedArrayFactory(DatasetFactory):
       dims=("antenna_name", "receptor_label", "element_id"),
       data=element_flag,
     )
+
+    coder_factory = MSv2CoderFactory.from_arrow_table(phased_array)
 
     data_vars = {
       "PHASED_ARRAY_COORDINATE_AXES": coder_factory.create("COORDINATE_AXES").decode(
