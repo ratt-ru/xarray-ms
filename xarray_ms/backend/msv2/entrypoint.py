@@ -615,7 +615,6 @@ class MSv2EntryPoint(BackendEntrypoint):
       datasets[f"{path}/field_and_source_xds"] = field_and_source.get_dataset()
 
       phased_array_ds = phased_array.get_dataset(
-        antenna_name=antenna_ds["antenna_name"],
         receptor_label=antenna_ds["receptor_label"],
         polarization_type=antenna_ds["polarization_type"],
       )

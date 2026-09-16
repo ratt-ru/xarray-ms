@@ -62,14 +62,21 @@ class AntennaSelection:
   Used both in the creation of antenna_xds and phased_array_xds.
   """
 
+  feed_rows: npt.NDArray[np.int32]
+  """Row indices that were selected in the FEED table."""
+
   antenna_ids: npt.NDArray[np.int32]
   """Antenna ids for the given partition, in order of appearance in the FEED table."""
 
-  feed_rows: npt.NDArray[np.int32]
-  """Row indices of the selected feeds in the FEED table."""
+  unique_antenna_names: npt.NDArray[np.str_]
+  """Antenna names (made unique if necessary) for the given partition.
+
+  Given in order of appearance in the FEED table.
+  """
 
 
 def select_partition_antennas(
+  antenna_table: pa.Table,
   feed_table: pa.Table,
   partition_spw_id: int,
   partition_feed_ids: npt.NDArray[np.int32],
@@ -79,8 +86,10 @@ def select_partition_antennas(
 
   Parameters
   ----------
+  antenna_table : pa.Table
+      The ANTENNA subtable.
   feed_table : pa.Table
-      The FEED subtable containing the relevant feed and antenna ids.
+      The FEED subtable.
   partition_spw_id : int
       The spectral window id for the partition.
   partition_feed_ids : np.ndarray
@@ -91,7 +100,8 @@ def select_partition_antennas(
   Returns
   -------
   AntennaSelection
-      A dataclass containing the selected antenna ids and feed table row indices.
+      A dataclass containing the selected feed rows, antenna ids, and
+      unique (deduplicated) antenna names for the partition.
   """
   feed_ids = feed_table["FEED_ID"].to_numpy()
   spw_ids = feed_table["SPECTRAL_WINDOW_ID"].to_numpy()
@@ -114,5 +124,16 @@ def select_partition_antennas(
     out=mask,
   )
 
-  feed_rows = np.where(mask)[0].astype(np.int32)
-  return AntennaSelection(antenna_ids=antenna_ids[mask], feed_rows=feed_rows)
+  selected_feed_rows = np.where(mask)[0].astype(np.int32)
+  selected_antenna_ids = antenna_ids[selected_feed_rows]
+
+  # Deduplicate against the full ANTENNA table so suffix assignments are
+  # consistent with those produced in the correlated dataset factory.
+  antenna_names = antenna_table["NAME"].to_numpy().astype(str)
+  selected_antenna_names = unique_antenna_names(antenna_names)[selected_antenna_ids]
+
+  return AntennaSelection(
+    feed_rows=selected_feed_rows,
+    antenna_ids=selected_antenna_ids,
+    unique_antenna_names=selected_antenna_names,
+  )

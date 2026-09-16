@@ -13,7 +13,6 @@ class PhasedArrayFactory(DatasetFactory):
 
   def get_dataset(
     self,
-    antenna_name: DataArray,
     receptor_label: DataArray,
     polarization_type: DataArray,
   ) -> Dataset | None:
@@ -21,9 +20,6 @@ class PhasedArrayFactory(DatasetFactory):
 
     Parameters
     ----------
-    antenna_name : DataArray
-        The antenna names for the phased array, extracted from the ANTENNA table
-        subset relevant to the partition.
     receptor_label : DataArray
         The receptor labels for the phased array, extracted from the ANTENNA table
         subset relevant to the partition.
@@ -48,14 +44,35 @@ class PhasedArrayFactory(DatasetFactory):
 
     partition = self._structure_factory.instance[self._partition_key]
     feed = self._subtable_factories["FEED"].instance
+    antenna = self._subtable_factories["ANTENNA"].instance
 
     selection = select_partition_antennas(
-      feed, partition.spw_id, partition.feed_ids, partition.antenna_ids
+      antenna, feed, partition.spw_id, partition.feed_ids, partition.antenna_ids
     )
-    row_mask = np.isin(phased_array["ANTENNA_ID"].to_numpy(), selection.antenna_ids)
-    row_indices = np.where(row_mask)[0]
 
+    # Take the row subset that corresponds to the selected antenna_ids, but
+    # match the order of the selection, NOT the order of the PHASED_ARRAY table.
+    # The antenna_name coordinate of phased_array_xds must be aligned with
+    # that of antenna_xds.
+    phased_array_antenna_ids = phased_array["ANTENNA_ID"].to_numpy()
+
+    if not set(selection.antenna_ids).issubset(set(phased_array_antenna_ids)):
+      raise InvalidMeasurementSet(
+        f"PHASED_ARRAY table does not contain all antenna_ids "
+        f"for partition {self._partition_key}. "
+        f"antenna_ids in PHASED_ARRAY: {phased_array_antenna_ids.tolist()}, "
+        f"antenna_ids in partition: {selection.antenna_ids.tolist()}"
+      )
+
+    mapping_antenna_row = {
+      antenna_id: row_index
+      for row_index, antenna_id in enumerate(phased_array_antenna_ids)
+    }
+    row_indices = [
+      mapping_antenna_row[antenna_id] for antenna_id in selection.antenna_ids
+    ]
     phased_array = phased_array.take(row_indices)
+
     if len(phased_array) == 0:
       raise InvalidMeasurementSet(
         f"No entries were found in PHASED_ARRAY matching "
@@ -114,7 +131,7 @@ class PhasedArrayFactory(DatasetFactory):
     }
 
     coords = {
-      "antenna_name": antenna_name,
+      "antenna_name": selection.unique_antenna_names,
       "receptor_label": receptor_label,
       "polarization_type": polarization_type,
       "cartesian_pos_label": ["x", "y", "z"],
