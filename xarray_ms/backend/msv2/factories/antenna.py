@@ -4,7 +4,10 @@ from xarray import Dataset, Variable
 from xarray_ms.backend.msv2.factories.core import DatasetFactory
 from xarray_ms.backend.msv2.imputation import maybe_impute_observation_table
 from xarray_ms.backend.msv2.measures_encoders import MSv2CoderFactory
-from xarray_ms.backend.msv2.table_utils import unique_antenna_names
+from xarray_ms.backend.msv2.table_utils import (
+  select_partition_antennas,
+  unique_antenna_names,
+)
 from xarray_ms.errors import InvalidMeasurementSet
 
 RELOCATABLE_ARRAY = {"ALMA", "VLA", "NOEMA", "EVLA"}
@@ -25,27 +28,10 @@ class AntennaFactory(DatasetFactory):
 
     import pyarrow.compute as pac
 
-    feed_id = feeds["FEED_ID"].to_numpy()
-    spw_id = feeds["SPECTRAL_WINDOW_ID"].to_numpy()
-    feed_ant_id = feeds["ANTENNA_ID"].to_numpy()
-    # Select feeds with global spws (-1) or that match the partition spw
-    mask = np.logical_or.reduce(
-      (
-        spw_id == -1,
-        spw_id == partition.spw_id,
-      )
+    selection = select_partition_antennas(
+      feeds, partition.spw_id, partition.feed_ids, partition.antenna_ids
     )
-
-    np.logical_and.reduce(
-      (
-        mask,
-        np.isin(feed_id, partition.feed_ids),
-        np.isin(feed_ant_id, partition.antenna_ids),
-      ),
-      out=mask,
-    )
-
-    filtered_ants = ants.take(feed_ant_id[mask])
+    filtered_ants = ants.take(selection.antenna_ids)
 
     if len(filtered_ants) == 0:
       raise InvalidMeasurementSet(
@@ -57,14 +43,14 @@ class AntennaFactory(DatasetFactory):
     # Deduplicate against the full ANTENNA table so suffix assignments are
     # consistent with those produced in the correlated dataset factory.
     all_ant_names = unique_antenna_names(ants["NAME"].to_numpy().astype(str))
-    antenna_names = all_ant_names[feed_ant_id[mask]]
+    antenna_names = all_ant_names[selection.antenna_ids]
     telescope_names = np.asarray([telescope_name] * len(antenna_names), dtype=str)
     position = pac.list_flatten(filtered_ants["POSITION"]).to_numpy().reshape(-1, 3)
     diameter = filtered_ants["DISH_DIAMETER"].to_numpy()
     station = filtered_ants["STATION"].to_numpy().astype(str)
     mount = filtered_ants["MOUNT"].to_numpy().astype(str)
 
-    filtered_feeds = feeds.take(np.where(mask)[0])
+    filtered_feeds = feeds.take(selection.feed_rows)
     feed_coder_factory = MSv2CoderFactory.from_arrow_table(filtered_feeds)
     nreceptors = filtered_feeds["NUM_RECEPTORS"].unique().to_numpy()
 
