@@ -4,9 +4,7 @@ from xarray import Dataset, Variable
 from xarray_ms.backend.msv2.factories.core import DatasetFactory
 from xarray_ms.backend.msv2.imputation import maybe_impute_observation_table
 from xarray_ms.backend.msv2.measures_encoders import MSv2CoderFactory
-from xarray_ms.backend.msv2.table_utils import (
-  select_partition_antennas,
-)
+from xarray_ms.backend.msv2.table_utils import AntennaSelection
 from xarray_ms.errors import InvalidMeasurementSet
 
 RELOCATABLE_ARRAY = {"ALMA", "VLA", "NOEMA", "EVLA"}
@@ -16,7 +14,15 @@ class AntennaFactory(DatasetFactory):
   """Factory class for generating the antenna_xds dataset for a
   given partition of the Measurement Set"""
 
-  def get_dataset(self) -> Dataset:
+  def get_dataset(self, selection: AntennaSelection) -> Dataset:
+    """Generate the antenna_xds dataset for a partition.
+
+    Parameters
+    ----------
+    selection : AntennaSelection
+        The partition-specific antenna and feed selection shared with related
+        subtable datasets.
+    """
     partition = self._structure_factory.instance[self._partition_key]
     ants = self._subtable_factories["ANTENNA"].instance
     feeds = self._subtable_factories["FEED"].instance
@@ -27,9 +33,6 @@ class AntennaFactory(DatasetFactory):
 
     import pyarrow.compute as pac
 
-    selection = select_partition_antennas(
-      ants, feeds, partition.spw_id, partition.feed_ids, partition.antenna_ids
-    )
     filtered_ants = ants.take(selection.antenna_ids)
 
     if len(filtered_ants) == 0:

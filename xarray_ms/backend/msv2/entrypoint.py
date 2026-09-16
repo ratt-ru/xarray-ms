@@ -32,6 +32,7 @@ from xarray_ms.backend.msv2.structure import (
   MSv2Structure,
   MSv2StructureFactory,
 )
+from xarray_ms.backend.msv2.table_utils import select_partition_antennas
 from xarray_ms.errors import FrameConversionWarning, InvalidPartitionKey
 from xarray_ms.msv4_types import CORRELATED_DATASET_TYPES
 from xarray_ms.utils import format_docstring
@@ -607,14 +608,24 @@ class MSv2EntryPoint(BackendEntrypoint):
         partition_key, store_args.structure_factory, store_args.subtable_factories
       )
 
+      partition = structure[partition_key]
+      antenna_selection = select_partition_antennas(
+        store_args.subtable_factories["ANTENNA"].instance,
+        store_args.subtable_factories["FEED"].instance,
+        partition.spw_id,
+        partition.feed_ids,
+        partition.antenna_ids,
+      )
+
       path = f"{ms_name}_partition_{p:03}"
       datasets[path] = ds
 
-      antenna_ds = antenna_factory.get_dataset()
+      antenna_ds = antenna_factory.get_dataset(antenna_selection)
       datasets[f"{path}/antenna_xds"] = antenna_ds
       datasets[f"{path}/field_and_source_xds"] = field_and_source.get_dataset()
 
       phased_array_ds = phased_array.get_dataset(
+        antenna_selection,
         receptor_label=antenna_ds["receptor_label"],
         polarization_type=antenna_ds["polarization_type"],
       )

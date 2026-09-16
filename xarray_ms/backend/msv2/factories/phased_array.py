@@ -3,7 +3,7 @@ from xarray import DataArray, Dataset, Variable
 
 from xarray_ms.backend.msv2.factories.core import DatasetFactory
 from xarray_ms.backend.msv2.measures_encoders import MSv2CoderFactory
-from xarray_ms.backend.msv2.table_utils import select_partition_antennas
+from xarray_ms.backend.msv2.table_utils import AntennaSelection
 from xarray_ms.errors import InvalidMeasurementSet
 
 
@@ -13,6 +13,7 @@ class PhasedArrayFactory(DatasetFactory):
 
   def get_dataset(
     self,
+    selection: AntennaSelection,
     receptor_label: DataArray,
     polarization_type: DataArray,
   ) -> Dataset | None:
@@ -20,6 +21,8 @@ class PhasedArrayFactory(DatasetFactory):
 
     Parameters
     ----------
+    selection : AntennaSelection
+        The partition-specific antenna and feed selection shared with antenna_xds.
     receptor_label : DataArray
         The receptor labels for the phased array, extracted from the ANTENNA table
         subset relevant to the partition.
@@ -41,14 +44,6 @@ class PhasedArrayFactory(DatasetFactory):
     # or it is empty -- happens for some OSKAR SKA Mid simulations.
     if phased_array is None or len(phased_array) == 0:
       return None
-
-    partition = self._structure_factory.instance[self._partition_key]
-    feed = self._subtable_factories["FEED"].instance
-    antenna = self._subtable_factories["ANTENNA"].instance
-
-    selection = select_partition_antennas(
-      antenna, feed, partition.spw_id, partition.feed_ids, partition.antenna_ids
-    )
 
     # Take the row subset that corresponds to the selected antenna_ids, but
     # match the order of the selection, NOT the order of the PHASED_ARRAY table.
