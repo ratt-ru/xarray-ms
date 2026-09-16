@@ -71,11 +71,12 @@ class PhasedArrayFactory(DatasetFactory):
     num_elements = element_offset.shape[-1]
 
     # Element flags
+    num_receptors = len(receptor_label)
     element_flag = (
       pac.list_flatten(phased_array["ELEMENT_FLAG"], recursive=True)
       .to_numpy()
       .astype(bool)  # otherwise we get uint8 which is not schema-compliant
-      .reshape(num_stations, 2, num_elements)
+      .reshape(num_stations, num_receptors, num_elements)
     )
     element_flag_var = Variable(
       dims=("antenna_name", "receptor_label", "element_id"),
