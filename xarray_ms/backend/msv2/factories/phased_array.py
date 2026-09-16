@@ -5,7 +5,7 @@ from xarray_ms.backend.msv2.factories.core import DatasetFactory
 from xarray_ms.backend.msv2.measures_encoders import MSv2CoderFactory
 
 
-class PhasedArray(DatasetFactory):
+class PhasedArrayFactory(DatasetFactory):
   """Factory class for generating the phased_array_xds dataset
   for a partition of the Measurement Set"""
 

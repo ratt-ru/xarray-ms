@@ -25,7 +25,7 @@ from xarray_ms.backend.msv2.factories import (
   AntennaFactory,
   CorrelatedFactory,
   FieldAndSourceFactory,
-  PhasedArray,
+  PhasedArrayFactory,
 )
 from xarray_ms.backend.msv2.structure import (
   DEFAULT_PARTITION_COLUMNS,
@@ -603,7 +603,7 @@ class MSv2EntryPoint(BackendEntrypoint):
         partition_key, store_args.structure_factory, store_args.subtable_factories
       )
 
-      phased_array = PhasedArray(
+      phased_array = PhasedArrayFactory(
         partition_key, store_args.structure_factory, store_args.subtable_factories
       )
 
