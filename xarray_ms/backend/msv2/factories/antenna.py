@@ -1,7 +1,7 @@
 import numpy as np
 from xarray import Dataset, Variable
 
-from xarray_ms.backend.msv2.antenna_selection import AntennaSelection
+from xarray_ms.backend.msv2.antenna_selection import PartitionAntennaSelection
 from xarray_ms.backend.msv2.factories.core import DatasetFactory
 from xarray_ms.backend.msv2.imputation import maybe_impute_observation_table
 from xarray_ms.backend.msv2.measures_encoders import MSv2CoderFactory
@@ -14,12 +14,12 @@ class AntennaFactory(DatasetFactory):
   """Factory class for generating the antenna_xds dataset for a
   given partition of the Measurement Set"""
 
-  def get_dataset(self, selection: AntennaSelection) -> Dataset:
+  def get_dataset(self, selection: PartitionAntennaSelection) -> Dataset:
     """Generate the antenna_xds dataset for a partition.
 
     Parameters
     ----------
-    selection : AntennaSelection
+    selection : PartitionAntennaSelection
         The partition-specific antenna and feed selection shared with related
         subtable datasets.
     """
@@ -42,14 +42,14 @@ class AntennaFactory(DatasetFactory):
       )
 
     ant_coder_factory = MSv2CoderFactory.from_arrow_table(filtered_ants)
-    antenna_names = selection.unique_antenna_names
+    antenna_names = selection.antenna_names
     telescope_names = np.asarray([telescope_name] * len(antenna_names), dtype=str)
     position = pac.list_flatten(filtered_ants["POSITION"]).to_numpy().reshape(-1, 3)
     diameter = filtered_ants["DISH_DIAMETER"].to_numpy()
     station = filtered_ants["STATION"].to_numpy().astype(str)
     mount = filtered_ants["MOUNT"].to_numpy().astype(str)
 
-    filtered_feeds = feeds.take(selection.feed_rows)
+    filtered_feeds = feeds.take(selection.feed_row_indices)
     feed_coder_factory = MSv2CoderFactory.from_arrow_table(filtered_feeds)
     nreceptors = filtered_feeds["NUM_RECEPTORS"].unique().to_numpy()
 

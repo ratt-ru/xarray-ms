@@ -3,7 +3,7 @@ import numpy.typing as npt
 import pyarrow as pa
 from xarray import DataArray, Dataset, Variable
 
-from xarray_ms.backend.msv2.antenna_selection import AntennaSelection
+from xarray_ms.backend.msv2.antenna_selection import PartitionAntennaSelection
 from xarray_ms.backend.msv2.factories.core import DatasetFactory
 from xarray_ms.backend.msv2.measures_encoders import MSv2CoderFactory
 from xarray_ms.errors import InvalidMeasurementSet
@@ -15,7 +15,7 @@ class PhasedArrayFactory(DatasetFactory):
 
   def get_dataset(
     self,
-    selection: AntennaSelection,
+    selection: PartitionAntennaSelection,
     receptor_label: DataArray,
     polarization_type: DataArray,
   ) -> Dataset | None:
@@ -23,7 +23,7 @@ class PhasedArrayFactory(DatasetFactory):
 
     Parameters
     ----------
-    selection : AntennaSelection
+    selection : PartitionAntennaSelection
         The partition-specific antenna and feed selection shared with antenna_xds.
     receptor_label : DataArray
         The receptor labels for the phased array, extracted from the ANTENNA table
@@ -136,7 +136,7 @@ class PhasedArrayFactory(DatasetFactory):
     }
 
     coords = {
-      "antenna_name": selection.unique_antenna_names,
+      "antenna_name": selection.antenna_names,
       "receptor_label": receptor_label,
       "polarization_type": polarization_type,
       "cartesian_pos_label": ["x", "y", "z"],

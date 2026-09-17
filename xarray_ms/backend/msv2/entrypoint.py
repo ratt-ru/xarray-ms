@@ -612,9 +612,7 @@ class MSv2EntryPoint(BackendEntrypoint):
       antenna_selection = select_partition_antennas(
         store_args.subtable_factories["ANTENNA"].instance,
         store_args.subtable_factories["FEED"].instance,
-        partition.spw_id,
-        partition.feed_ids,
-        partition.antenna_ids,
+        partition,
       )
 
       path = f"{ms_name}_partition_{p:03}"

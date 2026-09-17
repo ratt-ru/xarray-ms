@@ -8,6 +8,7 @@ import numpy as np
 import numpy.typing as npt
 import pyarrow as pa
 
+from xarray_ms.backend.msv2.structure import PartitionData
 from xarray_ms.errors import DuplicateAntennaNameWarning
 
 
@@ -41,28 +42,26 @@ def unique_antenna_names(names: np.ndarray) -> np.ndarray:
   return np.array(result, dtype=str)
 
 
-@dataclass
-class AntennaSelection:
-  """Antenna and feed ids for a given partition."""
+@dataclass(frozen=True, slots=True)
+class PartitionAntennaSelection:
+  """Antenna and feed rows selected for a partition."""
 
-  feed_rows: npt.NDArray[np.int32]
-  """Row indices that were selected in the FEED table."""
+  feed_row_indices: npt.NDArray[np.int32]
+  """Row indices selected from the FEED table."""
 
   antenna_ids: npt.NDArray[np.int32]
-  """Antenna ids for the given partition, in order of appearance in the FEED table."""
+  """Antenna ids in FEED-table order."""
 
-  unique_antenna_names: npt.NDArray[np.str_]
-  """Antenna names (made unique if necessary) for the given partition."""
+  antenna_names: npt.NDArray[np.str_]
+  """Canonical antenna names in FEED-table order."""
 
 
 def select_partition_antennas(
   antenna_table: pa.Table,
   feed_table: pa.Table,
-  partition_spw_id: int,
-  partition_feed_ids: npt.NDArray[np.int32],
-  partition_antenna_ids: npt.NDArray[np.int32],
-) -> AntennaSelection:
-  """Select antenna and feed ids for a given partition."""
+  partition: PartitionData,
+) -> PartitionAntennaSelection:
+  """Select antenna and feed rows for a partition."""
   feed_ids = feed_table["FEED_ID"].to_numpy()
   spw_ids = feed_table["SPECTRAL_WINDOW_ID"].to_numpy()
   antenna_ids = feed_table["ANTENNA_ID"].to_numpy()
@@ -71,27 +70,27 @@ def select_partition_antennas(
   mask = np.logical_or.reduce(
     (
       spw_ids == -1,
-      spw_ids == partition_spw_id,
+      spw_ids == partition.spw_id,
     )
   )
 
   np.logical_and.reduce(
     (
       mask,
-      np.isin(feed_ids, partition_feed_ids),
-      np.isin(antenna_ids, partition_antenna_ids),
+      np.isin(feed_ids, partition.feed_ids),
+      np.isin(antenna_ids, partition.antenna_ids),
     ),
     out=mask,
   )
 
-  selected_feed_rows = np.where(mask)[0].astype(np.int32)
-  selected_antenna_ids = antenna_ids[selected_feed_rows]
+  feed_row_indices = np.where(mask)[0].astype(np.int32)
+  selected_antenna_ids = antenna_ids[feed_row_indices].astype(np.int32, copy=False)
   antenna_names = unique_antenna_names(
     antenna_table["NAME"].to_numpy().astype(str)
   )[selected_antenna_ids]
 
-  return AntennaSelection(
-    feed_rows=selected_feed_rows,
+  return PartitionAntennaSelection(
+    feed_row_indices=feed_row_indices,
     antenna_ids=selected_antenna_ids,
-    unique_antenna_names=antenna_names,
+    antenna_names=antenna_names,
   )
