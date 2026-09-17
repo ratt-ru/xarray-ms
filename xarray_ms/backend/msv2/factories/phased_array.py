@@ -1,4 +1,6 @@
 import numpy as np
+import numpy.typing as npt
+import pyarrow as pa
 from xarray import DataArray, Dataset, Variable
 
 from xarray_ms.backend.msv2.factories.core import DatasetFactory
@@ -84,28 +86,24 @@ class PhasedArrayFactory(DatasetFactory):
       dims=("antenna_name", "cartesian_pos_label_local", "cartesian_pos_label"),
       data=coordinate_axes,
     )
-    num_stations = len(coordinate_axes)
 
     # Element offsets from their respective station positions
-    element_offset = (
-      pac.list_flatten(phased_array["ELEMENT_OFFSET"], recursive=True)
-      .to_numpy()
-      .reshape(num_stations, 3, -1)
+    element_offset = _pyarrow_chunked_array_to_rectangular_ndarray(
+      phased_array["ELEMENT_OFFSET"], middle_dim=3, fill_value=np.nan
     )
     element_offset_var = Variable(
       dims=("antenna_name", "cartesian_pos_label_local", "element_id"),
       data=element_offset,
     )
-    num_elements = element_offset.shape[-1]
+    max_elements_per_station = element_offset.shape[-1]
 
     # Element flags
     num_receptors = len(receptor_label)
-    element_flag = (
-      pac.list_flatten(phased_array["ELEMENT_FLAG"], recursive=True)
-      .to_numpy()
-      .astype(bool)  # otherwise we get uint8 which is not schema-compliant
-      .reshape(num_stations, num_receptors, num_elements)
+    element_flag = _pyarrow_chunked_array_to_rectangular_ndarray(
+      phased_array["ELEMENT_FLAG"], middle_dim=num_receptors, fill_value=False
     )
+    element_flag = element_flag.astype(bool)  # uint8 is not schema-compliant
+
     element_flag_var = Variable(
       dims=("antenna_name", "receptor_label", "element_id"),
       data=element_flag,
@@ -143,7 +141,7 @@ class PhasedArrayFactory(DatasetFactory):
       "polarization_type": polarization_type,
       "cartesian_pos_label": ["x", "y", "z"],
       "cartesian_pos_label_local": ["p", "q", "r"],
-      "element_id": np.arange(num_elements),
+      "element_id": np.arange(max_elements_per_station),
     }
 
     return Dataset(
@@ -151,3 +149,30 @@ class PhasedArrayFactory(DatasetFactory):
       coords=coords,
       attrs={"type": "phased_array"},
     )
+
+
+def _pyarrow_chunked_array_to_rectangular_ndarray(
+  chunked_arr: pa.ChunkedArray, middle_dim: int, fill_value=np.nan
+) -> npt.NDArray:
+  """
+  Give a regular shape to ELEMENT_OFFSET and ELEMENT_FLAG.
+
+  Each contain one entry per station of shape (middle_dim, num_elements), where
+  num_elements can vary per station. This function converts the variable-length
+  arrays into a rectangular array of shape (num_stations, middle_dim, max_num_elements),
+  filling in missing values with `fill_value`.
+  """
+  import pyarrow.compute as pac
+
+  def _entry_to_2d_array(data: pa.FixedSizeListScalar) -> npt.NDArray:
+    return pac.list_flatten(data, recursive=True).to_numpy().reshape(middle_dim, -1)
+
+  station_arrays = [_entry_to_2d_array(item) for item in chunked_arr]
+  num_stations = len(station_arrays)
+  max_inner_dim = max(arr.shape[1] for arr in station_arrays)
+
+  result = np.full((num_stations, middle_dim, max_inner_dim), fill_value)
+  for i, arr in enumerate(station_arrays):
+    result[i, :, : arr.shape[1]] = arr
+
+  return result
