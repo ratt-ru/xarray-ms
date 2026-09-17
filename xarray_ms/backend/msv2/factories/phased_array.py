@@ -125,6 +125,18 @@ class PhasedArrayFactory(DatasetFactory):
       ),
     }
 
+    data_vars["PHASED_ARRAY_COORDINATE_AXES"].attrs = {
+      "units": "dimensionless",
+      "type": "rotation_matrix",
+    }
+
+    data_vars["PHASED_ARRAY_ELEMENT_OFFSET"].attrs = {
+      "units": "m",
+      "type": "location",
+      "coordinate_system": "topocentric",
+      "origin": "ANTENNA_POSITION",
+    }
+
     coords = {
       "antenna_name": selection.unique_antenna_names,
       "receptor_label": receptor_label,
