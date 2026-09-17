@@ -1,10 +1,10 @@
 import numpy as np
 from xarray import Dataset, Variable
 
+from xarray_ms.backend.msv2.antenna_selection import AntennaSelection
 from xarray_ms.backend.msv2.factories.core import DatasetFactory
 from xarray_ms.backend.msv2.imputation import maybe_impute_observation_table
 from xarray_ms.backend.msv2.measures_encoders import MSv2CoderFactory
-from xarray_ms.backend.msv2.table_utils import AntennaSelection
 from xarray_ms.errors import InvalidMeasurementSet
 
 RELOCATABLE_ARRAY = {"ALMA", "VLA", "NOEMA", "EVLA"}

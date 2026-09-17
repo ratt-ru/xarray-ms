@@ -17,6 +17,7 @@ from xarray.core.dataset import Dataset
 from xarray.core.datatree import DataTree
 from xarray.core.utils import try_read_magic_number_from_file_or_path
 
+from xarray_ms.backend.msv2.antenna_selection import select_partition_antennas
 from xarray_ms.backend.msv2.entrypoint_utils import (
   CommonStoreArgs,
   resolve_driver_kwargs,
@@ -32,7 +33,6 @@ from xarray_ms.backend.msv2.structure import (
   MSv2Structure,
   MSv2StructureFactory,
 )
-from xarray_ms.backend.msv2.table_utils import select_partition_antennas
 from xarray_ms.errors import FrameConversionWarning, InvalidPartitionKey
 from xarray_ms.msv4_types import CORRELATED_DATASET_TYPES
 from xarray_ms.utils import format_docstring
