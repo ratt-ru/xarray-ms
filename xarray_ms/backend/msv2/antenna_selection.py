@@ -83,11 +83,12 @@ def select_partition_antennas(
     out=mask,
   )
 
-  feed_row_indices = np.where(mask)[0].astype(np.int32)
+  feed_row_indices = np.where(mask)[0].astype(np.int32, copy=False)
   selected_antenna_ids = antenna_ids[feed_row_indices].astype(np.int32, copy=False)
-  antenna_names = unique_antenna_names(
-    antenna_table["NAME"].to_numpy().astype(str)
-  )[selected_antenna_ids]
+  # Deduplicate against the full ANTENNA table so suffix assignments are
+  # consistent with those produced in the correlated dataset factory.
+  antenna_names = antenna_table["NAME"].to_numpy().astype(str)
+  antenna_names = unique_antenna_names(antenna_names)[selected_antenna_ids]
 
   return PartitionAntennaSelection(
     feed_row_indices=feed_row_indices,
