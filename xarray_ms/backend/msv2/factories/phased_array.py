@@ -87,6 +87,14 @@ class PhasedArrayFactory(DatasetFactory):
       data=coordinate_axes,
     )
 
+    # Number of elements per station
+    # Each station has three offset rows; one row length gives its element count.
+    num_stations = len(phased_array)
+    element_count = np.fromiter(
+      (len(phased_array["ELEMENT_OFFSET"][i][0]) for i in range(num_stations)),
+      dtype=np.int32,
+    )
+
     # Element offsets from their respective station positions
     element_offset = _pyarrow_chunked_array_to_rectangular_ndarray(
       phased_array["ELEMENT_OFFSET"], middle_dim=3, fill_value=np.nan
@@ -120,6 +128,10 @@ class PhasedArrayFactory(DatasetFactory):
       ),
       "PHASED_ARRAY_ELEMENT_FLAG": coder_factory.create("ELEMENT_FLAG").decode(
         element_flag_var
+      ),
+      "PHASED_ARRAY_ELEMENT_COUNT": Variable(
+        dims=("antenna_name",),
+        data=element_count,
       ),
     }
 

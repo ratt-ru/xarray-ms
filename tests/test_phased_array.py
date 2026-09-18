@@ -62,6 +62,11 @@ def test_phased_array_dataset(simmed_ms):
       np.full(nelements, True, dtype=bool), (nreceptors, 1)
     )
 
+  npt.assert_array_equal(
+    phased_array["PHASED_ARRAY_ELEMENT_COUNT"],
+    np.arange(MAX_ELEMENTS) + 1,
+  )
+
   npt.assert_allclose(
     phased_array["PHASED_ARRAY_COORDINATE_AXES"],
     expected_coordinate_axes,
