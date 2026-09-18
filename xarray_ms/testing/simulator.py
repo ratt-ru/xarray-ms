@@ -399,7 +399,7 @@ class MSStructureSimulator:
         element_offset = np.tile(np.arange(nelements, dtype=np.float64), (3, 1))
         T.putcol("ELEMENT_OFFSET", element_offset[None, ...], index=index)
 
-        element_flag = np.tile(np.full(nelements, True, dtype=bool), (nreceptors, 1))
+        element_flag = np.tile(np.full(nelements, False, dtype=bool), (nreceptors, 1))
         T.putcol("ELEMENT_FLAG", element_flag[None, ...], index=index)
 
   def generate_descriptors(self) -> Generator[PartitionDescriptor, None, None]:

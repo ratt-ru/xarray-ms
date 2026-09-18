@@ -52,14 +52,14 @@ def test_phased_array_dataset(simmed_ms):
   expected_element_offsets = np.full(
     (NANTENNA, 3, MAX_ELEMENTS), np.nan, dtype=np.float64
   )
-  expected_element_flags = np.zeros((NANTENNA, 2, MAX_ELEMENTS), dtype=bool)
+  expected_element_flags = np.full((NANTENNA, 2, MAX_ELEMENTS), True, dtype=bool)
   for antenna_id in range(NANTENNA):
     nelements = antenna_id + 1
     expected_element_offsets[antenna_id, :, :nelements] = np.tile(
       np.arange(nelements, dtype=np.float64), (3, 1)
     )
     expected_element_flags[antenna_id, :, :nelements] = np.tile(
-      np.full(nelements, True, dtype=bool), (nreceptors, 1)
+      np.full(nelements, False, dtype=bool), (nreceptors, 1)
     )
 
   npt.assert_array_equal(

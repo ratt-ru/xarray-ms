@@ -108,7 +108,7 @@ class PhasedArrayFactory(DatasetFactory):
     # Element flags
     num_receptors = len(receptor_label)
     element_flag = _pyarrow_chunked_array_to_rectangular_ndarray(
-      phased_array["ELEMENT_FLAG"], middle_dim=num_receptors, fill_value=False
+      phased_array["ELEMENT_FLAG"], middle_dim=num_receptors, fill_value=True
     )
     element_flag = element_flag.astype(bool)  # uint8 is not schema-compliant
 
