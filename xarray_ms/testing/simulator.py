@@ -373,9 +373,9 @@ class MSStructureSimulator:
 
   def _write_phased_array(self, output_ms: str) -> None:
     """Write a small PHASED_ARRAY table with variable-sized element arrays."""
-    phased_array_table_desc = ms_descriptor("PHASED_ARRAY")
+    phased_array_table_desc = ms_descriptor("MSV3_PHASED_ARRAY")
     with Table.ms_from_descriptor(
-      output_ms, "PHASED_ARRAY", table_desc=phased_array_table_desc
+      output_ms, "MSV3_PHASED_ARRAY", table_desc=phased_array_table_desc
     ) as T:
       T.addrows(self.nantenna)
 
