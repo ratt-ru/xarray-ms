@@ -120,6 +120,7 @@ class MSv2Store(AbstractWritableDataStore):
     "_driver_kwargs",
     "_epoch",
     "_write_region",
+    "_owns_factories",
   )
 
   _table_factory: MainTableFactory
@@ -133,6 +134,7 @@ class MSv2Store(AbstractWritableDataStore):
   _driver_kwargs: Dict[str, Any]
   _epoch: str
   _write_region: WriteRegionT
+  _owns_factories: bool
 
   def __init__(
     self,
@@ -147,6 +149,7 @@ class MSv2Store(AbstractWritableDataStore):
     driver_kwargs: Dict[str, Any],
     epoch: str,
     write_region: WriteRegionT,
+    owns_factories: bool = True,
   ):
     self._table_factory = table_factory
     self._subtable_factories = subtable_factories
@@ -159,6 +162,7 @@ class MSv2Store(AbstractWritableDataStore):
     self._driver_kwargs = driver_kwargs
     self._epoch = epoch
     self._write_region = write_region
+    self._owns_factories = owns_factories
 
   @classmethod
   def open(
@@ -174,6 +178,7 @@ class MSv2Store(AbstractWritableDataStore):
     epoch: str | None = None,
     structure_factory: MSv2StructureFactory | None = None,
     write_region: WriteRegionT = "auto",
+    owns_factories: bool = True,
   ):
     if not isinstance(ms, str):
       raise ValueError("Measurement Sets paths must be strings")
@@ -217,13 +222,22 @@ class MSv2Store(AbstractWritableDataStore):
       driver_kwargs=store_args.driver_kwargs,
       epoch=store_args.epoch,
       write_region=write_region,
+      owns_factories=owns_factories,
     )
 
   def close(self, **kwargs):
+    # Releasing the main table closes the underlying arcae Table,
+    # flushing any writes to disk. arcae exposes no separate flush,
+    # so this happens even when the factories are shared.
     self._table_factory.release()
-    self._structure_factory.release()
-    for subtable_factory in self._subtable_factories.values():
-      subtable_factory.release()
+
+    # Structure and subtable data are derived, expensive to recompute and
+    # shared with any other store (or open DataTree) using the same
+    # Measurement Set. Only a store that created them may evict them.
+    if self._owns_factories:
+      self._structure_factory.release()
+      for subtable_factory in self._subtable_factories.values():
+        subtable_factory.release()
 
   def main_dataset_factory(self) -> CorrelatedFactory:
     return CorrelatedFactory(

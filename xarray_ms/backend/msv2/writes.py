@@ -316,6 +316,7 @@ def msv2_store_from_dataset(ds: Dataset, region="auto") -> MSv2Store:
     epoch=store_args.epoch,
     structure_factory=store_args.structure_factory,
     write_region=region,
+    owns_factories=False,
   )
 
 
