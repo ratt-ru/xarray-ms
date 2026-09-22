@@ -3,6 +3,10 @@
 Changelog
 =========
 
+X.Y.Z (DD-MM-YYYY)
+------------------
+* Add an ``AGENTS.MD`` (:pr:`175`).
+
 0.6.0 (22-09-2026)
 ------------------
 * Upgrade to arcae 0.5.5 (:pr:`174`) which supports:
