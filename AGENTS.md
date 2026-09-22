@@ -130,7 +130,29 @@ Signal when the grid cannot be made perfectly regular:
   missing for some timesteps; imputed with defaults (benign in most cases).
 
 ### Backend
+
 Uses `arcae` (not python-casacore) for high-performance CASA Table access.
+
+#### Write support
+
+There are two versions of arcae available. They can be distinguished
+by the `arcae.safe_multithreaded_writes()` function returning `True` if writes
+are supported when multiple (i.e. > 1) instances of a casacore Table
+are opened by arcae.
+
+* `arcae >= 0.5.0, < 0.6.0` supports writing if only a single casacore Table
+  instance is requested (i.e. `ninstances=1`). This functionality is
+  currently available in arcae's `main` branch.
+  `xarray-ms >= 0.5.0, < 0.6.0` and xarray-ms' `main` branch mirror this
+  functionality and versioning setup.
+* `arcae >= 0.4.0, < 0.5.0` supports writing when multiple instances
+  of a casacore Table are requested (i.e. `ninstances > 1`) by supporting
+  a Multiple-Reader Single-Writer pattern.
+  This functionality is currently available via `alpha` releases in
+  arcae's `0.4.0-dev` branch. `xarray-ms >= 0.4.0, < 0.5.0` and xarray-ms'
+  `write-support`  branch mirror this functionality and versioning setup.
+  The intention is to merge both these branches into each repository's
+  `main` branch after undergoing sufficient testing.
 
 ## When relevant
 - [Documentation](doc/source) → Documentation markdown source
