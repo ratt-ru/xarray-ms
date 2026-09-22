@@ -4,7 +4,7 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 
-from xarray_ms.backend.msv2.table_utils import unique_antenna_names
+from xarray_ms.backend.msv2.antenna_selection import unique_antenna_names
 from xarray_ms.errors import DuplicateAntennaNameWarning
 
 
