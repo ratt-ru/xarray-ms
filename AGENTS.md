@@ -1,8 +1,8 @@
 # xarray-ms: xarray MSv4 view over a CASA Measurement Set v2
 
 [ratt-ru/xarray-ms](https://github.com/ratt-ru/xarray-ms) presents an xarray
-Measurement Set v4 interface over
-[CASA Measurement Set v2](https://casa.nrao.edu/Memos/229.html) data.
+[Measurement Set v4](https://xradio.readthedocs.io/en/stable/measurement_set/schema.html) interface over
+CASA [Measurement Set v2](https://casa.nrao.edu/Memos/229.html) data.
 
 ### Core API
 
