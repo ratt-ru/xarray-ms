@@ -3,6 +3,13 @@
 Changelog
 =========
 
+0.6.0 (22-09-2026)
+------------------
+* Upgrade to arcae 0.5.5 (:pr:`174`) which supports:
+
+  - The ``MSV3_PHASED_ARRAY`` sub-table descriptor .
+  - A fix for deadlocks that could occur when closing arcae Tables.
+
 0.5.9 (14-09-2026)
 ------------------
 * Fix ``arcae.Table`` file descriptor leaks (:pr:`172`).
