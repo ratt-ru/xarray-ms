@@ -96,6 +96,5 @@ def test_phased_array_dataset(simmed_ms):
 
 def test_phased_array_dataset_is_absent_when_ms_table_absent(simmed_ms):
   datatree = xarray.open_datatree(simmed_ms).load()
-  partition = datatree["test_partition_000"]
-
+  partition = next(iter(datatree.children.values()))
   assert "phased_array_xds" not in partition
