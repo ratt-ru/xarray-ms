@@ -135,13 +135,16 @@ class PhasedArrayFactory(DatasetFactory):
       ),
     }
 
+    # Hardcoding every attribute according to the MSv4 schema
     data_vars["PHASED_ARRAY_COORDINATE_AXES"].attrs = {
       "units": "dimensionless",
       "type": "rotation_matrix",
     }
 
+    # Hardcode every PHASED_ARRAY_ELEMENT_OFFSET attribue according to the MSv4 schema,
+    # except for the units which the coder factory should set.
     data_vars["PHASED_ARRAY_ELEMENT_OFFSET"].attrs = {
-      "units": "m",
+      "units": data_vars["PHASED_ARRAY_ELEMENT_OFFSET"].attrs.get("units", "m"),
       "type": "location",
       "coordinate_system": "topocentric",
       "origin": "ANTENNA_POSITION",
