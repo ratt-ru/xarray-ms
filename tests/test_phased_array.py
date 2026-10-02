@@ -86,6 +86,7 @@ def test_phased_array_dataset(simmed_ms):
     "type": "rotation_matrix",
   }
   assert phased_array["PHASED_ARRAY_ELEMENT_OFFSET"].attrs == {
+    "frame": "ITRS",
     "units": "m",
     "type": "location",
     "coordinate_system": "topocentric",
