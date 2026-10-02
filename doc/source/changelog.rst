@@ -3,7 +3,7 @@
 Changelog
 =========
 
-X.Y.Z (DD-MM-YYYY)
+0.5.12 (02-10-2026)
 ------------------
 * Require ``zarr >= 3`` for tests and roundtrip Zarr v3 consolidated metadata (:pr:`180`).
 * Upgrade to rarg-python-patterns 0.0.5 (:pr:`179`).
