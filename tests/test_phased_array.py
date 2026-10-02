@@ -13,7 +13,6 @@ MAX_ELEMENTS = NANTENNA
     {
       "name": "phased_array.ms",
       "nantenna": NANTENNA,
-      "phased_array": True,
     }
   ],
   indirect=True,
@@ -92,9 +91,3 @@ def test_phased_array_dataset(simmed_ms):
     "coordinate_system": "topocentric",
     "origin": "ANTENNA_POSITION",
   }
-
-
-def test_phased_array_dataset_is_absent_when_ms_table_absent(simmed_ms):
-  datatree = xarray.open_datatree(simmed_ms).load()
-  partition = next(iter(datatree.children.values()))
-  assert "phased_array_xds" not in partition

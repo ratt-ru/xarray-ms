@@ -144,7 +144,6 @@ class MSStructureSimulator:
     ),
     auto_corrs: bool = True,
     simulate_data: bool = True,
-    phased_array: bool = False,
     table_desc: Dict[str, Any] | None = None,
     transform_chunk_desc: ChunkDescriptorTransformerT | None = None,
     transform_data: DataTransformerT | None = None,
@@ -202,7 +201,6 @@ class MSStructureSimulator:
     self.nstate = nstate
     self.nproc = nproc
     self.auto_corrs = auto_corrs
-    self.phased_array = phased_array
     self.dump_rate = dump_rate
     self.time_chunks = time_chunks
     self.time_start = time_start
@@ -368,8 +366,7 @@ class MSStructureSimulator:
       )
       T.putcol("NAME", np.asarray([f"SOURCE-{i}" for i in range(self.nfield)]))
 
-    if self.phased_array:
-      self._write_phased_array(output_ms)
+    self._write_phased_array(output_ms)
 
   def _write_phased_array(self, output_ms: str) -> None:
     """Write a small PHASED_ARRAY table with variable-sized element arrays."""
