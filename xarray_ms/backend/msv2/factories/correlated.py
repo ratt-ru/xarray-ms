@@ -9,6 +9,7 @@ from xarray.coding.variables import unpack_for_decoding
 from xarray.core.indexing import LazilyIndexedArray
 from xarray.core.utils import FrozenDict
 
+from xarray_ms.backend.msv2.antenna_selection import unique_antenna_names
 from xarray_ms.backend.msv2.array import (
   BroadcastMSv2Array,
   MainMSv2Array,
@@ -31,7 +32,6 @@ from xarray_ms.backend.msv2.structure import (
   PartitionKeyT,
   SubtableFactory,
 )
-from xarray_ms.backend.msv2.table_utils import unique_antenna_names
 from xarray_ms.casa_types import ColumnDesc, Polarisations
 from xarray_ms.errors import (
   ColumnShapeImputationWarning,

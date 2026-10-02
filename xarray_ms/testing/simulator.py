@@ -111,6 +111,7 @@ class MSStructureSimulator:
   nproc: int
   nstate: int
   auto_corrs: bool
+  phased_array: bool
   dump_rate: float
   time_chunks: int
   time_start: float
@@ -362,6 +363,39 @@ class MSStructureSimulator:
         "TRANSITION", np.asarray([[f"TRANSITION-{i}"] for i in range(self.nfield)])
       )
       T.putcol("NAME", np.asarray([f"SOURCE-{i}" for i in range(self.nfield)]))
+
+    self._write_phased_array(output_ms)
+
+  def _write_phased_array(self, output_ms: str) -> None:
+    """Write a small PHASED_ARRAY table with variable-sized element arrays."""
+    phased_array_table_desc = ms_descriptor("MSV3_PHASED_ARRAY")
+    with Table.ms_from_descriptor(
+      output_ms, "MSV3_PHASED_ARRAY", table_desc=phased_array_table_desc
+    ) as T:
+      T.addrows(self.nantenna)
+
+      # Reverse the table order to test that antenna_xds and phased_array_xds
+      # are still aligned by antenna_name, not by row index.
+      antenna_ids = np.arange(self.nantenna - 1, -1, -1, dtype=np.int32)
+      T.putcol("ANTENNA_ID", antenna_ids)
+
+      position = np.arange(self.nantenna * 3, dtype=np.float64).reshape(
+        self.nantenna, 3
+      )
+      T.putcol("POSITION", position[antenna_ids])
+
+      nreceptors = next(iter(self.feeds.values())).nreceptors
+      for row, antenna_id in enumerate(antenna_ids):
+        index = ([row],)
+        coordinate_axes = (antenna_id + 1) * np.eye(3)
+        T.putcol("COORDINATE_AXES", coordinate_axes[None, ...], index=index)
+
+        nelements = antenna_id + 1
+        element_offset = np.tile(np.arange(nelements, dtype=np.float64), (3, 1))
+        T.putcol("ELEMENT_OFFSET", element_offset[None, ...], index=index)
+
+        element_flag = np.tile(np.full(nelements, False, dtype=bool), (nreceptors, 1))
+        T.putcol("ELEMENT_FLAG", element_flag[None, ...], index=index)
 
   def generate_descriptors(self) -> Generator[PartitionDescriptor, None, None]:
     """Generates a sequence of descriptors, each corresponding to a partition"""

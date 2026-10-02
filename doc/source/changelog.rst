@@ -3,8 +3,14 @@
 Changelog
 =========
 
-0.5.11 (22-09-2026)
+0.5.12 (02-10-2026)
 ------------------
+* Require ``zarr >= 3`` for tests and roundtrip Zarr v3 consolidated metadata (:pr:`180`).
+* Upgrade to rarg-python-patterns 0.0.5 (:pr:`179`).
+* Add ``phased_array_xds`` support, from the optional ``PHASED_ARRAY`` sub-table (:pr:`176`, :pr:`178`).
+
+0.5.11 (22-09-2026)
+-------------------
 * Add an ``AGENTS.MD`` (:pr:`175`).
 * Upgrade to arcae 0.5.5 (:pr:`174`) which supports:
 
