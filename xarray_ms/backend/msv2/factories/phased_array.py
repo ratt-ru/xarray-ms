@@ -102,6 +102,7 @@ class PhasedArrayFactory(DatasetFactory):
     element_offset_var = Variable(
       dims=("antenna_name", "cartesian_pos_label_local", "element_id"),
       data=element_offset,
+      attrs={"coordinate_system": "topocentric", "origin": "ANTENNA_POSITION"},
     )
     max_elements_per_station = element_offset.shape[-1]
 
@@ -139,15 +140,6 @@ class PhasedArrayFactory(DatasetFactory):
     data_vars["PHASED_ARRAY_COORDINATE_AXES"].attrs = {
       "units": "dimensionless",
       "type": "rotation_matrix",
-    }
-
-    # Hardcode every PHASED_ARRAY_ELEMENT_OFFSET attribue according to the MSv4 schema,
-    # except for the units which the coder factory should set.
-    data_vars["PHASED_ARRAY_ELEMENT_OFFSET"].attrs = {
-      "units": data_vars["PHASED_ARRAY_ELEMENT_OFFSET"].attrs.get("units", "m"),
-      "type": "location",
-      "coordinate_system": "topocentric",
-      "origin": "ANTENNA_POSITION",
     }
 
     coords = {
