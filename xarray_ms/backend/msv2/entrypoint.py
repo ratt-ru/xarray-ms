@@ -17,6 +17,7 @@ from xarray.core.dataset import Dataset
 from xarray.core.datatree import DataTree
 from xarray.core.utils import try_read_magic_number_from_file_or_path
 
+from xarray_ms.backend.msv2.antenna_selection import select_partition_antennas
 from xarray_ms.backend.msv2.entrypoint_utils import (
   CommonStoreArgs,
   resolve_driver_kwargs,
@@ -25,6 +26,7 @@ from xarray_ms.backend.msv2.factories import (
   AntennaFactory,
   CorrelatedFactory,
   FieldAndSourceFactory,
+  PhasedArrayFactory,
 )
 from xarray_ms.backend.msv2.structure import (
   DEFAULT_PARTITION_COLUMNS,
@@ -602,10 +604,31 @@ class MSv2EntryPoint(BackendEntrypoint):
         partition_key, store_args.structure_factory, store_args.subtable_factories
       )
 
+      phased_array = PhasedArrayFactory(
+        partition_key, store_args.structure_factory, store_args.subtable_factories
+      )
+
+      partition = structure[partition_key]
+      antenna_selection = select_partition_antennas(
+        store_args.subtable_factories["ANTENNA"].instance,
+        store_args.subtable_factories["FEED"].instance,
+        partition,
+      )
+
       path = f"{ms_name}_partition_{p:03}"
       datasets[path] = ds
-      datasets[f"{path}/antenna_xds"] = antenna_factory.get_dataset()
+
+      antenna_ds = antenna_factory.get_dataset(antenna_selection)
+      datasets[f"{path}/antenna_xds"] = antenna_ds
       datasets[f"{path}/field_and_source_xds"] = field_and_source.get_dataset()
+
+      phased_array_ds = phased_array.get_dataset(
+        antenna_selection,
+        receptor_label=antenna_ds["receptor_label"],
+        polarization_type=antenna_ds["polarization_type"],
+      )
+      if phased_array_ds is not None:
+        datasets[f"{path}/phased_array_xds"] = phased_array_ds
 
     self.postprocess_datasets(datasets)
 

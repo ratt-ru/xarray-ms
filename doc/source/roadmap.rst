@@ -31,6 +31,7 @@ MSv4 specifies a set of optional datasets, of which the following are implemente
 
 - antenna_xds
 - field_and_source_xds (required components)
+- phased_array_xds
 
 The following optional datasets are not yet implemented:
 
@@ -40,14 +41,12 @@ The following optional datasets are not yet implemented:
 - gain_curve_xds
 - phase_calibration_xds
 - weather_xds
-- phased_array_xds
 
 Roadmap
 -------
 
 The existing coverage of the specification arguably represents a Pareto distribution of the required data for writing Radio Astronomy software in an MSv4 paradigm, but we aim to address the remaining cases as follows in order of priority:
 
-- phased_array_xds
 - pointing_xds
 
 as this will more fully support LOFAR and SKA-LOW. The following datasets are probably required for VLBI:
