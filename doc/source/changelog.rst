@@ -5,7 +5,8 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
-* Add ``phased_array_xds`` support, from the optional ``PHASED_ARRAY`` sub-table (:pr:`176`, :pr:`178`).
+* Add ``phased_array_xds`` support, from the optional ``PHASED_ARRAY`` sub-table (:pr:`176`).
+* Require ``zarr >= 3`` for tests and roundtrip Zarr v3 consolidated metadata (:pr:`180`).
 
 0.5.11 (22-09-2026)
 -------------------
