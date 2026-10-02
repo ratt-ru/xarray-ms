@@ -7,9 +7,23 @@ import xarray.testing as xt
 # zarr-python stores Zarr v3 consolidated metadata inline in the root
 # zarr.json, but this is not yet part of the Zarr v3 specification
 # https://github.com/zarr-developers/zarr-specs/pull/309
-pytestmark = pytest.mark.filterwarnings(
-  "ignore:Consolidated metadata is currently not part:UserWarning"
-)
+# Fixed-length string dtypes also lack a Zarr v3 specification.
+# The warnings are matched on their messages, which vary across
+# zarr versions, as their categories are not available in all of them
+pytestmark = [
+  pytest.mark.filterwarnings(
+    "ignore:Consolidated metadata is currently not part:UserWarning"
+  ),
+  # zarr >= 3.1
+  pytest.mark.filterwarnings(
+    "ignore:The data type .* does not have a Zarr V3 specification:FutureWarning"
+  ),
+  # zarr < 3.1
+  pytest.mark.filterwarnings(
+    "ignore:The (codec|dtype) .* is currently not part in the Zarr format 3"
+    " specification:UserWarning"
+  ),
+]
 
 
 def assert_consolidated_v3(zarr_path):
