@@ -6,6 +6,7 @@ Changelog
 X.Y.Z (DD-MM-YYYY)
 ------------------
 * Add ``phased_array_xds`` support, from the optional ``PHASED_ARRAY`` sub-table (:pr:`176`).
+* Upgrade to rarg-python-patterns 0.0.5 (:pr:`179`).
 
 0.5.11 (22-09-2026)
 ------------------
