@@ -7,7 +7,7 @@ X.Y.Z (DD-MM-YYYY)
 ------------------
 * Reduce CI minutes: test multiple python versions per runner with uv and pytest-xdist,
   test a reduced matrix on PRs, cancel superseded PR runs and fix the matrix OS
-  being ignored. Make MSv4 test corpus downloads atomic (:pr:`XXX`).
+  being ignored. Make MSv4 test corpus downloads atomic (:pr:`181`).
 
 0.5.12 (02-10-2026)
 ------------------
