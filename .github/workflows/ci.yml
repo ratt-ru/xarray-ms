@@ -10,38 +10,49 @@ on:
   schedule:
     - cron: '30 2 * * 1,4' # Every Monday and Thursday @ 2h30am UTC
 
+# Cancel superseded runs when new commits are pushed to a PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  check_skip:
-    runs-on: ubuntu-latest
+  test:
+    name: test (${{ matrix.os }}, ${{ matrix.python-versions }})
+    # GitHub natively skips push and pull_request runs on [skip ci]
+    # in the head commit message, but not in the PR title or body
     if: |
       !contains(format('{0} {1} {2}', github.event.head_commit.message, github.event.pull_request.title, github.event.pull_request.body), '[skip ci]')
-    steps:
-      - run: |
-          cat <<'MESSAGE'
-          github.event_name: ${{ toJson(github.event_name) }}
-          github.event:
-          ${{ toJson(github.event) }}
-          MESSAGE
-  test:
-    needs: check_skip
-    runs-on: ubuntu-latest
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
+      # Each job tests multiple python versions on a single runner.
+      # PRs test a subset of the matrix, while pushes to main,
+      # tags and scheduled runs test the full matrix.
+      # Include a python version < 3.14 on PRs as xradio is
+      # not installed on 3.14
       matrix:
-        os: ["ubuntu-22.04", "macos-13", "macos-14", "macos-15"]
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        include: >-
+          ${{ fromJSON(github.event_name == 'pull_request' && '[
+            {"os": "ubuntu-latest", "python-versions": "3.11 3.13"},
+            {"os": "macos-latest", "python-versions": "3.14"}
+          ]' || '[
+            {"os": "ubuntu-latest", "python-versions": "3.11 3.12 3.13 3.14"},
+            {"os": "macos-latest", "python-versions": "3.11 3.12 3.13 3.14"},
+            {"os": "macos-15-intel", "python-versions": "3.11 3.14"}
+          ]') }}
 
     steps:
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v7
-        with:
-          python-version: ${{ matrix.python-version }}
-
       - name: Checkout source
         uses: actions/checkout@v7
         with:
           fetch-depth: 1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
 
       - name: Download metadata
         run: curl https://downloadnrao.org/file.download.json > metadata.json
@@ -53,21 +64,18 @@ jobs:
           key: msv4-test-corpus-${{ hashFiles('metadata.json')}}
           path: ~/.cache/xarray-ms/msv4-test-data
 
-      - name: Create virtual environment
-        run: |
-          python -m venv .venv
-          source .venv/bin/activate
-          pip install -U pip
-
-      - name: Install xarray-ms
-        run: |
-          source .venv/bin/activate
-          pip install --group test .
-
       - name: Test xarray-ms
         run: |
-          source .venv/bin/activate
-          py.test -s -vvv tests/ -Werror --msv4_test_corpus
+          status=0
+          for py in ${{ matrix.python-versions }}; do
+            echo "::group::Python ${py}"
+            UV_PROJECT_ENVIRONMENT=".venv-${py}" uv run \
+              --python "${py}" --no-dev --group test --no-editable --with pytest-xdist \
+              py.test -n auto -vvv tests/ -Werror --msv4_test_corpus \
+              || { status=1; echo "::error::Tests failed on Python ${py}"; }
+            echo "::endgroup::"
+          done
+          exit "${status}"
 
       # - name: Debug with tmate on failure
       #   if: ${{ failure() }}
@@ -75,10 +83,11 @@ jobs:
 
   deploy:
     needs: [test]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https:/pypi.org/p/xarray-ms
+      url: https://pypi.org/p/xarray-ms
     permissions:
       id-token: write
     steps:
@@ -98,5 +107,4 @@ jobs:
           python -m build --sdist --wheel
 
       - name: Publish distribution 📦 to PyPI
-        if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags')
         uses: pypa/gh-action-pypi-publish@release/v1
