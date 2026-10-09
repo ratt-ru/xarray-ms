@@ -48,7 +48,9 @@ def test_open_dataset(simmed_ms):
 
   # Works with a LocalCluster
   with ExitStack() as stack:
-    cluster = stack.enter_context(LocalCluster(processes=True, n_workers=4))
+    cluster = stack.enter_context(
+      LocalCluster(processes=True, n_workers=4, dashboard_address=":0")
+    )
     stack.enter_context(Client(cluster))
     ds = stack.enter_context(xarray.open_dataset(simmed_ms, chunks=chunks))
     assert prune_datetime_structures(ds).identical(mem_ds)
@@ -163,7 +165,9 @@ def test_open_datatree(simmed_ms):
 
   # Works with a LocalCluster
   with ExitStack() as stack:
-    cluster = stack.enter_context(LocalCluster(processes=True, n_workers=4))
+    cluster = stack.enter_context(
+      LocalCluster(processes=True, n_workers=4, dashboard_address=":0")
+    )
     stack.enter_context(Client(cluster))
     dt = stack.enter_context(xarray.open_datatree(simmed_ms, preferred_chunks=chunks))
     xt.assert_identical(prune_datetime_structures(dt), mem_dt)
