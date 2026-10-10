@@ -5,6 +5,20 @@ Changelog
 
 Unreleased
 ----------
+* Scope fresh spectral windows to their complete antenna/feed cohort, keeping
+  canonical grids separate even when channel metadata matches. FEED rows use
+  explicit spectral-window references and feed zero for each antenna.
+* Qualify the test-only xarray/Zarr stack with NumPy below 2.5 to avoid its
+  generic-timedelta deprecation under the unchanged warnings-as-errors policy.
+* Materialize a selected MSv4 data group into a fresh MSv2 with explicit
+  complete-grid admission, bounded MAIN writes, canonical support columns and
+  verified no-replace publication. Sparse reconstruction and additional
+  visibility destinations remain outside this materializer's scope.
+* Carry known complete/padded row-grid provenance through MSv4 serialization
+  and reject known padded grids during fresh materialization.
+* Verify asymmetric channel/polarization cell descriptors in fresh skeletons.
+* Emit component-wise native measure units and consistent temporal/direction
+  references so fresh outputs can be consumed by WSClean.
 * Create staged, verified zero-row MSv2 tables from immutable fresh-write plans,
   including all visibility columns and deterministic required subtable rows.
 * Close and refresh the shared MAIN table after column additions, including

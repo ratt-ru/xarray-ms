@@ -555,7 +555,7 @@ def test_metadata_dedup_and_foreign_keys_independent_of_input_order(tmp_path):
     assert set(zip(keys.antenna1_ids, keys.feed1_ids, strict=True)) <= feed_pairs
     assert set(zip(keys.antenna2_ids, keys.feed2_ids, strict=True)) <= feed_pairs
   assert rows.field_rows[0].source_id == 0
-  assert rows.feed_rows[0].spectral_window_id == -1
+  assert rows.feed_rows[0].spectral_window_id == 0
 
 
 def test_distinct_spw_polarization_and_feed_configs(tmp_path):
@@ -582,18 +582,17 @@ def test_distinct_spw_polarization_and_feed_configs(tmp_path):
     plan.partitions[0].foreign_keys.data_desc_id
     != plan.partitions[1].foreign_keys.data_desc_id
   )
-  assert (
-    plan.partitions[0].foreign_keys.feed1_ids
-    != plan.partitions[1].foreign_keys.feed1_ids
-  )
-  assert {(r.antenna_id, r.feed_id) for r in plan.metadata.feed_rows} == {
-    (0, 0),
-    (0, 1),
-    (1, 0),
-    (1, 1),
+  assert {r.feed_id for r in plan.metadata.feed_rows} == {0}
+  assert {
+    (r.antenna_id, r.feed_id, r.spectral_window_id) for r in plan.metadata.feed_rows
+  } == {
+    (0, 0, 0),
+    (0, 0, 1),
+    (1, 0, 0),
+    (1, 0, 1),
   }
-  assert {p.foreign_keys.feed1_ids[0] for p in plan.partitions} == {0, 1}
-  assert {p.foreign_keys.feed2_ids[0] for p in plan.partitions} == {0, 1}
+  assert {p.foreign_keys.feed1_ids[0] for p in plan.partitions} == {0}
+  assert {p.foreign_keys.feed2_ids[0] for p in plan.partitions} == {0}
 
 
 @pytest.mark.parametrize("kind", ["antenna", "field"])

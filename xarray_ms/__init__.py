@@ -9,6 +9,7 @@ from xarray_ms.backend.msv2.fresh_plan import (
   datatree_plan_msv2,
   plan_fresh_msv2,
 )
+from xarray_ms.backend.msv2.fresh_write import write_fresh_msv2
 from xarray_ms.errors import (
   FreshMSv2PlanError,
   FreshMSv2TargetError,
@@ -23,6 +24,7 @@ __all__ = [
   "FreshMSv2ValidationError",
   "plan_fresh_msv2",
   "create_fresh_msv2",
+  "write_fresh_msv2",
   "multithreaded_writes",
 ]
 

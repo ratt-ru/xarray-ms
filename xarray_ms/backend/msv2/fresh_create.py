@@ -193,6 +193,14 @@ def _measure_keywords(plan):
     for part in plan.partitions
     for measure in part.measures
   }
+  # Native measure columns require one quantum unit per component.
+  for value in keywords.values():
+    count = {"uvw": 3, "position": 3, "direction": 2}.get(value["MEASINFO"]["type"], 1)
+    value["QuantumUnits"] *= count
+  keywords["MAIN::TIME_CENTROID"] = keywords["MAIN::TIME"]
+  keywords["OBSERVATION::TIME_RANGE"] = keywords["MAIN::TIME"]
+  keywords["FIELD::DELAY_DIR"] = keywords["FIELD::PHASE_DIR"]
+  keywords["FIELD::REFERENCE_DIR"] = keywords["FIELD::PHASE_DIR"]
   if plan.metadata.source_rows:
     # SOURCE directions are taken from the corresponding FIELD phase centres.
     keywords["SOURCE::DIRECTION"] = keywords["FIELD::PHASE_DIR"]
@@ -266,6 +274,8 @@ def _main_columns(plan):
     ("FLAG", np.dtype("bool").str, data_shapes),
     ("WEIGHT_SPECTRUM", np.dtype("float32").str, data_shapes),
     ("UVW", np.dtype("float64").str, ((3,),)),
+    ("WEIGHT", np.dtype("float32").str, tuple(sorted({(s[1],) for s in data_shapes}))),
+    ("SIGMA", np.dtype("float32").str, tuple(sorted({(s[1],) for s in data_shapes}))),
   )
 
 
@@ -284,7 +294,8 @@ def _verify(plan, staging):
       )
       if descriptor["valueType"].lower() != expected_type.lower():
         raise ValueError(f"Incorrect dtype for MAIN::{column}")
-      if len(shapes) == 1 and tuple(descriptor.get("shape", ())) != shapes[0]:
+      expected_shape = shapes[0] if descriptor.get("_c_order") else shapes[0][::-1]
+      if len(shapes) == 1 and tuple(descriptor.get("shape", ())) != expected_shape:
         raise ValueError(f"Incorrect cell shape for MAIN::{column}")
       if descriptor["dataManagerType"] not in ("TiledColumnStMan", "TiledShapeStMan"):
         raise ValueError(f"Incorrect storage manager for MAIN::{column}")
@@ -318,6 +329,11 @@ def _verify(plan, staging):
 
 def create_fresh_msv2(plan: FreshMSv2Plan) -> str:
   """Create and verify a fresh MS, publishing only after all handles close."""
+  return _transaction(plan)
+
+
+def _transaction(plan, populate=None):
+  """Shared private staging and no-replace publication for fresh outputs."""
   if not isinstance(plan, FreshMSv2Plan):
     raise TypeError("Expected a FreshMSv2Plan")
   target = plan.target
@@ -333,6 +349,8 @@ def create_fresh_msv2(plan: FreshMSv2Plan) -> str:
   try:
     _create(plan, staging)
     _verify(plan, staging)
+    if populate is not None:
+      populate(staging)
     if os.path.lexists(target):
       raise FreshMSv2TargetError(f"Target already exists: {target}")
     _publish_no_replace(staging, target)

@@ -524,7 +524,13 @@ class CorrelatedFactory(DatasetFactory):
     )
 
   def get_attrs(self) -> Dict[Any, Any]:
+    row_map = self._structure_factory.instance[self._partition_key].row_map
+    missing = int(np.count_nonzero(row_map < 0))
     return {
+      "xarray_ms_row_grid": {
+        "status": "padded" if missing else "complete",
+        "missing_rows": missing,
+      },
       "observation_info": self._observation_info(),
       "processor_info": self._processor_info(),
     }
