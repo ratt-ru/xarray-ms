@@ -5,6 +5,11 @@ Changelog
 
 Unreleased
 ----------
+* Scope fresh spectral windows to their complete antenna/feed cohort, keeping
+  canonical grids separate even when channel metadata matches. FEED rows use
+  explicit spectral-window references and feed zero for each antenna.
+* Qualify the test-only xarray/Zarr stack with NumPy below 2.5 to avoid its
+  generic-timedelta deprecation under the unchanged warnings-as-errors policy.
 * Materialize a selected MSv4 data group into a fresh MSv2 with explicit
   complete-grid admission, bounded MAIN writes, canonical support columns and
   verified no-replace publication. Sparse reconstruction and additional

@@ -78,6 +78,13 @@ or zero for zero row weight. ``FLAG_ROW`` is true when all
 channel/polarization flags are true.
 These are semantic reconstruction policies, not native-column preservation.
 
+Fresh metadata scopes each spectral window to its complete antenna/feed cohort.
+Equal spectral metadata and equal cohorts share rows; different cohorts receive
+separate spectral-window and data-description rows, preserving each canonical
+antenna grid when the fresh MS is reopened. Each FEED row references its explicit
+spectral window and uses feed zero for that antenna.
+
+
 ``rows_per_batch`` bounds writer row batches, each containing complete
 channel/polarization cells. Native mutations use one table instance and occur
 serially. An input Dask task can allocate more memory than the writer's batch
@@ -116,7 +123,9 @@ or qualification of the full Paper I demonstrator.
         write_fresh_msv2(tree, "complete.ms", row_grid="complete",
                         rows_per_batch=2)
 
-The test group pairs Zarr 2 with xarray before 2026.4. The generated profile
+The test group pairs Zarr 2 with xarray before 2026.4 and NumPy below 2.5,
+avoiding generic-timedelta deprecations under warnings-as-errors. Runtime
+dependency requirements remain unchanged. The generated profile
 was checked with Python 3.13, xarray 2026.2.0, Zarr 2.18.7 and arcae 0.4.0a14.
 Tests compare the reopened arrays and a flag-aware weighted visibility average,
 and separately remove an original MS before reconstructing from its Zarr export.

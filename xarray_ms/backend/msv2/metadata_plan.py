@@ -544,26 +544,29 @@ def build_metadata(
     for n in sorted(fields_by_name)
   )
   field_ids = {r.name: i for i, r in enumerate(field_rows)}
-  feed_configs = _ordered(
-    (ant_ids[n], pol, angle, focus)
-    for p in extracted
-    for n, pol, angle, focus in p.feeds
+
+  # A spectral window's canonical antenna grid is defined by its full FEED
+  # cohort. Scope otherwise equal spectral payloads to that cohort so a reader
+  # never unions antennas/configurations from unrelated partitions.
+  def scoped_spw(part):
+    cohort = _ordered(
+      (ant_ids[n], pol, angle, focus) for n, pol, angle, focus in part.feeds
+    )
+    return part.spw, cohort
+
+  scoped_spws = _ordered(scoped_spw(part) for part in extracted)
+  spw_ids = {key: i for i, key in enumerate(scoped_spws)}
+  spw_rows = tuple(payload for payload, _ in scoped_spws)
+  feed_rows = tuple(
+    FeedRow(antenna_id, 0, pol, angle, focus, spw_id)
+    for spw_id, (_, cohort) in enumerate(scoped_spws)
+    for antenna_id, pol, angle, focus in cohort
   )
-  feed_counts: dict[int, int] = {}
-  feed_rows_list = []
-  feed_ids = {}
-  for antenna_id, pol, angle, focus in feed_configs:
-    feed_id = feed_counts.get(antenna_id, 0)
-    feed_rows_list.append(FeedRow(antenna_id, feed_id, pol, angle, focus))
-    feed_ids[(antenna_id, pol, angle, focus)] = feed_id
-    feed_counts[antenna_id] = feed_id + 1
-  feed_rows = tuple(feed_rows_list)
-  spw_rows = _ordered(p.spw for p in extracted)
   pol_rows = _ordered(p.polarization for p in extracted)
-  spw_ids = {r: i for i, r in enumerate(spw_rows)}
   pol_ids = {r: i for i, r in enumerate(pol_rows)}
   dd_rows = _ordered(
-    DataDescriptionRow(spw_ids[p.spw], pol_ids[p.polarization]) for p in extracted
+    DataDescriptionRow(spw_ids[scoped_spw(p)], pol_ids[p.polarization])
+    for p in extracted
   )
   obs_rows = _ordered(p.observation for p in extracted)
   proc_rows = _ordered(p.processor for p in extracted)
@@ -590,10 +593,8 @@ def build_metadata(
       _fail("DATA_DESCRIPTION", "POLARIZATION_ID does not reference a planned row")
   keys = []
   for part in extracted:
-    local_feeds = {
-      n: feed_ids[(ant_ids[n], pol, angle, focus)]
-      for n, pol, angle, focus in part.feeds
-    }
+    spw_id = spw_ids[scoped_spw(part)]
+    local_feeds = {n: 0 for n, _, _, _ in part.feeds}
     local_ants = {r.name for r in part.antennas}
     local_fields = {f[0] for f in part.fields}
     for name in (*part.baseline1, *part.baseline2):
@@ -613,17 +614,19 @@ def build_metadata(
       tuple(local_feeds[n] for n in part.baseline2),
       tuple(field_ids[n] for n in part.field_names),
       part.scans,
-      dd_rows.index(DataDescriptionRow(spw_ids[part.spw], pol_ids[part.polarization])),
+      dd_rows.index(DataDescriptionRow(spw_id, pol_ids[part.polarization])),
       obs_rows.index(part.observation),
       proc_rows.index(part.processor),
       state_rows.index(part.state),
     )
-    valid_feeds = {(row.antenna_id, row.feed_id) for row in feed_rows}
+    valid_feeds = {
+      (row.antenna_id, row.feed_id, row.spectral_window_id) for row in feed_rows
+    }
     if any(
-      pair not in valid_feeds
+      (*pair, spw_id) not in valid_feeds
       for pair in zip(assignment.antenna1_ids, assignment.feed1_ids, strict=True)
     ) or any(
-      pair not in valid_feeds
+      (*pair, spw_id) not in valid_feeds
       for pair in zip(assignment.antenna2_ids, assignment.feed2_ids, strict=True)
     ):
       _fail(
