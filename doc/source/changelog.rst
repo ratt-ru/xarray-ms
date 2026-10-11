@@ -5,11 +5,14 @@ Changelog
 
 Unreleased
 ----------
+* Merge upstream ``write-support`` 0.4.0-alpha.12. Fresh MSv2 planning refuses
+  the reader's new ``phased_array_xds`` as unsupported optional metadata instead
+  of silently dropping the ``PHASED_ARRAY`` sub-table. The test group follows
+  upstream's ``zarr >= 3`` and drops the fork's xarray < 2026.4 / NumPy < 2.5
+  test pins.
 * Scope fresh spectral windows to their complete antenna/feed cohort, keeping
   canonical grids separate even when channel metadata matches. FEED rows use
   explicit spectral-window references and feed zero for each antenna.
-* Qualify the test-only xarray/Zarr stack with NumPy below 2.5 to avoid its
-  generic-timedelta deprecation under the unchanged warnings-as-errors policy.
 * Materialize a selected MSv4 data group into a fresh MSv2 with explicit
   complete-grid admission, bounded MAIN writes, canonical support columns and
   verified no-replace publication. Additional data groups can be mapped to
