@@ -1,6 +1,7 @@
 """Transactional reduced complete-grid MSv4 to fresh MSv2 writer."""
 
 import os
+from collections.abc import Mapping
 
 import numpy as np
 from arcae.lib.arrow_tables import Table
@@ -14,7 +15,7 @@ from xarray_ms.backend.msv2.measures_encoders import EpochCoder
 def _populate(tree, plan, grids, staging, bound):
   row = 0
   with Table.from_filename(staging, readonly=False, ninstances=1) as table:
-    for columns in row_batches(tree, grids, bound):
+    for columns in row_batches(tree, grids, bound, plan.visibility_mappings):
       count = len(columns["TIME"])
       table.addrows(count)
       for column, values in columns.items():
@@ -44,7 +45,7 @@ def _verify_populated(tree, plan, grids, staging, bound, count, ranges):
     if table.nrow() != count or set(SUBTABLES) - set(table.getkeywords()):
       raise ValueError("Incorrect populated MAIN count or subtable closure")
     row = 0
-    for columns in row_batches(tree, grids, bound):
+    for columns in row_batches(tree, grids, bound, plan.visibility_mappings):
       size = len(columns["TIME"])
       for column, expected in columns.items():
         actual = table.getcol(column, index=(slice(row, row + size),))
@@ -76,16 +77,26 @@ def _verify_populated(tree, plan, grids, staging, bound, count, ranges):
 
 
 def write_fresh_msv2(
-  tree, target, *, row_grid, data_group="base", rows_per_batch=128
+  tree,
+  target,
+  *,
+  row_grid,
+  data_group="base",
+  rows_per_batch=128,
+  additional_visibility: Mapping[str, str] | None = None,
 ) -> str:
   """Write the selected group to DATA in a new, complete-grid MSv2.
 
   ``row_grid='complete'`` is a required caller assertion. Known padded sources
   are rejected. Weights narrow to float32; overflow is rejected. WEIGHT is the
   channel mean and SIGMA is its reciprocal square root, with zero for zero weight.
-  All source payload reads and native writes are bounded by ``rows_per_batch``.
+  ``additional_visibility`` maps other data groups to extra visibility columns.
+  Source selections and native writes are bounded by ``rows_per_batch``, with
+  complete channel/polarization cells for each visibility column. Memory scales
+  with the number of columns and cell size; source Dask chunks can exceed this
+  bound.
   """
-  plan = plan_fresh_msv2(tree, target, data_group)
+  plan = plan_fresh_msv2(tree, target, data_group, additional_visibility)
   grids = admit_rows(tree, plan, row_grid, rows_per_batch)
   return _transaction(
     plan, lambda staging: _populate(tree, plan, grids, staging, rows_per_batch)

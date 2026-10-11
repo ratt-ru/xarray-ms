@@ -12,8 +12,9 @@ Unreleased
   generic-timedelta deprecation under the unchanged warnings-as-errors policy.
 * Materialize a selected MSv4 data group into a fresh MSv2 with explicit
   complete-grid admission, bounded MAIN writes, canonical support columns and
-  verified no-replace publication. Sparse reconstruction and additional
-  visibility destinations remain outside this materializer's scope.
+  verified no-replace publication. Additional data groups can be mapped to
+  standard or custom visibility columns that clone the DATA descriptor and
+  storage policy. Sparse reconstruction remains outside this materializer's scope.
 * Carry known complete/padded row-grid provenance through MSv4 serialization
   and reject known padded grids during fresh materialization.
 * Verify asymmetric channel/polarization cell descriptors in fresh skeletons.

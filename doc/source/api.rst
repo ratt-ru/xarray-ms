@@ -52,7 +52,15 @@ existing destination. A failed attempt removes its private staging directory.
         write_fresh_msv2(
             tree, "new.ms", row_grid="complete", data_group="base",
             rows_per_batch=128,
+            additional_visibility={
+                "model": "MODEL_DATA",
+                "model2": "MODEL_DATA2",
+                "residual": "RESIDUAL_DATA",
+            },
         )
+
+This example assumes the ``model``, ``model2`` and ``residual`` data groups
+exist in every partition.
 
 ``row_grid="complete"`` is a required assertion that every time/baseline cell
 represents a real row. Each partition must contain the full cross-correlation
@@ -85,17 +93,23 @@ antenna grid when the fresh MS is reopened. Each FEED row references its explici
 spectral window and uses feed zero for that antenna.
 
 
+``additional_visibility`` maps other source data-group names to standard or
+custom MSv2 visibility column names. Omitted or empty mappings write only
+``DATA``. Each extra group must exist in every partition and match the selected
+visibility dimensions, shape and dtype. Extras clone the ``DATA`` descriptor
+and storage policy; flags, weights and UVW come from the selected group.
+Reserved or duplicate destination names are rejected before staging.
+
 ``rows_per_batch`` bounds writer row batches, each containing complete
-channel/polarization cells. Native mutations use one table instance and occur
-serially. An input Dask task can allocate more memory than the writer's batch
-size; choose source chunks accordingly. Existing ``DataTree.to_msv2`` update
+channel/polarization cells for all requested visibility columns. Batch memory
+scales linearly with the number of visibility columns and their full cell size.
+Native mutations use one table instance and occur serially. An input Dask task
+can allocate more memory than the writer's batch size; choose source chunks accordingly. Existing ``DataTree.to_msv2`` update
 behavior is unchanged.
 
-Additional visibility destinations remain supported by the planning and
-zero-row skeleton APIs, but are deferred in this materializer. Sparse-grid
-reconstruction, unrestricted optional metadata and variable measure references
-are also deferred. This semantic writer does not replace the exact-logical
-native preservation sidecar used by the MSv2 workflow project.
+Sparse-grid reconstruction, unrestricted optional metadata and variable
+measure references remain deferred. This semantic writer does not replace the
+exact-logical native preservation sidecar used by the MSv2 workflow project.
 
 .. autofunction:: xarray_ms.write_fresh_msv2
 

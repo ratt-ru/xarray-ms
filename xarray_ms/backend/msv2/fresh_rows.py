@@ -142,10 +142,11 @@ def admit_rows(tree, plan, row_grid, rows_per_batch):
   return tuple(grids)
 
 
-def row_batches(tree, grids, bound):
+def row_batches(tree, grids, bound, visibility_mappings=()):
   for grid in grids:
     part = grid.partition
     ds = tree[part.path].to_dataset()
+    additional = dict(part.additional_correlated_data)
     k = part.foreign_keys
     for t, time in enumerate(grid.time):
       for start in range(0, len(grid.order), bound):
@@ -208,6 +209,9 @@ def row_batches(tree, grids, bound):
           "SCAN_NUMBER": np.full(count, k.scan_numbers[t], dtype=np.int32),
           "ARRAY_ID": np.zeros(count, dtype=np.int32),
         }
+        for group, column in visibility_mappings:
+          if column != "DATA":
+            rows[column] = read(additional[group])
         for col, values in (
           ("ANTENNA1", k.antenna1_ids),
           ("ANTENNA2", k.antenna2_ids),

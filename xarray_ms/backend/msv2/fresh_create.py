@@ -6,6 +6,7 @@ import os
 import shutil
 import sys
 import tempfile
+from copy import deepcopy
 from datetime import datetime
 
 import numpy as np
@@ -215,7 +216,18 @@ def _create(plan, staging):
   managers = []
   canonical = ms_descriptor("MAIN", complete=True)
   columns = _main_columns(plan)
+  extra_columns = {column for _, column in plan.visibility_mappings if column != "DATA"}
   for column, dtype, shapes in columns:
+    if column in extra_columns:
+      # Extra visibility cells have the same dtype and shape as DATA. Clone
+      # its complete descriptor and storage policy, including its comment.
+      desc[column] = deepcopy(desc["DATA"])
+      group = f"{column}_GROUP"
+      desc[column]["dataManagerGroup"] = group
+      manager = deepcopy(next(m for m in managers if m["COLUMNS"] == ["DATA"]))
+      manager.update(NAME=group, COLUMNS=[column])
+      managers.append(manager)
+      continue
     canonical_desc = canonical.get(column)
     if column == "FLAG":
       # casacore accepts BOOL as an alias of canonical "boolean"; avoid a
