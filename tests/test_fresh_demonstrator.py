@@ -11,6 +11,22 @@ from xarray_ms import write_fresh_msv2
 from xarray_ms.errors import FreshMSv2ValidationError, IrregularBaselineGridWarning
 from xarray_ms.testing.fresh import make_complete_tree
 
+# Zarr v3 specification warnings, as filtered in tests/test_zarr_roundtrip.py
+pytestmark = [
+  pytest.mark.filterwarnings(
+    "ignore:Consolidated metadata is currently not part:UserWarning"
+  ),
+  # zarr >= 3.1
+  pytest.mark.filterwarnings(
+    "ignore:The data type .* does not have a Zarr V3 specification:FutureWarning"
+  ),
+  # zarr < 3.1
+  pytest.mark.filterwarnings(
+    "ignore:The (codec|dtype) .* is currently not part in the Zarr format 3"
+    " specification:UserWarning"
+  ),
+]
+
 
 def _visibility(tree):
   return next(n for n in tree.subtree if n.attrs.get("type") == "visibility")

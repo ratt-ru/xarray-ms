@@ -468,10 +468,23 @@ def test_base_role_supported_dtypes(tmp_path, role, dtype, accepted):
 def test_real_backend_tree_can_be_planned_without_creation(simmed_ms, tmp_path):
   target = tmp_path / "fresh.ms"
   with xr.open_datatree(simmed_ms, auto_corrs=True) as tree:
+    for partition in tree.children.values():
+      del partition["phased_array_xds"]
     plan = tree.plan_msv2(target)
     assert plan.target == str(target)
     assert plan.partitions
     assert all(p.correlated_data == "VISIBILITY" for p in plan.partitions)
+  assert not target.exists()
+
+
+def test_real_backend_phased_array_is_refused(simmed_ms, tmp_path):
+  target = tmp_path / "fresh.ms"
+  with xr.open_datatree(simmed_ms, auto_corrs=True) as tree:
+    with pytest.raises(
+      FreshMSv2ValidationError,
+      match="unsupported optional metadata.*phased_array_xds",
+    ):
+      tree.plan_msv2(target)
   assert not target.exists()
 
 
