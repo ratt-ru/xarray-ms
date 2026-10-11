@@ -129,6 +129,89 @@ Signal when the grid cannot be made perfectly regular:
 - `IrregularBaselineGridWarning` — `row_map` contains `-1`s, i.e. baselines
   missing for some timesteps; imputed with defaults (benign in most cases).
 
+### Measures
+
+MSv2 and MSv4 record measures (units, measure type and reference frame) in
+different places:
+
+- **MSv2** stores them once per column, in the column descriptor keywords:
+  `MEASINFO["type"]` (e.g. `position`), `MEASINFO["Ref"]` for a fixed frame
+  (e.g. `ITRF`) *or* `MEASINFO["VarRefCol"]` naming a column of per-row frame
+  codes, and `QuantumUnits` (e.g. `["m", "m", "m"]`).
+- **MSv4** stores them as `attrs` on each variable: `type`, `units` and a
+  frame-like key (`frame`, `scale`/`format` for time, `observer` for frequency),
+  plus schema-only attributes such as `coordinate_system`, `origin` and
+  `origin_object_name` that have no MSv2 equivalent.
+
+#### 1. Adapt, then decode
+
+Measures are translated column by column, in
+[measures_adapters.py](xarray_ms/backend/msv2/measures_adapters.py) and
+[measures_encoders.py](xarray_ms/backend/msv2/measures_encoders.py):
+
+```python
+coder_factory = MSv2CoderFactory.from_arrow_table(subtable)  # or .from_table_desc(desc)
+var = coder_factory.create("COLUMN").decode(var)
+```
+
+- The **measures adapter** reads the column descriptor. `ArrowTableMeasuresAdapter`
+  (used by `from_arrow_table`) also resolves `VarRefCol` against the table's
+  rows. Because the subtable has already been cut down to the partition's rows,
+  it must find exactly one frame, else `PartitioningError` is raised. The fix is
+  a finer `partition_schema`. `ColumnDescMeasuresAdapter` (used by
+  `from_table_desc`) supports a fixed `Ref` only.
+- `MSv2CoderFactory.create` picks a **coder** from `MEASINFO["type"]`:
+
+  | MSv2 type   | Coder             | MSv4 `type`      | Frame key / mapping                     |
+  |-------------|-------------------|------------------|-----------------------------------------|
+  | `epoch`     | `EpochCoder`      | `time`           | `scale`; also converts MJD → unix data |
+  | `frequency` | `FrequencyCoder`  | `spectral_coord` | `observer`, e.g. `LSRK` → `lsrk`        |
+  | `direction` | `DirectionCoder`  | `sky_coord`      | `frame`, e.g. `J2000` → `fk5`           |
+  | `position`  | `PositionCoder`   | `location`       | `frame`, `ITRF` → `ITRS`                |
+  | `uvw`       | `UvwCoder`        | `uvw`            | `frame`, e.g. `J2000` → `fk5`           |
+
+#### 2. How to construct a measures variable
+
+Split the attributes by where they come from:
+
+1. put the MSv4-only attributes, i.e. those the MSv4 schema requires but MSv2
+   cannot express, on the `Variable` when you create it,
+2. pass the variable through `decode`, which adds the attributes derived from
+   the MSv2 measures (`type`, `units`, frame).
+
+`ANTENNA_POSITION` in [antenna.py](xarray_ms/backend/msv2/factories/antenna.py)
+is the reference example:
+
+```python
+antenna_position = Variable(
+  ("antenna_name", "cartesian_pos_label"),
+  position,
+  {"coordinate_system": "geocentric", "origin_object_name": "earth"},
+)
+ant_coder_factory.create("POSITION").decode(antenna_position)
+# attrs: coordinate_system=geocentric, origin_object_name=earth,
+#        type=location, units=m, frame=ITRS
+```
+
+**Do not** assign `var.attrs = {...}` after decoding. This replaces the derived
+attributes and silently drops any not listed, almost always the `frame`.
+`PHASED_ARRAY_ELEMENT_OFFSET` used to do this (see
+[#176](https://github.com/ratt-ru/xarray-ms/pull/176#discussion_r4083467399));
+it now follows the two-step pattern in
+[phased_array.py](xarray_ms/backend/msv2/factories/phased_array.py).
+Its `frame` is the MSv2 `Ref` (`ITRF` → `ITRS`) as recorded, even though the
+offsets are topocentric.
+
+#### 3. When hardcoding is legitimate
+
+Only when MSv2 holds no measures information for the column:
+
+- `PHASED_ARRAY_COORDINATE_AXES` is a rotation matrix with no `MEASINFO`;
+  its `units: dimensionless` and `type: rotation_matrix` are set directly.
+- `DATA` carries no units in MSv2, so `MSV4_to_MSV2_COLUMN_SCHEMAS` in
+  [correlated.py](xarray_ms/backend/msv2/factories/correlated.py) supplies
+  `VisibilityCoder` (`units: Jy`) instead of the default coder.
+
 ### Backend
 
 Uses `arcae` (not python-casacore) for high-performance CASA Table access.
@@ -156,6 +239,7 @@ are opened by arcae.
 
 ## When relevant
 - [Documentation](doc/source) → Documentation markdown source
+- Adding or changing a variable carrying units or frames → read [Measures](#measures)
 
 ## Tooling
 
