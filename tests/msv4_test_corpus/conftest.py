@@ -3,9 +3,10 @@ from __future__ import annotations
 import enum
 import json
 import os.path
+import tempfile
 import urllib.request
 import zipfile
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from dataclasses import InitVar, dataclass, field
 from hashlib import sha256
 
@@ -86,6 +87,22 @@ IGNORE_DATASETS = {"panel_cutoff_mask"}
 DESIRED_DATASET_TYPES = {DatasetType.MSV2}
 
 
+@contextmanager
+def atomic_open(path: str, mode: str):
+  """Open a temporary file alongside ``path`` that replaces ``path``
+  on successful exit and is removed otherwise. Concurrent readers,
+  such as pytest-xdist workers, never observe a partially written file"""
+  fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(path))
+  try:
+    with os.fdopen(fd, mode) as f:
+      yield f
+  except BaseException:
+    os.unlink(tmp_path)
+    raise
+  else:
+    os.replace(tmp_path, path)
+
+
 def download_item(ds_meta: DatasetMetadata, output_file: str, checksum_file: str):
   """Download an item described by a ``ds_meta`` object to ``output_file``,
   storing it's checksum in ``checksum_file``"""
@@ -93,8 +110,10 @@ def download_item(ds_meta: DatasetMetadata, output_file: str, checksum_file: str
     url = f"{BASE_URL}/{ds_meta.path}/{ds_meta.filename}"
     request = urllib.request.Request(url, headers=HEADERS)
     response = stack.enter_context(urllib.request.urlopen(request))
-    archive = stack.enter_context(open(output_file, "wb"))
-    checkfile = stack.enter_context(open(checksum_file, "w"))
+    # Contexts exit in reverse order: the archive is
+    # moved into place before its checksum file
+    checkfile = stack.enter_context(atomic_open(checksum_file, "w"))
+    archive = stack.enter_context(atomic_open(output_file, "wb"))
     digest = sha256()
 
     while data := response.read(ONE_MB):

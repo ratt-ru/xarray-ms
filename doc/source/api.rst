@@ -108,8 +108,12 @@ can allocate more memory than the writer's batch size; choose source chunks acco
 behavior is unchanged.
 
 Sparse-grid reconstruction, unrestricted optional metadata and variable
-measure references remain deferred. This semantic writer does not replace the
-exact-logical native preservation sidecar used by the MSv2 workflow project.
+measure references remain deferred. In particular, a ``phased_array_xds``
+child, which the reader produces when the source MSv2 has a ``PHASED_ARRAY``
+sub-table, is refused rather than silently dropped; callers can delete it from
+each partition to accept that loss explicitly. This semantic writer does not
+replace the exact-logical native preservation sidecar used by the MSv2
+workflow project.
 
 .. autofunction:: xarray_ms.write_fresh_msv2
 
@@ -137,10 +141,12 @@ or qualification of the full Paper I demonstrator.
         write_fresh_msv2(tree, "complete.ms", row_grid="complete",
                         rows_per_batch=2)
 
-The test group pairs Zarr 2 with xarray before 2026.4 and NumPy below 2.5,
-avoiding generic-timedelta deprecations under warnings-as-errors. Runtime
-dependency requirements remain unchanged. The generated profile
-was checked with Python 3.13, xarray 2026.2.0, Zarr 2.18.7 and arcae 0.4.0a14.
+The test group requires Zarr 3 and filters Zarr's warnings that consolidated
+metadata is not yet part of the Zarr v3 specification, and that some data types
+and codecs lack a Zarr v3 specification; all other warnings remain errors.
+Runtime dependency requirements remain unchanged. The generated profile
+was checked with Python 3.13, xarray 2026.9.0, NumPy 2.5.4, Zarr 3.4.1 and
+arcae 0.4.0a14.
 Tests compare the reopened arrays and a flag-aware weighted visibility average,
 and separately remove an original MS before reconstructing from its Zarr export.
 Native writes always use ``ninstances=1``; the newer arcae 0.5 branch is not
