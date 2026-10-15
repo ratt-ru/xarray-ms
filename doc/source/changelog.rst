@@ -5,6 +5,11 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Check that secondary columns have a single row shape in linear time,
+  instead of sorting all row shapes with ``np.unique``, and only read the
+  first row's shape of fixed shape columns. This reduces the time to open
+  a 4.6 million row MeerKAT Measurement Set with three secondary columns
+  by about 14 seconds.
 * Reduce CI minutes: test multiple python versions per runner with uv and pytest-xdist,
   test a reduced matrix on PRs, cancel superseded PR runs and fix the matrix OS
   being ignored. Make MSv4 test corpus downloads atomic (:pr:`181`).
