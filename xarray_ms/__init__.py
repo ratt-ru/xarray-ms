@@ -1,6 +1,35 @@
 import warnings
 
+from xarray import DataTree
+
+from xarray_ms.backend.msv2.fresh_create import create_fresh_msv2
+from xarray_ms.backend.msv2.fresh_plan import (
+  FreshMSv2Partition,
+  FreshMSv2Plan,
+  datatree_plan_msv2,
+  plan_fresh_msv2,
+)
+from xarray_ms.backend.msv2.fresh_write import write_fresh_msv2
+from xarray_ms.errors import (
+  FreshMSv2PlanError,
+  FreshMSv2TargetError,
+  FreshMSv2ValidationError,
+)
+
+__all__ = [
+  "FreshMSv2Partition",
+  "FreshMSv2Plan",
+  "FreshMSv2PlanError",
+  "FreshMSv2TargetError",
+  "FreshMSv2ValidationError",
+  "plan_fresh_msv2",
+  "create_fresh_msv2",
+  "write_fresh_msv2",
+  "multithreaded_writes",
+]
+
 HAS_WRITE_SUPPORT = False
+DataTree.plan_msv2 = datatree_plan_msv2
 
 
 def _install_write_support():
@@ -11,7 +40,7 @@ def _install_write_support():
     return
 
   try:
-    from xarray import Dataset, DataTree
+    from xarray import Dataset
 
     from xarray_ms.backend.msv2.writes import (
       dataset_to_msv2,

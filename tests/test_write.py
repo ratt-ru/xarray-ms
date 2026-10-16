@@ -5,12 +5,14 @@ import numpy as np
 import pytest
 import xarray
 from arcae.lib.arrow_tables import ms_descriptor
+from rarg_python_patterns.multiton import Multiton
 from xarray import DataTree
 
 import xarray_ms
 from xarray_ms.backend.msv2.writes import (
   DataVariableInfo,
   generate_column_descriptor,
+  msv2_store_from_dataset,
 )
 from xarray_ms.errors import MismatchedWriteRegion, NonCanonicalColumnWarning
 from xarray_ms.msv4_types import CORRELATED_DATASET_TYPES
@@ -204,6 +206,147 @@ def test_sync_canonical_column(simmed_ms):
       table_desc["MODEL_DATA"]["comment"] == canonical_desc["MODEL_DATA"]["comment"]
     )
     assert table_desc["MODEL_DATA_CUSTOM"]["comment"] == ""
+
+
+@pytest.mark.parametrize(
+  "simmed_ms, fail_second",
+  [
+    ({"name": "schema-refresh.ms"}, False),
+    ({"name": "schema-refresh-fail.ms"}, True),
+  ],
+  indirect=["simmed_ms"],
+)
+def test_sync_refreshes_main_table_only_after_schema_change(
+  simmed_ms, monkeypatch, fail_second
+):
+  events = []
+  original_release = Multiton.release
+  original_instance = Multiton.instance.fget
+  released = False
+  add_count = 0
+
+  class ObservedTable:
+    def __init__(self, table):
+      self.table = table
+
+    def __getattr__(self, name):
+      return getattr(self.table, name)
+
+    def close(self):
+      events.append("close")
+      self.table.close()
+
+    def addcols(self, *args, **kwargs):
+      nonlocal add_count
+      add_count += 1
+      if fail_second and add_count == 2:
+        raise RuntimeError("second column failed")
+      return self.table.addcols(*args, **kwargs)
+
+  def record_instance(multiton):
+    nonlocal released
+    table = original_instance(multiton)
+    if multiton == factory:
+      if released:
+        events.append("reopen")
+        released = False
+      return ObservedTable(table)
+    return table
+
+  def record_release(multiton):
+    nonlocal released
+    if multiton == factory:
+      events.append("release")
+      released = True
+    return original_release(multiton)
+
+  with xarray.open_datatree(simmed_ms, auto_corrs=True) as dt:
+    for node in dt.subtree:
+      if node.attrs.get("type") in CORRELATED_DATASET_TYPES:
+        vis = node.VISIBILITY
+        new_columns = {"MODEL_DATA": xarray.zeros_like(vis)}
+        if fail_second:
+          new_columns["MODEL_DATA_CUSTOM"] = xarray.zeros_like(vis)
+        dt[node.path] = DataTree(node.ds.assign(new_columns))
+        correlated_ds = dt[node.path].ds
+
+    factory = msv2_store_from_dataset(correlated_ds).table_factory
+    monkeypatch.setattr(Multiton, "instance", property(record_instance))
+    monkeypatch.setattr(Multiton, "release", record_release)
+
+    if fail_second:
+      with pytest.raises(RuntimeError, match="second column failed"):
+        dt.sync_msv2()
+    else:
+      dt.sync_msv2()
+    expected_events = (
+      ["close", "release"] if fail_second else ["close", "release", "reopen"]
+    )
+    assert events == expected_events
+    assert "MODEL_DATA" in factory.instance.columns()
+    assert events == ["close", "release", "reopen"]
+
+    dt.sync_msv2()
+    if fail_second:
+      assert "MODEL_DATA_CUSTOM" in factory.instance.columns()
+      assert events == ["close", "release", "reopen"] * 2
+    else:
+      assert events == ["close", "release", "reopen"]
+
+
+@pytest.mark.parametrize(
+  "simmed_ms", [{"name": "schema-refresh-close.ms"}], indirect=True
+)
+def test_sync_propagates_close_failure_inside_outer_except(simmed_ms, monkeypatch):
+  original_instance = Multiton.instance.fget
+  original_release = Multiton.release
+  events = []
+
+  class FailingCloseTable:
+    def __init__(self, table):
+      self.table = table
+
+    def __getattr__(self, name):
+      return getattr(self.table, name)
+
+    def addcols(self, *args, **kwargs):
+      result = self.table.addcols(*args, **kwargs)
+      events.append("addcols")
+      return result
+
+    def close(self):
+      self.table.close()
+      events.append("close")
+      raise RuntimeError("closing MAIN failed")
+
+  def record_instance(multiton):
+    table = original_instance(multiton)
+    return FailingCloseTable(table) if multiton == factory else table
+
+  def record_release(multiton):
+    if multiton == factory:
+      events.append("release")
+    return original_release(multiton)
+
+  with xarray.open_datatree(simmed_ms, auto_corrs=True) as dt:
+    for node in dt.subtree:
+      if node.attrs.get("type") in CORRELATED_DATASET_TYPES:
+        ds = node.ds.assign(MODEL_DATA=xarray.zeros_like(node.VISIBILITY))
+        dt[node.path] = DataTree(ds)
+        correlated_ds = dt[node.path].ds
+
+    factory = msv2_store_from_dataset(correlated_ds).table_factory
+    monkeypatch.setattr(Multiton, "instance", property(record_instance))
+    monkeypatch.setattr(Multiton, "release", record_release)
+
+    try:
+      raise ValueError("outer exception")
+    except ValueError:
+      with pytest.raises(RuntimeError, match="closing MAIN failed"):
+        dt.sync_msv2()
+
+    assert events == ["addcols", "close", "release"]
+    assert "MODEL_DATA" in factory.instance.columns()
 
 
 @pytest.mark.parametrize(

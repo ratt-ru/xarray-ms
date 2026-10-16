@@ -3,6 +3,38 @@
 Changelog
 =========
 
+Unreleased
+----------
+* Merge upstream ``write-support`` 0.4.0-alpha.12. Fresh MSv2 planning refuses
+  the reader's new ``phased_array_xds`` as unsupported optional metadata instead
+  of silently dropping the ``PHASED_ARRAY`` sub-table. The test group follows
+  upstream's ``zarr >= 3`` and drops the fork's xarray < 2026.4 / NumPy < 2.5
+  test pins.
+* Scope fresh spectral windows to their complete antenna/feed cohort, keeping
+  canonical grids separate even when channel metadata matches. FEED rows use
+  explicit spectral-window references and feed zero for each antenna.
+* Materialize a selected MSv4 data group into a fresh MSv2 with explicit
+  complete-grid admission, bounded MAIN writes, canonical support columns and
+  verified no-replace publication. Additional data groups can be mapped to
+  standard or custom visibility columns that clone the DATA descriptor and
+  storage policy. Sparse reconstruction remains outside this materializer's scope.
+* Carry known complete/padded row-grid provenance through MSv4 serialization
+  and reject known padded grids during fresh materialization.
+* Verify asymmetric channel/polarization cell descriptors in fresh skeletons.
+* Emit component-wise native measure units and consistent temporal/direction
+  references so fresh outputs can be consumed by WSClean.
+* Create staged, verified zero-row MSv2 tables from immutable fresh-write plans,
+  including all visibility columns and deterministic required subtable rows.
+* Close and refresh the shared MAIN table after column additions, including
+  partial failures, so lazy writes cannot reuse a stale casacore schema.
+* Plan deterministic MSv2 metadata rows and validated MAIN foreign keys from
+  MSv4 partition metadata without creating tables or reading visibility payloads.
+* Validate fixed MSv4 measure references during fresh-MS v2 preflight and carry
+  immutable CASA column keywords in the plan for metadata creation.
+* Add pure fresh-MS v2 preflight planning via ``plan_fresh_msv2`` and
+  ``DataTree.plan_msv2``. Planning validates visibility data groups and
+  destination columns without creating or writing a Measurement Set.
+
 X.Y.Z (DD-MM-YYYY)
 ------------------
 * Reduce CI minutes: test multiple python versions per runner with uv and pytest-xdist,

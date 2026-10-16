@@ -151,6 +151,8 @@ class DimensionlessCoder(SuppliedQuantityCoder):
 class UvwCoder(MeasuresCoder):
   """Encodes UVW coordinate measures"""
 
+  MSV2_TO_MSV4_FRAME = {"J2000": "fk5", "ICRS": "icrs", "APP": "APP"}
+
   def encode(self, variable: Variable, name: T_Name = None) -> Variable:
     dims, data, attrs, encoding = unpack_for_encoding(variable)
     attrs = {k: v for k, v in attrs.items() if k not in {"type", "units", "frame"}}
@@ -160,10 +162,9 @@ class UvwCoder(MeasuresCoder):
     dims, data, attrs, encoding = unpack_for_decoding(variable)
     attrs["type"] = self.measures_adapter.msv4_type("raise")
     attrs["units"] = self.measures_adapter.quantum_unit("raise")
-    if (msv2_frame := self.measures_adapter.msv2_frame("raise")) == "J2000":
-      attrs["frame"] = "fk5"
-    elif msv2_frame == "APP":
-      attrs["frame"] = msv2_frame
+    msv2_frame = self.measures_adapter.msv2_frame("raise")
+    if msv2_frame in self.MSV2_TO_MSV4_FRAME:
+      attrs["frame"] = self.MSV2_TO_MSV4_FRAME[msv2_frame]
     elif msv2_frame == "ITRF":
       # NOTE: ITRF is not a valid UVW frame
       # but some CASA tasks will set it
@@ -183,6 +184,7 @@ class EpochCoder(MeasuresCoder):
   MJD_EPOCH: datetime = datetime(1858, 11, 17)
   UTC_EPOCH: datetime = datetime(1970, 1, 1)
   MJD_OFFSET_SECONDS: float = (UTC_EPOCH - MJD_EPOCH).total_seconds()
+  MSV2_TO_MSV4_FRAME = {"UTC": "utc", "TAI": "tai"}
 
   @staticmethod
   def encode_array(data: npt.NDArray) -> npt.NDArray:
@@ -215,12 +217,10 @@ class EpochCoder(MeasuresCoder):
     attrs["type"] = self.measures_adapter.msv4_type("raise")
     attrs["units"] = self.measures_adapter.quantum_unit("raise")
     attrs["format"] = "unix"
-    if (msv2_frame := self.measures_adapter.msv2_frame("raise")) == "UTC":
-      attrs["scale"] = "utc"
-    elif msv2_frame == "TAI":
-      attrs["scale"] = "tai"
-    else:
+    msv2_frame = self.measures_adapter.msv2_frame("raise")
+    if msv2_frame not in self.MSV2_TO_MSV4_FRAME:
       raise NotImplementedError(f"Epoch frame {msv2_frame}")
+    attrs["scale"] = self.MSV2_TO_MSV4_FRAME[msv2_frame]
 
     if isinstance(data, MSv2Array):
       data.transform = EpochCoder.decode_array

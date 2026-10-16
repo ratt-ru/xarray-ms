@@ -364,7 +364,8 @@ def sync_msv2(dt: DataTree, write_map: WriteMapT = None):
 
   # Get a table factory from the MSv2Store
   table_factory = msv2_store_from_dataset(next(iter(vis_datasets)).ds).table_factory
-  table_desc = table_factory.instance.tabledesc()
+  table = table_factory.instance
+  table_desc = table.tabledesc()
 
   write_map = {**MSV4_WRITE_MAP, **promote_write_map(write_map)}
   var_info_map: DataVariableInfoMap = defaultdict(
@@ -407,11 +408,28 @@ def sync_msv2(dt: DataTree, write_map: WriteMapT = None):
   # casacore's Table::addColumn accepts a single data manager
   # specification per call, so add each column separately
   column_descs, dminfo = generate_column_descriptor(table_desc, var_info_map)
-  for group in dminfo.values():
-    (column,) = group["COLUMNS"]
-    table_factory.instance.addcols({column: column_descs[column]}, {"*1": group})
+  if dminfo:
+    add_failed = False
+    try:
+      for group in dminfo.values():
+        (column,) = group["COLUMNS"]
+        table.addcols({column: column_descs[column]}, {"*1": group})
+    except BaseException:
+      add_failed = True
+      raise
+    finally:
+      # Close the materialized table before evicting it: release() only
+      # removes the cache entry and does not close the arcae/casacore table.
+      # Refresh even if a later addcols fails after earlier columns succeeded.
+      try:
+        table.close()
+      except Exception:
+        if not add_failed:
+          raise
+      finally:
+        table_factory.release()
 
-  # Check every requested column, not just those created above
+  # Check every requested column on the reopened table, not just new columns.
   columns = set(table_factory.instance.columns())
   if missing := sorted({c for _, c in var_info_map.keys()} - columns):
     raise ColumnCreationError(
