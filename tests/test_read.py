@@ -504,3 +504,61 @@ def test_additional_columns(simmed_ms):
         "polarization",
       )
       assert node["MODEL_DATA"].equals(node["VISIBILITY"])
+
+
+ROW_SHAPE_TABLE_DESC = {
+  "MIXED_SHAPE_DATA": {
+    **NONSTANDARD_TABLE_DESC["CORRELATED_DATA"],
+    "comment": "MIXED_SHAPE_DATA column",
+  },
+  "FIXED_SHAPE_DATA": {
+    **NONSTANDARD_TABLE_DESC["CORRELATED_DATA"],
+    "comment": "FIXED_SHAPE_DATA column",
+    "option": 4,
+    "shape": [8, 4],
+  },
+}
+
+
+def _add_row_shape_columns(chunk_desc, data_dict):
+  dims, data = data_dict["DATA"]
+  # The first chunk has one channel less than the other chunks
+  data_dict["MIXED_SHAPE_DATA"] = (
+    dims,
+    data[:, :-1] if chunk_desc.chunk_id == 0 else data,
+  )
+  data_dict["FIXED_SHAPE_DATA"] = (dims, data)
+  return data_dict
+
+
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [
+    {
+      "name": "row_shapes.ms",
+      "ntime": 4,
+      "time_chunks": 2,
+      "transform_data": _add_row_shape_columns,
+      "table_desc": ROW_SHAPE_TABLE_DESC,
+    }
+  ],
+  indirect=True,
+)
+def test_secondary_column_row_shapes(simmed_ms):
+  """A variably shaped secondary column whose rows differ in shape is ignored,
+  while a fixed shape secondary column is exposed"""
+  with pytest.warns(
+    ColumnShapeImputationWarning,
+    match="Ignoring secondary column MIXED_SHAPE_DATA without a distinct row shape",
+  ):
+    with xarray.open_datatree(simmed_ms) as dt:
+      dt.load()
+      node = dt["row_shapes_partition_000"]
+      assert "MIXED_SHAPE_DATA" not in node
+      assert node["FIXED_SHAPE_DATA"].dims == (
+        "time",
+        "baseline_id",
+        "frequency",
+        "polarization",
+      )
+      assert node["FIXED_SHAPE_DATA"].equals(node["VISIBILITY"])
