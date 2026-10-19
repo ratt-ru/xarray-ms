@@ -136,3 +136,31 @@ def test_select_partition_antennas_heterogeneous_feeds():
 
   npt.assert_array_equal(selection.antenna_ids, [2, 0, 1])
   npt.assert_array_equal(selection.feed_row_indices, [0, 1, 2])
+
+
+def test_select_partition_antennas_prefers_partition_spw():
+  """FEED rows matching the partition spw are preferred over global spw rows"""
+  antenna = pa.table({"NAME": ["A0", "A1"]})
+  feed = pa.table(
+    {
+      "ANTENNA_ID": pa.array([0, 1, 0, 0], pa.int32()),
+      "FEED_ID": pa.array([0, 0, 0, 0], pa.int32()),
+      "SPECTRAL_WINDOW_ID": pa.array([-1, -1, 1, 0], pa.int32()),
+      "RECEPTOR_ANGLE": pa.array(
+        [[0.0, 1.0], [0.0, 1.0], [0.25, 1.25], [0.5, 1.5]], pa.list_(pa.float64())
+      ),
+      "POLARIZATION_TYPE": pa.array([["X", "Y"]] * 4, pa.list_(pa.string())),
+    }
+  )
+  partition = SimpleNamespace(
+    spw_id=0,
+    feed_ids=np.array([0], np.int32),
+    antenna_ids=np.array([0, 1], np.int32),
+  )
+  with warnings.catch_warnings():
+    warnings.simplefilter("error", HeterogeneousFeedWarning)
+    selection = select_partition_antennas(antenna, feed, partition)
+
+  # Antenna 0 uses its spw 0 row, antenna 1 falls back to its global spw row
+  npt.assert_array_equal(selection.antenna_ids, [1, 0])
+  npt.assert_array_equal(selection.feed_row_indices, [1, 3])

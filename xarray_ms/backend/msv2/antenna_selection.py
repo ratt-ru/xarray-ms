@@ -120,6 +120,11 @@ def select_partition_antennas(
     out=mask,
   )
 
+  # Prefer rows matching the partition spw over global spw (-1) rows
+  # for antennas that have both.
+  spw_antennas = antenna_ids[mask & (spw_ids == partition.spw_id)]
+  mask &= ~((spw_ids == -1) & np.isin(antenna_ids, spw_antennas))
+
   # FEED may contain multiple rows per antenna (e.g. one per feed and time).
   # Select the first row of each antenna, in FEED-table order.
   feed_row_indices = np.where(mask)[0]
