@@ -5,6 +5,11 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* List each antenna once in ``antenna_xds``, using its first FEED row, when the FEED
+  table has multiple rows per antenna, e.g. one per feed or time. Emit a
+  ``HeterogeneousFeedWarning`` if ``RECEPTOR_ANGLE``, ``POLARIZATION_TYPE`` or
+  ``FOCUS_LENGTH`` differ between these rows. Prefer FEED rows matching the
+  partition's ``SPECTRAL_WINDOW_ID`` over global (``-1``) rows (:issue:`186`, :pr:`187`).
 * Check that secondary columns have a single row shape in linear time,
   instead of sorting all row shapes with ``np.unique``, and only read the
   first row's shape of fixed shape columns. This reduces the time to open

@@ -1,6 +1,7 @@
 import os.path
 import warnings
 
+import numpy as np
 import pytest
 import xarray
 
@@ -31,6 +32,7 @@ pmx = pytest.mark.xfail
 @pytest.mark.filterwarnings("ignore::xarray_ms.errors.ImputedMetadataWarning")
 @pytest.mark.filterwarnings("ignore::xarray_ms.errors.IrregularTimeGridWarning")
 @pytest.mark.filterwarnings("ignore::xarray_ms.errors.IrregularBaselineGridWarning")
+@pytest.mark.filterwarnings("ignore::xarray_ms.errors.HeterogeneousFeedWarning")
 @pytest.mark.parametrize(
   "msv4_corpus_dataset, partition_schema",
   [
@@ -93,4 +95,8 @@ def test_msv4_corpus(msv4_corpus_dataset, partition_schema):
     if xradio:
       issues = list(check_datatree(dt))
       assert not issues
+    for node in dt.subtree:
+      if node.name == "antenna_xds":
+        antenna_names = node.antenna_name.values
+        assert len(antenna_names) == len(np.unique(antenna_names))
     dt.load()
