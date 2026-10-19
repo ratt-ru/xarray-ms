@@ -366,6 +366,23 @@ def test_isel_loads_on_subsets(simmed_ms):
   assert dt["backend_partition_001"].isel(**p1_sel).identical(node1)
 
 
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [{"name": "outer.ms", "ntime": 5, "nantenna": 4}],
+  indirect=True,
+)
+def test_isel_arrays_on_time_and_baseline(simmed_ms):
+  """Array selections along both time and baseline_id are outer selections"""
+  selection = {"time": [0, 2, 4], "baseline_id": [0, 1]}
+  dt = xarray.open_datatree(simmed_ms, auto_corrs=True)
+  expected = dt["outer_partition_000"].ds.load().isel(**selection)
+
+  dt = xarray.open_datatree(simmed_ms, auto_corrs=True)
+  actual = dt["outer_partition_000"].ds.isel(**selection).load()
+  assert actual.VISIBILITY.shape[:2] == (3, 2)
+  xarray.testing.assert_equal(actual, expected)
+
+
 def test_isel_loads_on_integers(simmed_ms):
   """Tests isel using integer coordinates"""
   dt = xarray.open_datatree(simmed_ms)

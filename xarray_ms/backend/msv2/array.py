@@ -124,8 +124,10 @@ class MainMSv2Array(MSv2Array):
     expected_shape = tuple(slice_length(k, s) for k, s in zip(key, self.shape))
     if reduce(mul, expected_shape, 1) == 0:
       return np.empty(expected_shape, dtype=self.dtype)
-    # Map the (time, baseline_id) coordinates onto row indices
-    rows = self._structure_factory.instance[self._partition].row_map[key[:2]]
+    # Map the (time, baseline_id) coordinates onto row indices.
+    # Index each axis separately, as the key is an outer indexer
+    row_map = self._structure_factory.instance[self._partition].row_map
+    rows = row_map[key[0]][:, key[1]]
     row_key = (rows.ravel(),) + key[2:]
     row_shape = (rows.size,) + expected_shape[2:]
     result = np.full(row_shape, self._default, dtype=self.dtype)

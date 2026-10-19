@@ -5,6 +5,8 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Fix ``IndexError`` when selecting correlated data with arrays along both
+  ``time`` and ``baseline_id``, e.g. ``isel(time=[0, 2], baseline_id=[0, 1])``.
 * List each antenna once in ``antenna_xds``, using its first FEED row, when the FEED
   table has multiple rows per antenna, e.g. one per feed or time. Emit a
   ``HeterogeneousFeedWarning`` if ``RECEPTOR_ANGLE``, ``POLARIZATION_TYPE`` or
