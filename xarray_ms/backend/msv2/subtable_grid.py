@@ -11,13 +11,17 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass
-from typing import Tuple
+from typing import TYPE_CHECKING, Dict, Sequence, Tuple
 
 import numpy as np
 import numpy.typing as npt
 import pyarrow as pa
 
 from xarray_ms.errors import IrregularSubtableGridWarning, PartitioningError
+
+if TYPE_CHECKING:
+  from xarray_ms.backend.msv2.partition import PartitionKeyT
+  from xarray_ms.backend.msv2.subtable_index import SubtableIndexFactory
 
 # Intervals smaller than this (seconds) are considered unusable
 # for establishing the validity of a subtable row
@@ -241,3 +245,99 @@ def gather(data: npt.NDArray, index: npt.NDArray[np.int64], fill_value) -> npt.N
   valid = index >= 0
   result[valid] = data[index[valid]]
   return result
+
+
+def default_fill_value(dtype: np.dtype):
+  """Fill value for missing grid cells: ``nan`` for inexact types, else zero"""
+  return np.nan if np.issubdtype(dtype, np.inexact) else dtype.type(0)
+
+
+@dataclass(frozen=True, slots=True)
+class GriddedSubtable:
+  """Subtable columns gridded onto ``(time, antenna, ...)``"""
+
+  time: npt.NDArray[np.float64]
+  """Time coordinate of the grid"""
+
+  data: Dict[str, npt.NDArray | None]
+  """Gridded columns. ``None`` if the column is absent or unreadable"""
+
+
+def grid_subtable(
+  index_factory: SubtableIndexFactory,
+  group: PartitionKeyT,
+  antenna_ids: npt.NDArray[np.integer],
+  span: Tuple[float, float],
+  columns: Sequence[str],
+  grid_time: npt.NDArray[np.float64] | None = None,
+) -> GriddedSubtable | None:
+  """Select, grid and read subtable columns.
+
+  This is intended to be wrapped in a
+  :class:`~rarg_python_patterns.multiton.Multiton`, so that partitions
+  sharing the same antennas, time span and grid times
+  (e.g. partitions differing only in spectral window)
+  share the result, rather than repeating the work.
+
+  Args:
+    index_factory: Factory producing the subtable index.
+    group: Partition key of the subtable index group.
+    antenna_ids: Antenna ids defining the antenna axis of the grid.
+    span: ``(start, end)`` time span of rows to select.
+    columns: Columns to read.
+    grid_time: If supplied, rows are gridded on these times via :func:`asof_grid`.
+      Otherwise, rows are gridded on their own times via :func:`native_grid`.
+
+  Returns:
+    The gridded columns, or None if no subtable rows were selected.
+  """
+  index = index_factory.instance
+
+  try:
+    group_index = index.groups[group]
+  except KeyError:
+    return None
+
+  selected = select_rows(
+    group_index["TIME"],
+    group_index["VALID_INTERVAL"],
+    group_index["ANTENNA_ID"],
+    antenna_ids,
+    span,
+  )
+
+  if selected.size == 0:
+    return None
+
+  time = group_index["TIME"][selected]
+  antenna_id = group_index["ANTENNA_ID"][selected]
+
+  if grid_time is not None:
+    valid_interval = group_index["VALID_INTERVAL"][selected]
+    grid = asof_grid(time, valid_interval, antenna_id, antenna_ids, grid_time)
+    # Read only the rows referenced by the grid
+    rows, grid_index = np.unique(grid.index, return_inverse=True)
+    grid_index = grid_index.reshape(grid.index.shape) - int(rows[0] < 0)
+    rows = rows[rows >= 0]
+  else:
+    # The native grid references every selected row
+    grid = native_grid(time, antenna_id, antenna_ids, index.name)
+    rows, grid_index = np.arange(time.size), grid.index
+
+  if rows.size == 0:
+    return None
+
+  present = [c for c in columns if index.has_column(c)]
+  raw = index.getcols(present, group_index["row"][selected][rows])
+  data: Dict[str, npt.NDArray | None] = {}
+
+  for column in columns:
+    if (values := raw.get(column)) is None:
+      data[column] = None
+    else:
+      gridded = gather(values, grid_index, default_fill_value(values.dtype))
+      # The result may be shared between partitions
+      gridded.flags.writeable = False
+      data[column] = gridded
+
+  return GriddedSubtable(grid.time, data)

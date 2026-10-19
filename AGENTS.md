@@ -150,6 +150,11 @@ that data columns are read for the selected rows only.
   `open_datatree(..., interpolate=...)` are instead gridded on the correlated
   `time` axis with a pyarrow as-of join, taking the most recently valid row.
 
+`grid_subtable` performs the selection, gridding and column reads. Factories call
+it through a `Multiton` keyed on `(index, group, antenna_ids, span, columns,
+grid_time)`, so partitions sharing these, e.g. partitions differing only in
+spectral window, share one read-only result rather than repeating the work.
+
 ### Measures
 
 MSv2 and MSv4 record measures (units, measure type and reference frame) in

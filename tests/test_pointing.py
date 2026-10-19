@@ -100,3 +100,31 @@ def test_pointing_absent(simmed_ms):
 def test_invalid_interpolate(simmed_ms):
   with pytest.raises(ValueError, match="Invalid interpolate values"):
     xarray.open_datatree(simmed_ms, interpolate=["pointing", "foo"])
+
+
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [
+    {
+      "name": "pointing_spws.ms",
+      "ntime": NTIME,
+      "nantenna": NANTENNA,
+      "pointing": True,
+      "data_description": [(8, ["XX", "YY"]), (4, ["XX", "YY"])],
+    }
+  ],
+  indirect=True,
+)
+def test_pointing_shared_between_partitions(simmed_ms):
+  """Partitions differing only in spectral window share gridded POINTING data"""
+  with pytest.warns(IrregularSubtableGridWarning):
+    dt = xarray.open_datatree(simmed_ms)
+
+  beams = [
+    dt[path].POINTING_BEAM.values
+    for path in sorted(dt.groups)
+    if path.endswith("/pointing_xds")
+  ]
+  assert len(beams) == 2
+  assert np.shares_memory(beams[0], beams[1])
+  assert not beams[0].flags.writeable

@@ -651,7 +651,7 @@ class MSv2EntryPoint(BackendEntrypoint):
 
       pointing_ds = pointing.get_dataset(
         antenna_selection,
-        store_args.subtable_index_factories["POINTING"].instance,
+        store_args.subtable_index_factories["POINTING"],
         interpolate="pointing" in interpolate,
       )
       if pointing_ds is not None:
