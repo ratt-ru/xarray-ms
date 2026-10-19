@@ -150,10 +150,17 @@ that data columns are read for the selected rows only.
   `open_datatree(..., interpolate=...)` are instead gridded on the correlated
   `time` axis with a pyarrow as-of join, taking the most recently valid row.
 
-`grid_subtable` performs the selection, gridding and column reads. Factories call
-it through a `Multiton` keyed on `(index, group, antenna_ids, span, columns,
-grid_time)`, so partitions sharing these, e.g. partitions differing only in
-spectral window, share one read-only result rather than repeating the work.
+`grid_subtable` performs the selection and gridding, converting the grid into
+subtable row numbers. Factories call it through a `Multiton` keyed on
+`(index, group, antenna_ids, span, grid_time)`, so partitions sharing these,
+e.g. partitions differing only in spectral window, share one read-only grid.
+
+Data columns are read lazily by `SubtableMSv2Array` in
+[array.py](xarray_ms/backend/msv2/array.py), which maps the requested
+`(time, antenna)` block through the grid onto subtable rows, exactly as
+`MainMSv2Array` does with `row_map`. Each row is read once even when it occupies
+several grid cells, as arcae rejects duplicate row indices. Indexed subtables are
+opened with multiple instances so that, e.g. dask chunks, can be read concurrently.
 
 ### Measures
 

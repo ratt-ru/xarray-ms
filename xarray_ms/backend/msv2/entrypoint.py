@@ -51,6 +51,10 @@ if TYPE_CHECKING:
     PartitionKeyT,
     SubtableFactory,
   )
+  from xarray_ms.backend.msv2.subtable_index import (
+    SubtableIndexFactory,
+    SubtableTableFactory,
+  )
 
 
 def promote_chunks(
@@ -112,6 +116,8 @@ class MSv2Store(AbstractWritableDataStore):
   __slots__ = (
     "_table_factory",
     "_subtable_factories",
+    "_subtable_table_factories",
+    "_subtable_index_factories",
     "_structure_factory",
     "_partition_schema",
     "_partition_key",
@@ -124,6 +130,8 @@ class MSv2Store(AbstractWritableDataStore):
 
   _table_factory: MainTableFactory
   _subtable_factories: Dict[str, SubtableFactory]
+  _subtable_table_factories: Dict[str, SubtableTableFactory]
+  _subtable_index_factories: Dict[str, SubtableIndexFactory]
   _structure_factory: MSv2StructureFactory
   _partition_schema: List[str]
   _partition_key: PartitionKeyT
@@ -145,9 +153,13 @@ class MSv2Store(AbstractWritableDataStore):
     driver: str,
     driver_kwargs: Dict[str, Any],
     epoch: str,
+    subtable_table_factories: Dict[str, SubtableTableFactory] | None = None,
+    subtable_index_factories: Dict[str, SubtableIndexFactory] | None = None,
   ):
     self._table_factory = table_factory
     self._subtable_factories = subtable_factories
+    self._subtable_table_factories = subtable_table_factories or {}
+    self._subtable_index_factories = subtable_index_factories or {}
     self._structure_factory = structure_factory
     self._partition_schema = partition_schema
     self._partition_key = partition_key
@@ -212,6 +224,8 @@ class MSv2Store(AbstractWritableDataStore):
       driver=store_args.driver,
       driver_kwargs=store_args.driver_kwargs,
       epoch=store_args.epoch,
+      subtable_table_factories=store_args.subtable_table_factories,
+      subtable_index_factories=store_args.subtable_index_factories,
     )
 
   def close(self, **kwargs):
@@ -219,6 +233,10 @@ class MSv2Store(AbstractWritableDataStore):
     self._structure_factory.release()
     for subtable_factory in self._subtable_factories.values():
       subtable_factory.release()
+    for index_factory in self._subtable_index_factories.values():
+      index_factory.release()
+    for table_factory in self._subtable_table_factories.values():
+      table_factory.release()
 
   def main_dataset_factory(self) -> CorrelatedFactory:
     return CorrelatedFactory(

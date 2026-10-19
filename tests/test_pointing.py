@@ -2,7 +2,9 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 import xarray
+from arcae.lib.arrow_tables import Table, ms_descriptor
 
+from xarray_ms.backend.msv2.array import SubtableMSv2Array
 from xarray_ms.backend.msv2.measures_encoders import EpochCoder
 from xarray_ms.errors import IrregularSubtableGridWarning
 from xarray_ms.testing.simulator import FIRST_FEB_2023_MJDS
@@ -116,15 +118,59 @@ def test_invalid_interpolate(simmed_ms):
   indirect=True,
 )
 def test_pointing_shared_between_partitions(simmed_ms):
-  """Partitions differing only in spectral window share gridded POINTING data"""
+  """Partitions differing only in spectral window share
+  the lazily read POINTING row grid"""
   with pytest.warns(IrregularSubtableGridWarning):
     dt = xarray.open_datatree(simmed_ms)
 
-  beams = [
-    dt[path].POINTING_BEAM.values
+  def backend_array(variable):
+    data = variable._data
+    while not isinstance(data, SubtableMSv2Array):
+      data = data.array
+    return data
+
+  arrays = [
+    backend_array(dt[path].POINTING_BEAM.variable)
     for path in sorted(dt.groups)
     if path.endswith("/pointing_xds")
   ]
-  assert len(beams) == 2
-  assert np.shares_memory(beams[0], beams[1])
-  assert not beams[0].flags.writeable
+  assert len(arrays) == 2
+  grids = [a._grid_factory.instance for a in arrays]
+  assert grids[0] is grids[1]
+  assert not grids[0].rows.flags.writeable
+
+
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [{"name": "pointing_validity.ms", "ntime": NTIME, "nantenna": NANTENNA}],
+  indirect=True,
+)
+@pytest.mark.parametrize("interpolate", [None, "pointing"])
+def test_pointing_single_validity_row(simmed_ms, interpolate):
+  """A single POINTING row per antenna, whose time lies outside the
+  correlated data, but whose interval covers it, is selected and
+  associated with every correlated timestep"""
+  time = FIRST_FEB_2023_MJDS + 10 * NTIME * DUMP_RATE
+  direction = np.stack([np.full(NANTENNA, 0.5), np.arange(NANTENNA) * 0.1], axis=-1)
+
+  with Table.ms_from_descriptor(
+    simmed_ms, "POINTING", table_desc=ms_descriptor("POINTING", complete=True)
+  ) as T:
+    T.addrows(NANTENNA)
+    T.putcol("ANTENNA_ID", np.arange(NANTENNA, dtype=np.int32))
+    T.putcol("TIME", np.full(NANTENNA, time))
+    T.putcol("INTERVAL", np.full(NANTENNA, 100 * NTIME * DUMP_RATE))
+    T.putcol("NUM_POLY", np.zeros(NANTENNA, np.int32))
+    T.putcol("DIRECTION", direction[:, None, :])
+
+  dt = xarray.open_datatree(simmed_ms, interpolate=interpolate)
+  pointing = dt["pointing_validity_partition_000/pointing_xds"]
+  beam = pointing.POINTING_BEAM.values
+
+  if interpolate:
+    assert beam.shape == (NTIME, NANTENNA, 2)
+  else:
+    assert beam.shape == (1, NANTENNA, 2)
+
+  npt.assert_allclose(beam, np.broadcast_to(direction, beam.shape))
+  assert "POINTING_DISH_MEASURED" not in pointing

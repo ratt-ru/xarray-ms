@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import concurrent.futures as cf
 import multiprocessing as mp
-from typing import Any, Dict, Mapping, Sequence, TypeAlias
+from typing import Any, Dict, Mapping, Sequence, Tuple, TypeAlias
 
 import numpy as np
 import numpy.typing as npt
@@ -15,6 +15,12 @@ from xarray_ms.backend.msv2.subtable_grid import effective_interval
 
 SUBTABLE_SORT_COLUMNS = ["ANTENNA_ID", "TIME"]
 SUBTABLE_OTHER_COLUMNS = ["INTERVAL", "row"]
+#: Default number of table instances opened for indexed subtables,
+#: so that data columns can be read concurrently
+DEFAULT_SUBTABLE_NINSTANCES = 4
+
+SubtableTableFactory: TypeAlias = Multiton[Table]
+"""Multiton producing an arcae subtable :class:`~arcae.lib.arrow_tables.Table`"""
 
 
 class SubtableIndex:
@@ -28,45 +34,39 @@ class SubtableIndex:
   data columns can subsequently be read for selected rows only.
   """
 
-  _name: str
-  _driver_kwargs: Dict[str, Any]
+  _table_factory: SubtableTableFactory
   _table_desc: Dict[str, Any]
   _groups: Dict[PartitionKeyT, Dict[str, npt.NDArray]]
 
   def __init__(
     self,
-    name: str,
+    table_factory: SubtableTableFactory,
     partition_columns: Sequence[str] = (),
-    **driver_kwargs: Any,
   ):
-    driver_kwargs.setdefault("ninstances", 1)
-    self._name = name
-    self._driver_kwargs = driver_kwargs
+    self._table_factory = table_factory
     self._table_desc = {}
     self._groups = {}
 
     try:
-      table = self._open()
+      table = table_factory.instance
     except pa.lib.ArrowInvalid as e:
       # The subtable does not exist
       if "subtable" in str(e) and "is invalid" in str(e):
         return
       raise
 
-    with table:
-      self._table_desc = table.tabledesc()
+    self._table_desc = table.tabledesc()
 
-      if table.nrow() == 0:
-        return
+    if table.nrow() == 0:
+      return
 
-      columns = set(table.columns())
-      partition_columns = list(partition_columns)
-      index_columns = partition_columns + SUBTABLE_SORT_COLUMNS + ["INTERVAL"]
+    partition_columns = list(partition_columns)
+    index_columns = partition_columns + SUBTABLE_SORT_COLUMNS + ["INTERVAL"]
 
-      if missing := set(index_columns) - columns:
-        raise ValueError(f"{name} is missing indexing columns {sorted(missing)}")
+    if missing := set(index_columns) - set(table.columns()):
+      raise ValueError(f"{table.name()} is missing indexing columns {sorted(missing)}")
 
-      index = table.to_arrow(columns=index_columns)
+    index = table.to_arrow(columns=index_columns)
 
     with cf.ThreadPoolExecutor(max_workers=mp.cpu_count()) as pool:
       self._groups = TablePartitioner(
@@ -78,14 +78,9 @@ class SubtableIndex:
         group["TIME"], group["INTERVAL"], group["ANTENNA_ID"]
       )
 
-  def _open(self) -> Table:
-    return Table.from_filename(
-      self._name, readonly=True, lockoptions="nolock", **self._driver_kwargs
-    )
-
   @property
   def name(self) -> str:
-    return self._name
+    return self._table_factory.instance.name()
 
   @property
   def table_desc(self) -> Dict[str, Any]:
@@ -104,30 +99,25 @@ class SubtableIndex:
   def has_column(self, column: str) -> bool:
     return column in self._table_desc
 
-  def getcols(
-    self, columns: Sequence[str], rows: npt.NDArray[np.integer]
-  ) -> Dict[str, npt.NDArray | None]:
-    """Read ``columns`` for the given subtable ``rows``.
+  @property
+  def table_factory(self) -> SubtableTableFactory:
+    """Factory producing the subtable, for reading data columns"""
+    return self._table_factory
 
-    Rows are read in ascending order and returned in the order
-    of ``rows``. Columns which cannot be read, generally because their
-    cells are undefined, are returned as ``None``."""
-    order = np.argsort(rows, kind="stable")
-    index = (np.ascontiguousarray(rows[order]),)
-    result: Dict[str, npt.NDArray | None] = {}
+  def column_row_type(
+    self, column: str, row: int
+  ) -> Tuple[Tuple[int, ...], np.dtype] | None:
+    """Returns the shape and dtype of ``column`` in subtable ``row``,
+    or None if the column is absent or its cell is undefined"""
+    if not self.has_column(column):
+      return None
 
-    with self._open() as table:
-      for column in columns:
-        try:
-          data = table.getcol(column, index)
-        except (pa.lib.ArrowInvalid, TypeError):
-          result[column] = None
-        else:
-          unordered = np.empty_like(data)
-          unordered[order] = data
-          result[column] = unordered
+    try:
+      data = self._table_factory.instance.getcol(column, (np.array([row]),))
+    except (pa.lib.ArrowInvalid, TypeError):
+      return None
 
-    return result
+    return data.shape[1:], data.dtype
 
 
 SubtableIndexFactory: TypeAlias = Multiton[SubtableIndex]

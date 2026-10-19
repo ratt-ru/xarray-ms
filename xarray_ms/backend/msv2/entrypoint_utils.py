@@ -14,7 +14,12 @@ from xarray_ms.backend.msv2.structure import (
   MSv2StructureFactory,
   SubtableFactory,
 )
-from xarray_ms.backend.msv2.subtable_index import SubtableIndex, SubtableIndexFactory
+from xarray_ms.backend.msv2.subtable_index import (
+  DEFAULT_SUBTABLE_NINSTANCES,
+  SubtableIndex,
+  SubtableIndexFactory,
+  SubtableTableFactory,
+)
 
 #: Backend drivers currently supported by xarray-ms.
 SUPPORTED_DRIVERS = ("arcae",)
@@ -162,6 +167,7 @@ class CommonStoreArgs:
   preferred_chunks: Dict[str, int]
   ms_factory: MainTableFactory
   subtable_factories: Dict[str, SubtableFactory]
+  subtable_table_factories: Dict[str, SubtableTableFactory]
   subtable_index_factories: Dict[str, SubtableIndexFactory]
   structure_factory: MSv2StructureFactory
 
@@ -175,6 +181,7 @@ class CommonStoreArgs:
     "preferred_chunks",
     "ms_factory",
     "subtable_factories",
+    "subtable_table_factories",
     "subtable_index_factories",
     "structure_factory",
   )
@@ -219,12 +226,24 @@ class CommonStoreArgs:
       )
       for subtable in (DEFAULT_SUBTABLES + EXTRA_SUBTABLES)
     }
+    self.subtable_table_factories = {
+      subtable: Multiton(
+        Table.from_filename,
+        f"{ms}::{subtable}",
+        readonly=True,
+        lockoptions="nolock",
+        **{
+          "ninstances": DEFAULT_SUBTABLE_NINSTANCES,
+          **table_driver_kwargs(self.driver_kwargs, subtable),
+        },
+      )
+      for subtable in INDEXED_SUBTABLES
+    }
     self.subtable_index_factories = {
       subtable: Multiton(
         SubtableIndex,
-        f"{ms}::{subtable}",
+        self.subtable_table_factories[subtable],
         tuple(partition_columns),
-        **table_driver_kwargs(self.driver_kwargs, subtable),
       )
       for subtable, partition_columns in INDEXED_SUBTABLES.items()
     }
