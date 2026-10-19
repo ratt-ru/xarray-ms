@@ -1,4 +1,3 @@
-import numpy as np
 from rarg_python_patterns.multiton import Multiton
 from xarray import Dataset, Variable
 
@@ -31,7 +30,6 @@ class PointingFactory(DatasetFactory):
     ----------
     selection : PartitionAntennaSelection
         The partition-specific antenna selection shared with antenna_xds.
-        Antennas repeated over multiple feeds are only included once.
     pointing_factory : SubtableIndexFactory
         Factory producing the index of the POINTING subtable.
     interpolate : bool
@@ -56,19 +54,12 @@ class PointingFactory(DatasetFactory):
     half_interval = partition.interval.max() / 2 if partition.interval.size else 0.0
     span = (partition.time.min() - half_interval, partition.time.max() + half_interval)
 
-    # POINTING has no feed axis, but the selection contains an antenna
-    # per selected feed. Use each antenna once, in order of first occurrence
-    _, first = np.unique(selection.antenna_ids, return_index=True)
-    first = np.sort(first)
-    antenna_ids = selection.antenna_ids[first]
-    antenna_names = selection.antenna_names[first]
-
     # Partitions sharing antennas and time span share the gridded columns
     gridded = Multiton(
       grid_subtable,
       pointing_factory,
       group,
-      antenna_ids,
+      selection.antenna_ids,
       span,
       POINTING_COLUMNS,
       partition.time if interpolate else None,
@@ -110,7 +101,7 @@ class PointingFactory(DatasetFactory):
       data_vars=data_vars,
       coords={
         time_dim: time_var,
-        "antenna_name": Variable("antenna_name", antenna_names),
+        "antenna_name": Variable("antenna_name", selection.antenna_names),
         "local_sky_dir_label": Variable("local_sky_dir_label", local_sky_dir_labels),
       },
       attrs={"type": "pointing"},
