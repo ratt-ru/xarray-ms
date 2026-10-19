@@ -35,6 +35,11 @@ class DuplicateAntennaNameWarning(UserWarning):
   and are made unique by appending a numeric suffix"""
 
 
+class HeterogeneousFeedWarning(UserWarning):
+  """Warning raised when per-feed FEED quantities, such as RECEPTOR_ANGLE,
+  differ between the feeds of an antenna in a partition"""
+
+
 class FrameConversionWarning(UserWarning):
   """Warning raised if there's no defined conversion from a CASA
   to astropy reference frame"""
