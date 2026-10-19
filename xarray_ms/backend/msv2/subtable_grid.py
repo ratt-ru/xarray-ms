@@ -48,10 +48,12 @@ def effective_interval(
 ) -> npt.NDArray[np.float64]:
   """Returns an interval over which each subtable row is valid.
 
-  Some subtables record zero or near-zero intervals.
-  The median sampling cadence of the subtable is substituted
-  for such intervals, or an infinite interval if the cadence
-  cannot be determined.
+  Some subtables record intervals much shorter than their sampling cadence.
+  For example, POINTING intervals may be zero, while ALMA
+  records 0.048s intervals for WEATHER rows sampled every minute.
+  Such intervals are extended to the median sampling cadence of the subtable.
+  If the cadence cannot be determined, zero or near-zero intervals
+  are considered infinite.
 
   Args:
     time: Row times, sorted per antenna.
@@ -61,14 +63,14 @@ def effective_interval(
   Returns:
     Row intervals.
   """
-  if np.all(valid := interval > MINIMUM_INTERVAL):
-    return interval
-
   same_antenna = antenna_id[1:] == antenna_id[:-1]
   diffs = np.diff(time)[same_antenna]
   diffs = diffs[diffs > 0]
-  cadence = np.median(diffs) if diffs.size > 0 else np.inf
-  return np.where(valid, interval, cadence)
+
+  if diffs.size == 0:
+    return np.where(interval > MINIMUM_INTERVAL, interval, np.inf)
+
+  return np.maximum(interval, np.median(diffs))
 
 
 def select_rows(

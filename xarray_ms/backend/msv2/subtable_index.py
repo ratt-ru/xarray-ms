@@ -27,6 +27,12 @@ class SubtableIndex:
   """Indexes an MSv2 subtable keyed on ``(ANTENNA_ID, TIME)``,
   such as POINTING, SYSCAL or PHASE_CAL.
 
+  Some subtables key their rows on another identifier.
+  For example, WEATHER may identify weather stations
+  by ``NS_WX_STATION_ID`` rather than ``ANTENNA_ID``.
+  The first of ``key_columns`` present in the subtable
+  is used as the key and is presented as ``ANTENNA_ID``.
+
   Only the indexing columns of the subtable are read. These are
   partitioned on ``partition_columns`` (e.g. ``SPECTRAL_WINDOW_ID``)
   and sorted on ``(ANTENNA_ID, TIME)``, in the same manner as the MAIN table.
@@ -36,15 +42,18 @@ class SubtableIndex:
 
   _table_factory: SubtableTableFactory
   _table_desc: Dict[str, Any]
+  _key_column: str
   _groups: Dict[PartitionKeyT, Dict[str, npt.NDArray]]
 
   def __init__(
     self,
     table_factory: SubtableTableFactory,
     partition_columns: Sequence[str] = (),
+    key_columns: Sequence[str] = ("ANTENNA_ID",),
   ):
     self._table_factory = table_factory
     self._table_desc = {}
+    self._key_column = key_columns[-1]
     self._groups = {}
 
     try:
@@ -60,13 +69,20 @@ class SubtableIndex:
     if table.nrow() == 0:
       return
 
+    columns = set(table.columns())
+    self._key_column = next((c for c in key_columns if c in columns), key_columns[-1])
     partition_columns = list(partition_columns)
-    index_columns = partition_columns + SUBTABLE_SORT_COLUMNS + ["INTERVAL"]
+    index_columns = partition_columns + [self._key_column, "TIME", "INTERVAL"]
 
-    if missing := set(index_columns) - set(table.columns()):
+    if missing := set(index_columns) - columns:
       raise ValueError(f"{table.name()} is missing indexing columns {sorted(missing)}")
 
     index = table.to_arrow(columns=index_columns)
+
+    if self._key_column != "ANTENNA_ID":
+      index = index.rename_columns(
+        ["ANTENNA_ID" if c == self._key_column else c for c in index.column_names]
+      )
 
     with cf.ThreadPoolExecutor(max_workers=mp.cpu_count()) as pool:
       self._groups = TablePartitioner(
@@ -95,6 +111,11 @@ class SubtableIndex:
     the interval over which each row is valid in the ``VALID_INTERVAL`` column.
     Empty if the subtable does not exist or contains no rows"""
     return self._groups
+
+  @property
+  def key_column(self) -> str:
+    """The subtable column presented as ``ANTENNA_ID`` in :attr:`groups`"""
+    return self._key_column
 
   def has_column(self, column: str) -> bool:
     return column in self._table_desc

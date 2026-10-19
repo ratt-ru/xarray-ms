@@ -30,6 +30,8 @@ from xarray_ms.backend.msv2.factories import (
   FieldAndSourceFactory,
   PhasedArrayFactory,
   PointingFactory,
+  SystemCalibrationFactory,
+  WeatherFactory,
 )
 from xarray_ms.backend.msv2.structure import (
   DEFAULT_PARTITION_COLUMNS,
@@ -674,6 +676,28 @@ class MSv2EntryPoint(BackendEntrypoint):
       )
       if pointing_ds is not None:
         datasets[f"{path}/pointing_xds"] = pointing_ds
+
+      system_calibration_ds = SystemCalibrationFactory(
+        partition_key, store_args.structure_factory, store_args.subtable_factories
+      ).get_dataset(
+        antenna_selection,
+        antenna_ds,
+        store_args.subtable_index_factories["SYSCAL"],
+        interpolate="sys_cal" in interpolate,
+      )
+      if system_calibration_ds is not None:
+        datasets[f"{path}/system_calibration_xds"] = system_calibration_ds
+
+      weather_ds = WeatherFactory(
+        partition_key, store_args.structure_factory, store_args.subtable_factories
+      ).get_dataset(
+        antenna_selection,
+        antenna_ds,
+        store_args.subtable_index_factories["WEATHER"],
+        interpolate="weather" in interpolate,
+      )
+      if weather_ds is not None:
+        datasets[f"{path}/weather_xds"] = weather_ds
 
     self.postprocess_datasets(datasets)
 

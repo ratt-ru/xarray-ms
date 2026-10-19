@@ -1,7 +1,7 @@
 import os.path
 import warnings
 from copy import deepcopy
-from typing import Any, Dict, FrozenSet, Iterable, List, Literal
+from typing import Any, Dict, FrozenSet, Iterable, List, Literal, Tuple
 
 import pyarrow as pa
 from arcae.lib.arrow_tables import Table
@@ -51,17 +51,21 @@ DEFAULT_SUBTABLES = [
 EXTRA_SUBTABLES = [
   "SOURCE",
   "PHASED_ARRAY",
+  "ASDM_STATION",
 ]
 
 #: Subtables keyed on ``(ANTENNA_ID, TIME)`` that are indexed,
-#: rather than read in full, mapped to their partitioning columns
-INDEXED_SUBTABLES: Dict[str, List[str]] = {
-  "POINTING": [],
+#: rather than read in full, mapped to their partitioning
+#: and (candidate) key columns
+INDEXED_SUBTABLES: Dict[str, Tuple[Tuple[str, ...], Tuple[str, ...]]] = {
+  "POINTING": ((), ("ANTENNA_ID",)),
+  "SYSCAL": (("SPECTRAL_WINDOW_ID",), ("ANTENNA_ID",)),
+  "WEATHER": ((), ("NS_WX_STATION_ID", "ANTENNA_ID")),
 }
 
 #: Sub-datasets whose time axis can be associated
 #: with the time axis of the correlated dataset
-INTERPOLATABLE_DATASETS = ("pointing",)
+INTERPOLATABLE_DATASETS = ("pointing", "sys_cal", "weather")
 
 
 def resolve_interpolate(interpolate: str | Iterable[str] | None) -> FrozenSet[str]:
@@ -243,9 +247,10 @@ class CommonStoreArgs:
       subtable: Multiton(
         SubtableIndex,
         self.subtable_table_factories[subtable],
-        tuple(partition_columns),
+        partition_columns,
+        key_columns,
       )
-      for subtable, partition_columns in INDEXED_SUBTABLES.items()
+      for subtable, (partition_columns, key_columns) in INDEXED_SUBTABLES.items()
     }
     self.structure_factory = structure_factory or Multiton(
       MSv2Structure,

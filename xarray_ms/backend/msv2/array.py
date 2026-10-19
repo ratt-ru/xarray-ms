@@ -201,10 +201,10 @@ class BroadcastMSv2Array(MSv2Array):
 
 class SubtableMSv2Array(MSv2Array):
   """Backend array reading a column of an MSv2 subtable keyed on
-  ``(ANTENNA_ID, TIME)``, such as POINTING. Columns are presented with
-  ``(time, antenna)`` as the first dimensions. These are mapped onto
-  subtable rows via a grid of subtable row numbers, in which ``-1``
-  indicates a missing row."""
+  ``(ANTENNA_ID, TIME)``, such as POINTING or SYSCAL. Columns are presented
+  with ``(time, antenna)``, or ``(antenna, time)``, as the first dimensions.
+  These are mapped onto subtable rows via a ``(time, antenna)`` grid of
+  subtable row numbers, in which ``-1`` indicates a missing row."""
 
   __slots__ = (
     "_table_factory",
@@ -213,6 +213,8 @@ class SubtableMSv2Array(MSv2Array):
     "_default",
     "_read_dtype",
     "_leading_axes",
+    "_antenna_first",
+    "_column_axes",
     "_transform",
   )
 
@@ -222,6 +224,8 @@ class SubtableMSv2Array(MSv2Array):
   _default: Any
   _read_dtype: npt.DTypeLike
   _leading_axes: int
+  _antenna_first: bool
+  _column_axes: Tuple[int, ...] | None
   _transform: TransformerT | None
 
   def __init__(
@@ -234,6 +238,8 @@ class SubtableMSv2Array(MSv2Array):
     default: Any,
     read_dtype: npt.DTypeLike | None = None,
     leading_axes: int = 0,
+    antenna_first: bool = False,
+    column_axes: Tuple[int, ...] | None = None,
     transform: TransformerT | None = None,
   ):
     """
@@ -241,7 +247,8 @@ class SubtableMSv2Array(MSv2Array):
       table_factory: Factory producing the subtable.
       grid_factory: Factory producing the ``(time, antenna)`` row grid.
       column: Subtable column.
-      shape: Shape of the array, starting with ``(time, antenna)``.
+      shape: Shape of the array, starting with ``(time, antenna)``
+        or ``(antenna, time)``.
       dtype: Data type of the array.
       default: Value of missing rows.
       read_dtype: Data type with which the column is read,
@@ -250,6 +257,11 @@ class SubtableMSv2Array(MSv2Array):
       leading_axes: Number of leading column axes from which only
         the first element is read, e.g. the polynomial axis of
         POINTING::DIRECTION.
+      antenna_first: If True, the array is presented
+        with ``(antenna, time)`` as the first dimensions.
+      column_axes: The column axis presented by each trailing dimension
+        of the array, e.g. ``(1, 0)`` presents ``(chan, receptor)``
+        column data as ``(receptor, chan)``. Defaults to column order.
       transform: Transform applied to the read data.
     """
     super().__init__(shape, np.dtype(dtype))
@@ -259,9 +271,12 @@ class SubtableMSv2Array(MSv2Array):
     self._default = default
     self._read_dtype = dtype if read_dtype is None else read_dtype
     self._leading_axes = leading_axes
+    self._antenna_first = antenna_first
+    self._column_axes = column_axes
     self._transform = transform
 
     assert len(shape) >= 2, "(time, antenna) required"
+    assert column_axes is None or sorted(column_axes) == list(range(len(shape) - 2))
 
   def __getitem__(self, key) -> npt.NDArray:
     return explicit_indexing_adapter(
@@ -275,16 +290,27 @@ class SubtableMSv2Array(MSv2Array):
     if reduce(mul, expected_shape, 1) == 0:
       return np.empty(expected_shape, dtype=self.dtype)
     # Map the (time, antenna) coordinates onto subtable rows
-    rows = self._grid_factory.instance.rows[key[:2]]
+    grid_rows = self._grid_factory.instance.rows
+    grid_rows = grid_rows.T if self._antenna_first else grid_rows
+    # Index each axis separately, as the key is an outer indexer
+    rows = grid_rows[key[0]][:, key[1]]
+    # Map the trailing dimensions onto column axes
+    trailing_key, trailing_shape = key[2:], expected_shape[2:]
+    if self._column_axes is not None:
+      order = np.argsort(self._column_axes)
+      trailing_key = tuple(trailing_key[i] for i in order)
+      trailing_shape = tuple(trailing_shape[i] for i in order)
     # A row may occupy multiple grid cells, for example when it is valid
     # over multiple timesteps. Read each row once and then expand
     unique_rows, inverse = np.unique(rows.ravel(), return_inverse=True)
     leading = (slice(0, 1),) * self._leading_axes
-    row_key = (unique_rows,) + leading + key[2:]
-    row_shape = (unique_rows.size,) + (1,) * self._leading_axes + expected_shape[2:]
+    row_key = (unique_rows,) + leading + trailing_key
+    row_shape = (unique_rows.size,) + (1,) * self._leading_axes + trailing_shape
     result = np.full(row_shape, self._default, dtype=self._read_dtype)
     self._table_factory.instance.getcol(self._column, row_key, result)
-    result = result[inverse].reshape(rows.shape + expected_shape[2:])
+    result = result[inverse].reshape(rows.shape + trailing_shape)
+    if self._column_axes is not None:
+      result = result.transpose((0, 1) + tuple(2 + a for a in self._column_axes))
     result = result.squeeze(axis=squeeze_axis)
     return self._transform(result) if self._transform else result
 

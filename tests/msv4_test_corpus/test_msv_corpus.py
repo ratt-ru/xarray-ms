@@ -38,6 +38,33 @@ POINTING_DATASETS = {
   "59755_eq_interleave_15.ms",
 }
 
+# Datasets with non-empty SYSCAL subtables overlapping the correlated data
+SYSCAL_DATASETS = {
+  "VLBA_TL016B_split.ms",
+  "VLBA_TL016B_split_lsrk.ms",
+  "global_vlbi_gg084b_reduced.ms",
+}
+
+# Datasets with non-empty WEATHER subtables overlapping the correlated data
+WEATHER_DATASETS = {
+  "Antennae_North.cal.lsrk.ms",
+  "Antennae_North.cal.lsrk.split.ms",
+  "J1924-2914.ms.calibrated.split.SPW3",
+  "SNR_G55_10s.split.ms",
+  "VLASS3.2.sb45755730.eb46170641.60480.16266136574.split.v6.ms",
+  "VLBA_TL016B_split.ms",
+  "VLBA_TL016B_split_lsrk.ms",
+  "ea25_cal_small_after_fixed.split.ms",
+  "ea25_cal_small_before_fixed.split.ms",
+}
+
+# {sub-dataset node: (datasets, interpolate name)}
+SUBTABLE_DATASETS = {
+  "pointing_xds": (POINTING_DATASETS, "pointing"),
+  "system_calibration_xds": (SYSCAL_DATASETS, "sys_cal"),
+  "weather_xds": (WEATHER_DATASETS, "weather"),
+}
+
 
 @pytest.mark.msv4_test_corpus
 @pytest.mark.filterwarnings(
@@ -106,7 +133,10 @@ POINTING_DATASETS = {
 )
 def test_msv4_corpus(msv4_corpus_dataset, partition_schema):
   name, path = msv4_corpus_dataset
-  interpolate = [None, "pointing"] if name in POINTING_DATASETS else [None]
+  interpolate = [
+    interp for datasets, interp in SUBTABLE_DATASETS.values() if name in datasets
+  ]
+  interpolate = [None] + ([interpolate] if interpolate else [])
   for ps in partition_schema:
     for interp in interpolate:
       dt = xarray.open_datatree(
@@ -119,6 +149,7 @@ def test_msv4_corpus(msv4_corpus_dataset, partition_schema):
         if node.name == "antenna_xds":
           antenna_names = node.antenna_name.values
           assert len(antenna_names) == len(np.unique(antenna_names))
-      has_pointing = any(g.endswith("/pointing_xds") for g in dt.groups)
-      assert has_pointing == (name in POINTING_DATASETS)
+      for node_name, (datasets, _) in SUBTABLE_DATASETS.items():
+        present = any(g.endswith(f"/{node_name}") for g in dt.groups)
+        assert present == (name in datasets), node_name
       dt.load()

@@ -33,25 +33,20 @@ MSv4 specifies a set of optional datasets, of which the following are implemente
 - field_and_source_xds (required components)
 - phased_array_xds
 - pointing_xds
+- system_calibration_xds
+- weather_xds
 
 The following optional datasets are not yet implemented:
 
 - field_and_source_ephemeris_xds
-- system_calibration_xds
 - gain_curve_xds
 - phase_calibration_xds
-- weather_xds
 
 Roadmap
 -------
 
 The existing coverage of the specification arguably represents a Pareto distribution of the required data for writing Radio Astronomy software in an MSv4 paradigm, but we aim to address the remaining cases as follows in order of priority.
-Firstly, the following datasets are probably required for VLBI:
-
-- system_calibration_xds
-- weather_xds
-
-while the following are arguably required for calibration and other software that will need to be developed
+The following are arguably required for calibration and other software that will need to be developed
 for the MSv4 paradigm:
 
 - gain_curve_xds

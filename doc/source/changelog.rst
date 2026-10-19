@@ -24,6 +24,10 @@ X.Y.Z (DD-MM-YYYY)
   when ``interpolate="pointing"`` is passed to ``open_datatree``.
   Only the indexing columns of ``POINTING`` are read in full and
   POINTING data is read lazily (:pr:`185`).
+* Add ``system_calibration_xds`` and ``weather_xds`` support, from the ``SYSCAL``
+  and ``WEATHER`` sub-tables, also accepting ``interpolate="sys_cal"`` and
+  ``interpolate="weather"``. Weather stations are identified by ``NS_WX_STATION_ID``,
+  where present, and otherwise by ``ANTENNA_ID``.
 
 0.5.12 (02-10-2026)
 ------------------
