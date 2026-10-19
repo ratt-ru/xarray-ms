@@ -17,6 +17,11 @@ class IrregularChannelGridWarning(IrregularGridWarning):
   is encountered"""
 
 
+class IrregularSubtableGridWarning(IrregularGridWarning):
+  """Warning raised when a time and antenna keyed subtable
+  does not fully populate its (time, antenna) grid"""
+
+
 class MissingMetadataWarning(UserWarning):
   """Warning raised when metadata is missing"""
 

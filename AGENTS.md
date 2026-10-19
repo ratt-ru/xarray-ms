@@ -128,6 +128,27 @@ Signal when the grid cannot be made perfectly regular:
   is set and a per-channel `CHANNEL_WIDTH` column is added.
 - `IrregularBaselineGridWarning` — `row_map` contains `-1`s, i.e. baselines
   missing for some timesteps; imputed with defaults (benign in most cases).
+- `IrregularSubtableGridWarning` — a time-keyed subtable (e.g. `POINTING`)
+  does not populate every `(time, antenna)` cell; imputed with defaults.
+
+#### 6. Time-keyed subtables
+
+Subtables keyed on `(ANTENNA_ID, TIME)`, such as `POINTING`, can be much larger
+than the MAIN table and are not read in full. `SubtableIndex` in
+[subtable_index.py](xarray_ms/backend/msv2/subtable_index.py) reads only their
+indexing columns and sorts them with `TablePartitioner`, retaining row numbers so
+that data columns are read for the selected rows only.
+
+[subtable_grid.py](xarray_ms/backend/msv2/subtable_grid.py) then:
+
+- selects rows whose validity `[TIME - INTERVAL/2, TIME + INTERVAL/2]` overlaps
+  the partition's time span. Zero `INTERVAL`s are replaced with the subtable's
+  sampling cadence,
+- grids them as a `(time, antenna)` array of indices into the selected rows,
+  `-1` meaning missing, analogous to `row_map`. By default the grid uses the
+  subtable's own timesteps (e.g. `time_pointing`). Datasets named in
+  `open_datatree(..., interpolate=...)` are instead gridded on the correlated
+  `time` axis with a pyarrow as-of join, taking the most recently valid row.
 
 ### Measures
 

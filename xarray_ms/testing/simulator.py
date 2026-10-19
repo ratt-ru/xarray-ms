@@ -112,6 +112,7 @@ class MSStructureSimulator:
   nstate: int
   auto_corrs: bool
   phased_array: bool
+  pointing: bool
   dump_rate: float
   time_chunks: int
   time_start: float
@@ -143,6 +144,7 @@ class MSStructureSimulator:
       "DATA_DESC_ID",
     ),
     auto_corrs: bool = True,
+    pointing: bool = False,
     simulate_data: bool = True,
     table_desc: Dict[str, Any] | None = None,
     transform_chunk_desc: ChunkDescriptorTransformerT | None = None,
@@ -201,6 +203,7 @@ class MSStructureSimulator:
     self.nstate = nstate
     self.nproc = nproc
     self.auto_corrs = auto_corrs
+    self.pointing = pointing
     self.dump_rate = dump_rate
     self.time_chunks = time_chunks
     self.time_start = time_start
@@ -368,6 +371,9 @@ class MSStructureSimulator:
 
     self._write_phased_array(output_ms)
 
+    if self.pointing:
+      self._write_pointing(output_ms)
+
   def _write_phased_array(self, output_ms: str) -> None:
     """Write a small PHASED_ARRAY table with variable-sized element arrays."""
     phased_array_table_desc = ms_descriptor("MSV3_PHASED_ARRAY")
@@ -398,6 +404,42 @@ class MSStructureSimulator:
 
         element_flag = np.tile(np.full(nelements, False, dtype=bool), (nreceptors, 1))
         T.putcol("ELEMENT_FLAG", element_flag[None, ...], index=index)
+
+  def _write_pointing(self, output_ms: str) -> None:
+    """Write a POINTING table sampled at twice the MAIN table dump rate.
+
+    The POINTING timesteps extend a timestep before and after the
+    MAIN timesteps, and the last antenna is only present
+    at every second POINTING timestep.
+    """
+    interval = self.dump_rate / 2
+    ntime = 2 * self.ntime + 4
+    time = self.time_start - 2 * interval + np.arange(ntime) * interval
+    time_index, antenna_id = np.meshgrid(
+      np.arange(ntime), np.arange(self.nantenna), indexing="ij"
+    )
+    time_index, antenna_id = time_index.ravel(), antenna_id.ravel()
+    keep = (antenna_id != self.nantenna - 1) | (time_index % 2 == 0)
+    time_index, antenna_id = time_index[keep], antenna_id[keep]
+    nrow = time_index.size
+
+    direction = np.stack([time_index * 0.01, antenna_id * 0.1], axis=-1)
+
+    pointing_table_desc = ms_descriptor("POINTING", complete=True)
+    pointing_table_desc["DIRECTION"]["keywords"]["MEASINFO"]["Ref"] = "AZELGEO"
+    pointing_table_desc["ENCODER"]["keywords"]["MEASINFO"]["Ref"] = "AZELGEO"
+    with Table.ms_from_descriptor(
+      output_ms, "POINTING", table_desc=pointing_table_desc
+    ) as T:
+      T.addrows(nrow)
+      T.putcol("ANTENNA_ID", antenna_id.astype(np.int32))
+      T.putcol("TIME", time[time_index])
+      T.putcol("INTERVAL", np.full(nrow, interval))
+      T.putcol("NUM_POLY", np.zeros(nrow, np.int32))
+      T.putcol("DIRECTION", direction[:, None, :])
+      T.putcol("TARGET", direction[:, None, :])
+      T.putcol("ENCODER", direction + 0.001)
+      T.putcol("OVER_THE_TOP", np.zeros(nrow, bool))
 
   def generate_descriptors(self) -> Generator[PartitionDescriptor, None, None]:
     """Generates a sequence of descriptors, each corresponding to a partition"""

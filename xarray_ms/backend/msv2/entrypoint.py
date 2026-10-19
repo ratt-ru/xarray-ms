@@ -19,14 +19,17 @@ from xarray.core.utils import try_read_magic_number_from_file_or_path
 
 from xarray_ms.backend.msv2.antenna_selection import select_partition_antennas
 from xarray_ms.backend.msv2.entrypoint_utils import (
+  INTERPOLATABLE_DATASETS,
   CommonStoreArgs,
   resolve_driver_kwargs,
+  resolve_interpolate,
 )
 from xarray_ms.backend.msv2.factories import (
   AntennaFactory,
   CorrelatedFactory,
   FieldAndSourceFactory,
   PhasedArrayFactory,
+  PointingFactory,
 )
 from xarray_ms.backend.msv2.structure import (
   DEFAULT_PARTITION_COLUMNS,
@@ -369,7 +372,10 @@ class MSv2EntryPoint(BackendEntrypoint):
     store_entrypoint = StoreBackendEntrypoint()
     return store_entrypoint.open_dataset(store)
 
-  @format_docstring(DEFAULT_PARTITION_COLUMNS=DEFAULT_PARTITION_COLUMNS)
+  @format_docstring(
+    DEFAULT_PARTITION_COLUMNS=DEFAULT_PARTITION_COLUMNS,
+    INTERPOLATABLE_DATASETS=list(INTERPOLATABLE_DATASETS),
+  )
   def open_datatree(
     self,
     filename_or_obj: str | os.PathLike[Any] | BufferedIOBase | AbstractDataStore,
@@ -382,6 +388,7 @@ class MSv2EntryPoint(BackendEntrypoint):
     driver_kwargs: Dict[str, Any] | None = None,
     ninstances: int | None = None,
     epoch: str | None = None,
+    interpolate: str | Iterable[str] | None = None,
   ) -> DataTree:
     """Create a :class:`~xarray.core.datatree.DataTree` presenting an MSv4 view
     over multiple partitions of a MSv2 CASA Measurement Set.
@@ -448,6 +455,11 @@ class MSv2EntryPoint(BackendEntrypoint):
 
       epoch: A string uniquely identifying this Dataset.
         This should not normally be set by the user
+      interpolate: A sub-dataset name, or collection of sub-dataset names,
+        whose values should be associated with the time axis of the
+        correlated dataset, rather than retaining their native time axis.
+        Each timestep takes the most recently valid value.
+        Valid names are :code:`{INTERPOLATABLE_DATASETS}`.
 
     Returns:
       An xarray :class:`~xarray.core.datatree.DataTree`
@@ -464,6 +476,7 @@ class MSv2EntryPoint(BackendEntrypoint):
       driver=driver,
       driver_kwargs=driver_kwargs,
       epoch=epoch,
+      interpolate=interpolate,
     )
 
     dt = DataTree.from_dict(groups_dict)
@@ -546,6 +559,7 @@ class MSv2EntryPoint(BackendEntrypoint):
     ninstances: int | None = None,
     epoch: str | None = None,
     structure_factory: MSv2StructureFactory | None = None,
+    interpolate: str | Iterable[str] | None = None,
   ) -> Dict[str, Dataset]:
     """Create a dictionary of :class:`~xarray.Dataset` presenting an MSv4 view
     over a partition of a MSv2 CASA Measurement Set"""
@@ -556,6 +570,7 @@ class MSv2EntryPoint(BackendEntrypoint):
       raise ValueError("Measurement Set paths must be strings")
 
     driver_kwargs = resolve_driver_kwargs(driver, driver_kwargs, ninstances)
+    interpolate = resolve_interpolate(interpolate)
 
     store_args = CommonStoreArgs(
       ms,
@@ -608,6 +623,10 @@ class MSv2EntryPoint(BackendEntrypoint):
         partition_key, store_args.structure_factory, store_args.subtable_factories
       )
 
+      pointing = PointingFactory(
+        partition_key, store_args.structure_factory, store_args.subtable_factories
+      )
+
       partition = structure[partition_key]
       antenna_selection = select_partition_antennas(
         store_args.subtable_factories["ANTENNA"].instance,
@@ -629,6 +648,14 @@ class MSv2EntryPoint(BackendEntrypoint):
       )
       if phased_array_ds is not None:
         datasets[f"{path}/phased_array_xds"] = phased_array_ds
+
+      pointing_ds = pointing.get_dataset(
+        antenna_selection,
+        store_args.subtable_index_factories["POINTING"].instance,
+        interpolate="pointing" in interpolate,
+      )
+      if pointing_ds is not None:
+        datasets[f"{path}/pointing_xds"] = pointing_ds
 
     self.postprocess_datasets(datasets)
 

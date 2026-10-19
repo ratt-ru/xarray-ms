@@ -1,7 +1,7 @@
 import os.path
 import warnings
 from copy import deepcopy
-from typing import Any, Dict, List, Literal
+from typing import Any, Dict, FrozenSet, Iterable, List, Literal
 
 import pyarrow as pa
 from arcae.lib.arrow_tables import Table
@@ -14,6 +14,7 @@ from xarray_ms.backend.msv2.structure import (
   MSv2StructureFactory,
   SubtableFactory,
 )
+from xarray_ms.backend.msv2.subtable_index import SubtableIndex, SubtableIndexFactory
 
 #: Backend drivers currently supported by xarray-ms.
 SUPPORTED_DRIVERS = ("arcae",)
@@ -46,6 +47,32 @@ EXTRA_SUBTABLES = [
   "SOURCE",
   "PHASED_ARRAY",
 ]
+
+#: Subtables keyed on ``(ANTENNA_ID, TIME)`` that are indexed,
+#: rather than read in full, mapped to their partitioning columns
+INDEXED_SUBTABLES: Dict[str, List[str]] = {
+  "POINTING": [],
+}
+
+#: Sub-datasets whose time axis can be associated
+#: with the time axis of the correlated dataset
+INTERPOLATABLE_DATASETS = ("pointing",)
+
+
+def resolve_interpolate(interpolate: str | Iterable[str] | None) -> FrozenSet[str]:
+  """Normalise the ``interpolate`` argument into a set of sub-dataset names"""
+  if interpolate is None:
+    return frozenset()
+
+  names = frozenset([interpolate] if isinstance(interpolate, str) else interpolate)
+
+  if invalid := names - set(INTERPOLATABLE_DATASETS):
+    raise ValueError(
+      f"Invalid interpolate values {sorted(invalid)}. "
+      f"Valid values are {list(INTERPOLATABLE_DATASETS)}"
+    )
+
+  return names
 
 
 def resolve_driver_kwargs(
@@ -135,6 +162,7 @@ class CommonStoreArgs:
   preferred_chunks: Dict[str, int]
   ms_factory: MainTableFactory
   subtable_factories: Dict[str, SubtableFactory]
+  subtable_index_factories: Dict[str, SubtableIndexFactory]
   structure_factory: MSv2StructureFactory
 
   __slots__ = (
@@ -147,6 +175,7 @@ class CommonStoreArgs:
     "preferred_chunks",
     "ms_factory",
     "subtable_factories",
+    "subtable_index_factories",
     "structure_factory",
   )
 
@@ -189,6 +218,15 @@ class CommonStoreArgs:
         **table_driver_kwargs(self.driver_kwargs, subtable),
       )
       for subtable in (DEFAULT_SUBTABLES + EXTRA_SUBTABLES)
+    }
+    self.subtable_index_factories = {
+      subtable: Multiton(
+        SubtableIndex,
+        f"{ms}::{subtable}",
+        tuple(partition_columns),
+        **table_driver_kwargs(self.driver_kwargs, subtable),
+      )
+      for subtable, partition_columns in INDEXED_SUBTABLES.items()
     }
     self.structure_factory = structure_factory or Multiton(
       MSv2Structure,
