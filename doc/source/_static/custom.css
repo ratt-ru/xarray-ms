@@ -1,6 +1,5 @@
 /* Narrow the sidebars, which the theme sizes for deeper navigation trees,
-   and let the page and article fill wide screens, so that the article
-   and wide outputs such as DataTree reprs are given the most space */
+   so that more of the page is given to the article */
 html {
   --pst-sidebar-secondary: 13rem;
 }
@@ -9,12 +8,4 @@ html {
   .bd-sidebar-primary {
     --pst-sidebar-primary-width: 13rem;
   }
-
-  .bd-page-width {
-    max-width: none;
-  }
-}
-
-.bd-main .bd-content .bd-article-container {
-  max-width: none;
 }
