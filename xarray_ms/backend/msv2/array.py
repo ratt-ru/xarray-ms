@@ -159,7 +159,8 @@ class BroadcastMSv2Array(MSv2Array):
   data for a full resolution column.
 
   This is primarily useful for falling back to the
-  WEIGHT column when WEIGHT_SPECTRUM is missing, or
+  WEIGHT column when WEIGHT_SPECTRUM is missing,
+  SIGMA when SIGMA_SPECTRUM is missing, or
   FLAG_ROW if FLAG is missing.
   """
 
@@ -192,13 +193,20 @@ class BroadcastMSv2Array(MSv2Array):
     )
 
   def _getitem(self, key) -> npt.NDArray:
+    # Read integer keys as unit slices and drop their dimensions afterwards
+    int_axes = {i for i, k in enumerate(key) if isinstance(k, (int, np.integer))}
+    key = tuple(
+      slice(k % s, k % s + 1) if i in int_axes else k
+      for i, (k, s) in enumerate(zip(key, self.shape))
+    )
+    squeeze = tuple(0 if i in int_axes else slice(None) for i in range(len(key)))
     expected_shape = tuple(slice_length(k, s) for k, s in zip(key, self.shape))
     if reduce(mul, expected_shape, 1) == 0:
-      return np.empty(expected_shape, dtype=self.dtype)
+      return np.empty(expected_shape, dtype=self.dtype)[squeeze]
     low_res_key = tuple(k for i, k in zip(self._low_res_index, key) if i is not None)
     low_res_data = self._low_res_array.__getitem__(OuterIndexer(low_res_key))
     low_res_data = low_res_data[self._low_res_index]
-    return np.broadcast_to(low_res_data, expected_shape)
+    return np.broadcast_to(low_res_data, expected_shape)[squeeze]
 
 
 class SubtableMSv2Array(MSv2Array):

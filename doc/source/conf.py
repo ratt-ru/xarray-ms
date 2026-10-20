@@ -53,12 +53,12 @@ napoleon_attr_annotations = True
 
 html_theme = "pydata_sphinx_theme"
 
-# Disable navigation sidebars
-# https://github.com/pydata/pydata-sphinx-theme/issues/1662
+# Display the full site navigation in the primary sidebar
 html_sidebars = {
-  "**": [],
+  "**": ["sidebar-nav-global"],
 }
 html_static_path = ["_static"]
+html_css_files = ["custom.css"]
 
 extlinks = {
   "issue": ("https://github.com/ratt-ru/xarray-ms/issues/%s", "GH%s"),

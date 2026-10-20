@@ -151,6 +151,7 @@ class MSStructureSimulator:
     syscal: bool = False,
     weather: Literal["antenna", "station"] | None = None,
     simulate_data: bool = True,
+    phased_array: bool = False,
     table_desc: Dict[str, Any] | None = None,
     transform_chunk_desc: ChunkDescriptorTransformerT | None = None,
     transform_data: DataTransformerT | None = None,
@@ -211,6 +212,7 @@ class MSStructureSimulator:
     self.pointing = pointing
     self.syscal = syscal
     self.weather = weather
+    self.phased_array = phased_array
     self.dump_rate = dump_rate
     self.time_chunks = time_chunks
     self.time_start = time_start
@@ -376,7 +378,8 @@ class MSStructureSimulator:
       )
       T.putcol("NAME", np.asarray([f"SOURCE-{i}" for i in range(self.nfield)]))
 
-    self._write_phased_array(output_ms)
+    if self.phased_array:
+      self._write_phased_array(output_ms)
 
     if self.pointing:
       self._write_pointing(output_ms)

@@ -1,0 +1,11 @@
+/* Narrow the sidebars, which the theme sizes for deeper navigation trees,
+   so that more of the page is given to the article */
+html {
+  --pst-sidebar-secondary: 13rem;
+}
+
+@media (min-width: 960px) {
+  .bd-sidebar-primary {
+    --pst-sidebar-primary-width: 13rem;
+  }
+}
