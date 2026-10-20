@@ -231,7 +231,6 @@ class CommonStoreArgs:
         Table.from_filename,
         f"{ms}::{subtable}",
         readonly=True,
-        lockoptions="nolock",
         **{
           "ninstances": DEFAULT_SUBTABLE_NINSTANCES,
           **table_driver_kwargs(self.driver_kwargs, subtable),
