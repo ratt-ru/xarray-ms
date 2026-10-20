@@ -6,7 +6,7 @@ Changelog
 X.Y.Z (DD-MM-YYYY)
 ------------------
 * Re-enable the documentation's navigation sidebar, listing every page,
-  and narrow both sidebars to give more space to the page content (:issue:`20`, :pr:`193`).
+  narrow both sidebars and let the page content fill wide screens (:issue:`20`, :pr:`193`).
 * Fix ``IndexError`` when selecting correlated data with arrays along both
   ``time`` and ``baseline_id``, e.g. ``isel(time=[0, 2], baseline_id=[0, 1])`` (:pr:`191`).
 * List each antenna once in ``antenna_xds``, using its first FEED row, when the FEED
