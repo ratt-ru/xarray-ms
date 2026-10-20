@@ -6,7 +6,7 @@ Changelog
 X.Y.Z (DD-MM-YYYY)
 ------------------
 * Re-introduce the simulator's ``phased_array`` option, so that the ``PHASED_ARRAY``
-  sub-table is only simulated on request and no longer clutters the documentation.
+  sub-table is only simulated on request and no longer clutters the documentation (:pr:`194`).
 * Re-enable the documentation's navigation sidebar, listing every page,
   and narrow both sidebars to give more space to the page content (:issue:`20`, :pr:`193`).
 * Fix ``IndexError`` when selecting correlated data with arrays along both
