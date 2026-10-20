@@ -58,6 +58,7 @@ html_sidebars = {
   "**": ["sidebar-nav-global"],
 }
 html_static_path = ["_static"]
+html_css_files = ["custom.css"]
 
 extlinks = {
   "issue": ("https://github.com/ratt-ru/xarray-ms/issues/%s", "GH%s"),
