@@ -5,6 +5,7 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Bump the minimum ``arcae`` version to 0.5.8 (:pr:`196`).
 * Expose the ``SIGMA_SPECTRUM`` variable on the correlated dataset, read from
   ``MAIN::SIGMA_SPECTRUM`` or, if it is missing, broadcast from ``MAIN::SIGMA``
   over frequency, as ``WEIGHT`` is. Fix integer selections, e.g. ``isel(baseline_id=1)``,
