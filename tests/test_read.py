@@ -456,6 +456,18 @@ NONSTANDARD_TABLE_DESC = {
     # 'shape': ...,  # Variably shaped
     "valueType": "FLOAT",
   },
+  "SIGMA_SPECTRUM": {
+    "_c_order": True,
+    "comment": "SIGMA_SPECTRUM column",
+    "dataManagerGroup": "StandardStMan",
+    "dataManagerType": "StandardStMan",
+    "keywords": {},
+    "maxlen": 0,
+    "ndim": 2,
+    "option": 0,
+    # 'shape': ...,  # Variably shaped
+    "valueType": "FLOAT",
+  },
   "CORRELATED_WEIGHT_SPECTRUM": {
     "_c_order": True,
     "comment": "CORRELATED_WEIGHT_SPECTRUM column",
@@ -475,6 +487,7 @@ def _add_non_standard_columns(chunk_desc, data_dict):
   data_dict["CORRELATED_DATA"] = data_dict["DATA"]
   data_dict["MODEL_DATA"] = data_dict["DATA"]
   data_dict["FLOAT_DATA"] = (data_dict["DATA"][0], data_dict["DATA"][1].real)
+  data_dict["SIGMA_SPECTRUM"] = data_dict["WEIGHT_SPECTRUM"]
   return data_dict
 
 
@@ -521,6 +534,14 @@ def test_additional_columns(simmed_ms):
         "polarization",
       )
       assert node["MODEL_DATA"].equals(node["VISIBILITY"])
+
+      assert node["SIGMA_SPECTRUM"].dims == (
+        "time",
+        "baseline_id",
+        "frequency",
+        "polarization",
+      )
+      assert node["SIGMA_SPECTRUM"].equals(node["WEIGHT"])
 
 
 ROW_SHAPE_TABLE_DESC = {

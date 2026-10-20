@@ -182,8 +182,8 @@ class CorrelatedFactory(DatasetFactory):
     import pyarrow.compute as pac
     from arcae.lib.arrow_tables import ms_descriptor
 
-    # Ignore all standard msv2 columns, except
-    # for CORRECTED_DATA, CORRECTED_WEIGHT_SPECTRUM, FLOAT_DATA and MODEL_DATA
+    # Ignore all standard msv2 columns, except for CORRECTED_DATA,
+    # CORRECTED_WEIGHT_SPECTRUM, FLOAT_DATA, MODEL_DATA and SIGMA_SPECTRUM
     ignored_msv2_column_set = {
       c for c in ms_descriptor("MAIN", complete=True).keys() if not c.startswith("_")
     }
@@ -192,6 +192,7 @@ class CorrelatedFactory(DatasetFactory):
       "CORRECTED_WEIGHT_SPECTRUM",
       "MODEL_DATA",
       "FLOAT_DATA",
+      "SIGMA_SPECTRUM",
     }
     remaining_columns = set(self._ms_factory.instance.columns())
     remaining_columns -= ignored_msv2_column_set
