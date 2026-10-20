@@ -6,7 +6,7 @@ from arcae.lib.arrow_tables import Table, ms_descriptor
 
 from xarray_ms.backend.msv2.array import SubtableMSv2Array
 from xarray_ms.backend.msv2.measures_encoders import EpochCoder
-from xarray_ms.errors import IrregularSubtableGridWarning
+from xarray_ms.errors import DuplicateSubtableRowWarning, IrregularSubtableGridWarning
 from xarray_ms.testing.simulator import FIRST_FEB_2023_MJDS
 
 NTIME = 5
@@ -174,3 +174,50 @@ def test_pointing_single_validity_row(simmed_ms, interpolate):
 
   npt.assert_allclose(beam, np.broadcast_to(direction, beam.shape))
   assert "POINTING_DISH_MEASURED" not in pointing
+
+
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [{"name": "pointing.ms", "ntime": NTIME, "nantenna": NANTENNA, "pointing": True}],
+  indirect=True,
+)
+def test_pointing_outer_indexing(simmed_ms):
+  """Array selections on both the time and antenna dimensions
+  select the outer product of the indices"""
+  with pytest.warns(IrregularSubtableGridWarning):
+    dt = xarray.open_datatree(simmed_ms)
+
+  beam = dt["pointing_partition_000/pointing_xds"].POINTING_BEAM
+  # Select before loading, as loading caches the full array
+  selected = beam.isel(time_pointing=[0, 2, 3], antenna_name=[0, 2]).values
+  expected = beam.values[[0, 2, 3]][:, [0, 2]]
+  assert selected.shape == (3, 2, 2)
+  npt.assert_array_equal(selected, expected)
+
+
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [{"name": "pointing_duplicate.ms", "ntime": NTIME, "nantenna": NANTENNA}],
+  indirect=True,
+)
+@pytest.mark.parametrize("interpolate", [None, "pointing"])
+def test_pointing_duplicate_rows(simmed_ms, interpolate):
+  """POINTING rows sharing a (TIME, ANTENNA_ID) tuple cannot be gridded.
+  The pointing_xds is omitted, but the Measurement Set still opens"""
+  time = np.full(NANTENNA + 1, FIRST_FEB_2023_MJDS)
+  antenna_id = np.append(np.arange(NANTENNA), 0).astype(np.int32)
+
+  with Table.ms_from_descriptor(
+    simmed_ms, "POINTING", table_desc=ms_descriptor("POINTING", complete=True)
+  ) as T:
+    T.addrows(antenna_id.size)
+    T.putcol("ANTENNA_ID", antenna_id)
+    T.putcol("TIME", time)
+    T.putcol("INTERVAL", np.full(antenna_id.size, NTIME * DUMP_RATE))
+    T.putcol("NUM_POLY", np.zeros(antenna_id.size, np.int32))
+    T.putcol("DIRECTION", np.zeros((antenna_id.size, 1, 2)))
+
+  with pytest.warns(DuplicateSubtableRowWarning):
+    dt = xarray.open_datatree(simmed_ms, interpolate=interpolate)
+
+  assert "pointing_xds" not in dt["pointing_duplicate_partition_000"]

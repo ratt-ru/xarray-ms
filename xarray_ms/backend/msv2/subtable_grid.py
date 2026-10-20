@@ -18,7 +18,7 @@ import numpy.typing as npt
 import pyarrow as pa
 from rarg_python_patterns.multiton import Multiton
 
-from xarray_ms.errors import IrregularSubtableGridWarning, PartitioningError
+from xarray_ms.errors import DuplicateSubtableRowWarning, IrregularSubtableGridWarning
 
 if TYPE_CHECKING:
   from xarray_ms.backend.msv2.partition import PartitionKeyT
@@ -125,6 +125,21 @@ def antenna_index(
   return sorter[np.searchsorted(antenna_ids, antenna_id, sorter=sorter)]
 
 
+def has_duplicate_keys(
+  time: npt.NDArray[np.float64], antenna_id: npt.NDArray[np.integer]
+) -> bool:
+  """Returns True if any ``(TIME, ANTENNA_ID)`` tuple occurs more than once.
+
+  Args:
+    time: Row times, sorted per antenna.
+    antenna_id: Row antenna ids, sorted.
+  """
+  # Sorting places duplicates next to each other
+  return bool(
+    np.any(np.logical_and(antenna_id[1:] == antenna_id[:-1], time[1:] == time[:-1]))
+  )
+
+
 def native_grid(
   time: npt.NDArray[np.float64],
   antenna_id: npt.NDArray[np.integer],
@@ -132,6 +147,7 @@ def native_grid(
   name: str,
 ) -> SubtableGrid:
   """Grids selected subtable rows on the unique subtable times.
+  Each ``(TIME, ANTENNA_ID)`` tuple must be unique, see :func:`has_duplicate_keys`.
 
   Args:
     time: Selected row times.
@@ -145,13 +161,6 @@ def native_grid(
   utime, time_index = np.unique(time, return_inverse=True)
   nant = len(antenna_ids)
   flat_index = time_index * nant + antenna_index(antenna_id, antenna_ids)
-
-  if np.any(np.bincount(flat_index) > 1):
-    raise PartitioningError(
-      f"Multiple occurrences of a (TIME, ANTENNA_ID) tuple are present in {name}. "
-      f"It is not possible to establish a unique (time, antenna) grid."
-    )
-
   index = np.full(utime.size * nant, -1, dtype=np.int64)
   index[flat_index] = np.arange(flat_index.size)
 
@@ -281,7 +290,8 @@ def grid_subtable(
       Otherwise, rows are gridded on their own times via :func:`native_grid`.
 
   Returns:
-    The grid, or None if no subtable rows were selected.
+    The grid, or None if no subtable rows were selected, or if the
+    selected rows do not uniquely identify each ``(time, antenna)`` cell.
   """
   index = index_factory.instance
 
@@ -303,6 +313,18 @@ def grid_subtable(
 
   time = group_index["TIME"][selected]
   antenna_id = group_index["ANTENNA_ID"][selected]
+
+  # The subtable is optional: rather than failing to open the
+  # Measurement Set, omit it if it cannot be gridded unambiguously
+  if has_duplicate_keys(time, antenna_id):
+    warnings.warn(
+      f"Multiple rows of {index.name} share a (TIME, {index.key_column}) tuple, "
+      f"so it is not possible to establish a unique (time, antenna) grid. "
+      f"{index.name} will be omitted for antennas {antenna_ids.tolist()} "
+      f"over the time span {span}.",
+      DuplicateSubtableRowWarning,
+    )
+    return None
 
   if grid_time is not None:
     valid_interval = group_index["VALID_INTERVAL"][selected]

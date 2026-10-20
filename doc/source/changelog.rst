@@ -25,7 +25,9 @@ X.Y.Z (DD-MM-YYYY)
   native ``time_pointing`` axis, or on the correlated ``time`` axis
   when ``interpolate="pointing"`` is passed to ``open_datatree``.
   Only the indexing columns of ``POINTING`` are read in full and
-  POINTING data is read lazily (:pr:`185`).
+  POINTING data is read lazily. POINTING rows sharing a ``(TIME, ANTENNA_ID)``
+  key cannot be gridded: a ``DuplicateSubtableRowWarning`` is emitted and the
+  ``pointing_xds`` is omitted, rather than failing to open (:pr:`185`).
 * Add ``system_calibration_xds`` and ``weather_xds`` support, from the ``SYSCAL``
   and ``WEATHER`` sub-tables, also accepting ``interpolate="sys_cal"`` and
   ``interpolate="weather"``. Weather stations are identified by ``NS_WX_STATION_ID``,

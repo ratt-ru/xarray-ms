@@ -22,6 +22,12 @@ class IrregularSubtableGridWarning(IrregularGridWarning):
   does not fully populate its (time, antenna) grid"""
 
 
+class DuplicateSubtableRowWarning(UserWarning):
+  """Warning raised when multiple rows of a time and antenna keyed subtable
+  share the same key, so that they cannot be placed on a (time, antenna) grid.
+  The associated dataset is omitted"""
+
+
 class MissingMetadataWarning(UserWarning):
   """Warning raised when metadata is missing"""
 

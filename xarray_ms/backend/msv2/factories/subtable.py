@@ -96,7 +96,11 @@ class LazySubtableColumns:
     Returns:
       The gridded columns, or None if no subtable rows are relevant.
     """
-    # Partitions sharing antennas and time span share the grid
+    # Partitions sharing antennas and time span share the grid.
+    # The grid is not released when the store is closed, but expires.
+    # Lazy reads after expiry recreate the grid, and the subtable index
+    # if necessary. This is rare, as the arrays are usually read soon after
+    # opening, and is preferred to holding grids for the lifetime of the store
     grid_factory = Multiton(
       grid_subtable,
       index_factory,
