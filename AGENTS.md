@@ -128,6 +128,46 @@ Signal when the grid cannot be made perfectly regular:
   is set and a per-channel `CHANNEL_WIDTH` column is added.
 - `IrregularBaselineGridWarning` — `row_map` contains `-1`s, i.e. baselines
   missing for some timesteps; imputed with defaults (benign in most cases).
+- `IrregularSubtableGridWarning` — a time-keyed subtable (e.g. `POINTING`)
+  does not populate every `(time, antenna)` cell; imputed with defaults.
+- `DuplicateSubtableRowWarning` — multiple rows of a time-keyed subtable
+  share a `(TIME, ANTENNA_ID)` key, so cannot be gridded; the dataset is
+  omitted rather than failing the open, as these subtables are optional.
+
+#### 6. Time-keyed subtables
+
+Subtables keyed on `(ANTENNA_ID, TIME)`, such as `POINTING`, can be much larger
+than the MAIN table and are not read in full. `SubtableIndex` in
+[subtable_index.py](xarray_ms/backend/msv2/subtable_index.py) reads only their
+indexing columns and sorts them with `TablePartitioner`, retaining row numbers so
+that data columns are read for the selected rows only.
+
+[subtable_grid.py](xarray_ms/backend/msv2/subtable_grid.py) then:
+
+- selects rows whose validity `[TIME - INTERVAL/2, TIME + INTERVAL/2]` overlaps
+  the partition's time span. Zero `INTERVAL`s are replaced with the subtable's
+  sampling cadence,
+- grids them as a `(time, antenna)` array of indices into the selected rows,
+  `-1` meaning missing, analogous to `row_map`. By default the grid uses the
+  subtable's own timesteps (e.g. `time_pointing`). Datasets named in
+  `open_datatree(..., interpolate=...)` are instead gridded on the correlated
+  `time` axis with a pyarrow as-of join, taking the most recently valid row.
+
+Selected rows sharing a `(TIME, ANTENNA_ID)` key make the grid ambiguous in
+both modes. `grid_subtable` emits `DuplicateSubtableRowWarning` and the dataset
+is omitted for that partition, unlike `row_map` where duplicates are an error.
+
+`grid_subtable` performs the selection and gridding, converting the grid into
+subtable row numbers. Factories call it through a `Multiton` keyed on
+`(index, group, antenna_ids, span, grid_time)`, so partitions sharing these,
+e.g. partitions differing only in spectral window, share one read-only grid.
+
+Data columns are read lazily by `SubtableMSv2Array` in
+[array.py](xarray_ms/backend/msv2/array.py), which maps the requested
+`(time, antenna)` block through the grid onto subtable rows, exactly as
+`MainMSv2Array` does with `row_map`. Each row is read once even when it occupies
+several grid cells, as arcae rejects duplicate row indices. Indexed subtables are
+opened with multiple instances so that, e.g. dask chunks, can be read concurrently.
 
 ### Measures
 

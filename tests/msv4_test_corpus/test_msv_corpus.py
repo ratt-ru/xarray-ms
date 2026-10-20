@@ -23,6 +23,21 @@ except ImportError:
 
 pmx = pytest.mark.xfail
 
+# Datasets with non-empty POINTING subtables overlapping the correlated data
+POINTING_DATASETS = {
+  "ea25_cal_small_before_fixed.split.ms",
+  "ea25_cal_small_after_fixed.split.ms",
+  "J1924-2914.ms.calibrated.split.SPW3",
+  "VLASS3.2.sb45755730.eb46170641.60480.16266136574.split.v6.ms",
+  "small_lofar.ms",
+  "59749_bp_8beams_pattern.ms",
+  "59750_altaz_2settings.ms",
+  "59754_altaz_2weights_0.ms",
+  "59754_altaz_2weights_15.ms",
+  "59755_eq_interleave_0.ms",
+  "59755_eq_interleave_15.ms",
+}
+
 
 @pytest.mark.msv4_test_corpus
 @pytest.mark.filterwarnings(
@@ -33,6 +48,7 @@ pmx = pytest.mark.xfail
 @pytest.mark.filterwarnings("ignore::xarray_ms.errors.IrregularTimeGridWarning")
 @pytest.mark.filterwarnings("ignore::xarray_ms.errors.IrregularBaselineGridWarning")
 @pytest.mark.filterwarnings("ignore::xarray_ms.errors.HeterogeneousFeedWarning")
+@pytest.mark.filterwarnings("ignore::xarray_ms.errors.IrregularSubtableGridWarning")
 @pytest.mark.parametrize(
   "msv4_corpus_dataset, partition_schema",
   [
@@ -90,13 +106,19 @@ pmx = pytest.mark.xfail
 )
 def test_msv4_corpus(msv4_corpus_dataset, partition_schema):
   name, path = msv4_corpus_dataset
+  interpolate = [None, "pointing"] if name in POINTING_DATASETS else [None]
   for ps in partition_schema:
-    dt = xarray.open_datatree(f"{path}{os.path.sep}{name}", partition_schema=ps)
-    if xradio:
-      issues = list(check_datatree(dt))
-      assert not issues
-    for node in dt.subtree:
-      if node.name == "antenna_xds":
-        antenna_names = node.antenna_name.values
-        assert len(antenna_names) == len(np.unique(antenna_names))
-    dt.load()
+    for interp in interpolate:
+      dt = xarray.open_datatree(
+        f"{path}{os.path.sep}{name}", partition_schema=ps, interpolate=interp
+      )
+      if xradio:
+        issues = list(check_datatree(dt))
+        assert not issues
+      for node in dt.subtree:
+        if node.name == "antenna_xds":
+          antenna_names = node.antenna_name.values
+          assert len(antenna_names) == len(np.unique(antenna_names))
+      has_pointing = any(g.endswith("/pointing_xds") for g in dt.groups)
+      assert has_pointing == (name in POINTING_DATASETS)
+      dt.load()

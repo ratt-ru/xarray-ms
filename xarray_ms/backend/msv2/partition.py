@@ -81,6 +81,9 @@ class TablePartitioner:
 
     # Find the group start and end points in parallel by finding edges
     def find_edges(p, s):
+      # Without partitioning columns, there is a single group
+      if not self._partitionby:
+        return np.empty(0, dtype=np.int64)
       diffs = [np.diff(p[v]) > 0 for v in self._partitionby]
       return np.where(np.logical_or.reduce(diffs))[0] + s + 1
 

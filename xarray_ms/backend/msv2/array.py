@@ -20,6 +20,8 @@ if TYPE_CHECKING:
     MSv2StructureFactory,
     PartitionKeyT,
   )
+  from xarray_ms.backend.msv2.subtable_grid import GriddedSubtableFactory
+  from xarray_ms.backend.msv2.subtable_index import SubtableTableFactory
 
   TransformerT = Callable[[npt.NDArray], npt.NDArray]
 
@@ -205,3 +207,103 @@ class BroadcastMSv2Array(MSv2Array):
     low_res_data = self._low_res_array.__getitem__(OuterIndexer(low_res_key))
     low_res_data = low_res_data[self._low_res_index]
     return np.broadcast_to(low_res_data, expected_shape)[squeeze]
+
+
+class SubtableMSv2Array(MSv2Array):
+  """Backend array reading a column of an MSv2 subtable keyed on
+  ``(ANTENNA_ID, TIME)``, such as POINTING. Columns are presented with
+  ``(time, antenna)`` as the first dimensions. These are mapped onto
+  subtable rows via a grid of subtable row numbers, in which ``-1``
+  indicates a missing row."""
+
+  __slots__ = (
+    "_table_factory",
+    "_grid_factory",
+    "_column",
+    "_default",
+    "_read_dtype",
+    "_leading_axes",
+    "_transform",
+  )
+
+  _table_factory: SubtableTableFactory
+  _grid_factory: GriddedSubtableFactory
+  _column: str
+  _default: Any
+  _read_dtype: npt.DTypeLike
+  _leading_axes: int
+  _transform: TransformerT | None
+
+  def __init__(
+    self,
+    table_factory: SubtableTableFactory,
+    grid_factory: GriddedSubtableFactory,
+    column: str,
+    shape: Tuple[int, ...],
+    dtype: npt.DTypeLike,
+    default: Any,
+    read_dtype: npt.DTypeLike | None = None,
+    leading_axes: int = 0,
+    transform: TransformerT | None = None,
+  ):
+    """
+    Args:
+      table_factory: Factory producing the subtable.
+      grid_factory: Factory producing the ``(time, antenna)`` row grid.
+      column: Subtable column.
+      shape: Shape of the array, starting with ``(time, antenna)``.
+      dtype: Data type of the array.
+      default: Value of missing rows.
+      read_dtype: Data type with which the column is read,
+        if it differs from ``dtype``. ``transform`` should convert
+        from ``read_dtype`` to ``dtype``.
+      leading_axes: Number of leading column axes from which only
+        the first element is read, e.g. the polynomial axis of
+        POINTING::DIRECTION.
+      transform: Transform applied to the read data.
+    """
+    super().__init__(shape, np.dtype(dtype))
+    self._table_factory = table_factory
+    self._grid_factory = grid_factory
+    self._column = column
+    self._default = default
+    self._read_dtype = dtype if read_dtype is None else read_dtype
+    self._leading_axes = leading_axes
+    self._transform = transform
+
+    assert len(shape) >= 2, "(time, antenna) required"
+
+  def __getitem__(self, key) -> npt.NDArray:
+    return explicit_indexing_adapter(
+      key, self.shape, IndexingSupport.OUTER, self._getitem
+    )
+
+  def _getitem(self, key) -> npt.NDArray:
+    assert len(key) == len(self.shape)
+    key, squeeze_axis = MainMSv2Array.promote_integer_dims(key)
+    expected_shape = tuple(slice_length(k, s) for k, s in zip(key, self.shape))
+    if reduce(mul, expected_shape, 1) == 0:
+      return np.empty(expected_shape, dtype=self.dtype)
+    # Map the (time, antenna) coordinates onto subtable rows
+    grid_rows = self._grid_factory.instance.rows
+    # Index each axis separately, as the key is an outer indexer
+    rows = grid_rows[key[0]][:, key[1]]
+    # A row may occupy multiple grid cells, for example when it is valid
+    # over multiple timesteps. Read each row once and then expand
+    unique_rows, inverse = np.unique(rows.ravel(), return_inverse=True)
+    leading = (slice(0, 1),) * self._leading_axes
+    row_key = (unique_rows,) + leading + key[2:]
+    row_shape = (unique_rows.size,) + (1,) * self._leading_axes + expected_shape[2:]
+    result = np.full(row_shape, self._default, dtype=self._read_dtype)
+    self._table_factory.instance.getcol(self._column, row_key, result)
+    result = result[inverse].reshape(rows.shape + expected_shape[2:])
+    result = result.squeeze(axis=squeeze_axis)
+    return self._transform(result) if self._transform else result
+
+  @property
+  def transform(self) -> TransformerT | None:
+    return self._transform
+
+  @transform.setter
+  def transform(self, value: TransformerT) -> None:
+    self._transform = value

@@ -238,6 +238,7 @@ class DirectionCoder(MeasuresCoder):
   This encompasses celestial directions or, directions in the sky"""
 
   MSV2_TO_MSV4_FRAME = {
+    "AZEL": "altaz",
     "AZELGEO": "altaz",
     "ICRS": "icrs",
     "J2000": "fk5",
