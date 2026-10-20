@@ -297,6 +297,80 @@ def test_low_resolution_read(simmed_ms):
     )
 
 
+def _add_sigma(chunk_desc, data_dict):
+  data_dict = data_dict.copy()
+
+  ddid = chunk_desc.DATA_DESC_ID.item()
+  _, ncorr = map(len, chunk_desc.data_description[ddid])
+  nrow = data_dict["DATA_DESC_ID"][-1].size
+
+  # Generate a ramp function in the SIGMA column
+  shape = (nrow, ncorr)
+  sigma = np.arange(np.prod(shape), dtype=np.float64).reshape(shape)
+  data_dict["SIGMA"] = ("row", sigma)
+
+  return data_dict
+
+
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [
+    {
+      "name": "backend.ms",
+      "data_description": [(8, ["XX", "XY", "YX", "YY"]), (4, ["RR", "LL"])],
+      "transform_data": _add_sigma,
+    }
+  ],
+  indirect=True,
+)
+def test_sigma_broadcast(simmed_ms):
+  """Test that a missing SIGMA_SPECTRUM results in a broadcasted SIGMA column"""
+  dt = xarray.open_datatree(simmed_ms, auto_corrs=True)
+
+  for p in ["000", "001"]:
+    node = dt[f"backend_partition_{p}"]
+    ntime, nbl, nfreq, npol = (
+      node.sizes[d] for d in ("time", "baseline_id", "frequency", "polarization")
+    )
+    values = np.arange(np.prod((ntime, nbl, npol)), dtype=np.float64).reshape(
+      ntime, nbl, 1, npol
+    )
+    assert node.SIGMA_SPECTRUM.dims == (
+      "time",
+      "baseline_id",
+      "frequency",
+      "polarization",
+    )
+    assert_array_equal(
+      np.broadcast_to(values, (ntime, nbl, nfreq, npol)), node.SIGMA_SPECTRUM.values
+    )
+
+
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [
+    {
+      "name": "backend.ms",
+      "data_description": [(8, ["XX", "XY", "YX", "YY"])],
+      "table_desc": {"__remove_columns__": ["WEIGHT_SPECTRUM"]},
+      "transform_data": _remove_weight_spectrum_add_weight,
+    }
+  ],
+  indirect=True,
+)
+def test_broadcast_isel_integers(simmed_ms):
+  """Integer selections on a broadcasted WEIGHT column drop their dimensions"""
+  selection = {"time": 1, "baseline_id": -1, "frequency": slice(2, 5)}
+  dt = xarray.open_datatree(simmed_ms, auto_corrs=True)
+  node = dt["backend_partition_000"]
+  expected = node.WEIGHT.load().isel(**selection)
+
+  dt = xarray.open_datatree(simmed_ms, auto_corrs=True)
+  actual = dt["backend_partition_000"].WEIGHT.isel(**selection).load()
+  assert actual.dims == ("frequency", "polarization")
+  xarray.testing.assert_equal(actual, expected)
+
+
 @pytest.mark.parametrize(
   "simmed_ms",
   [
@@ -364,6 +438,23 @@ def test_isel_loads_on_subsets(simmed_ms):
   dt.load()
   assert dt["backend_partition_000"].isel(**p0_sel).identical(node0)
   assert dt["backend_partition_001"].isel(**p1_sel).identical(node1)
+
+
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [{"name": "outer.ms", "ntime": 5, "nantenna": 4}],
+  indirect=True,
+)
+def test_isel_arrays_on_time_and_baseline(simmed_ms):
+  """Array selections along both time and baseline_id are outer selections"""
+  selection = {"time": [0, 2, 4], "baseline_id": [0, 1]}
+  dt = xarray.open_datatree(simmed_ms, auto_corrs=True)
+  expected = dt["outer_partition_000"].ds.load().isel(**selection)
+
+  dt = xarray.open_datatree(simmed_ms, auto_corrs=True)
+  actual = dt["outer_partition_000"].ds.isel(**selection).load()
+  assert actual.VISIBILITY.shape[:2] == (3, 2)
+  xarray.testing.assert_equal(actual, expected)
 
 
 def test_isel_loads_on_integers(simmed_ms):
@@ -439,6 +530,18 @@ NONSTANDARD_TABLE_DESC = {
     # 'shape': ...,  # Variably shaped
     "valueType": "FLOAT",
   },
+  "SIGMA_SPECTRUM": {
+    "_c_order": True,
+    "comment": "SIGMA_SPECTRUM column",
+    "dataManagerGroup": "StandardStMan",
+    "dataManagerType": "StandardStMan",
+    "keywords": {},
+    "maxlen": 0,
+    "ndim": 2,
+    "option": 0,
+    # 'shape': ...,  # Variably shaped
+    "valueType": "FLOAT",
+  },
   "CORRELATED_WEIGHT_SPECTRUM": {
     "_c_order": True,
     "comment": "CORRELATED_WEIGHT_SPECTRUM column",
@@ -458,6 +561,7 @@ def _add_non_standard_columns(chunk_desc, data_dict):
   data_dict["CORRELATED_DATA"] = data_dict["DATA"]
   data_dict["MODEL_DATA"] = data_dict["DATA"]
   data_dict["FLOAT_DATA"] = (data_dict["DATA"][0], data_dict["DATA"][1].real)
+  data_dict["SIGMA_SPECTRUM"] = data_dict["WEIGHT_SPECTRUM"]
   return data_dict
 
 
@@ -504,3 +608,69 @@ def test_additional_columns(simmed_ms):
         "polarization",
       )
       assert node["MODEL_DATA"].equals(node["VISIBILITY"])
+
+      assert node["SIGMA_SPECTRUM"].dims == (
+        "time",
+        "baseline_id",
+        "frequency",
+        "polarization",
+      )
+      assert node["SIGMA_SPECTRUM"].equals(node["WEIGHT"])
+
+
+ROW_SHAPE_TABLE_DESC = {
+  "MIXED_SHAPE_DATA": {
+    **NONSTANDARD_TABLE_DESC["CORRELATED_DATA"],
+    "comment": "MIXED_SHAPE_DATA column",
+  },
+  "FIXED_SHAPE_DATA": {
+    **NONSTANDARD_TABLE_DESC["CORRELATED_DATA"],
+    "comment": "FIXED_SHAPE_DATA column",
+    "option": 4,
+    "shape": [8, 4],
+  },
+}
+
+
+def _add_row_shape_columns(chunk_desc, data_dict):
+  dims, data = data_dict["DATA"]
+  # The first chunk has one channel less than the other chunks
+  data_dict["MIXED_SHAPE_DATA"] = (
+    dims,
+    data[:, :-1] if chunk_desc.chunk_id == 0 else data,
+  )
+  data_dict["FIXED_SHAPE_DATA"] = (dims, data)
+  return data_dict
+
+
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [
+    {
+      "name": "row_shapes.ms",
+      "ntime": 4,
+      "time_chunks": 2,
+      "transform_data": _add_row_shape_columns,
+      "table_desc": ROW_SHAPE_TABLE_DESC,
+    }
+  ],
+  indirect=True,
+)
+def test_secondary_column_row_shapes(simmed_ms):
+  """A variably shaped secondary column whose rows differ in shape is ignored,
+  while a fixed shape secondary column is exposed"""
+  with pytest.warns(
+    ColumnShapeImputationWarning,
+    match="Ignoring secondary column MIXED_SHAPE_DATA without a distinct row shape",
+  ):
+    with xarray.open_datatree(simmed_ms) as dt:
+      dt.load()
+      node = dt["row_shapes_partition_000"]
+      assert "MIXED_SHAPE_DATA" not in node
+      assert node["FIXED_SHAPE_DATA"].dims == (
+        "time",
+        "baseline_id",
+        "frequency",
+        "polarization",
+      )
+      assert node["FIXED_SHAPE_DATA"].equals(node["VISIBILITY"])

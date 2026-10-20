@@ -17,6 +17,17 @@ class IrregularChannelGridWarning(IrregularGridWarning):
   is encountered"""
 
 
+class IrregularSubtableGridWarning(IrregularGridWarning):
+  """Warning raised when a time and antenna keyed subtable
+  does not fully populate its (time, antenna) grid"""
+
+
+class DuplicateSubtableRowWarning(UserWarning):
+  """Warning raised when multiple rows of a time and antenna keyed subtable
+  share the same key, so that they cannot be placed on a (time, antenna) grid.
+  The associated dataset is omitted"""
+
+
 class MissingMetadataWarning(UserWarning):
   """Warning raised when metadata is missing"""
 
@@ -33,6 +44,11 @@ class ImputedMetadataWarning(MissingMetadataWarning):
 class DuplicateAntennaNameWarning(UserWarning):
   """Warning raised when duplicate antenna names are found in the ANTENNA table
   and are made unique by appending a numeric suffix"""
+
+
+class HeterogeneousFeedWarning(UserWarning):
+  """Warning raised when per-feed FEED quantities, such as RECEPTOR_ANGLE,
+  differ between the feeds of an antenna in a partition"""
 
 
 class FrameConversionWarning(UserWarning):

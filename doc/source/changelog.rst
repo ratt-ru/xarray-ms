@@ -3,11 +3,47 @@
 Changelog
 =========
 
-X.Y.Z (DD-MM-YYYY)
-------------------
+0.5.13 (20-10-2026)
+-------------------
+* Bump the minimum ``arcae`` version to 0.5.8 (:pr:`196`).
+* Expose the ``SIGMA_SPECTRUM`` variable on the correlated dataset, read from
+  ``MAIN::SIGMA_SPECTRUM`` or, if it is missing, broadcast from ``MAIN::SIGMA``
+  over frequency, as ``WEIGHT`` is. Fix integer selections, e.g. ``isel(baseline_id=1)``,
+  on broadcast variables (:pr:`195`).
+* Re-introduce the simulator's ``phased_array`` option, so that the ``PHASED_ARRAY``
+  sub-table is only simulated on request and no longer clutters the documentation (:pr:`194`).
+* Re-enable the documentation's navigation sidebar, listing every page,
+  and narrow both sidebars to give more space to the page content (:issue:`20`, :pr:`193`).
+* Fix ``IndexError`` when selecting correlated data with arrays along both
+  ``time`` and ``baseline_id``, e.g. ``isel(time=[0, 2], baseline_id=[0, 1])`` (:pr:`191`).
+* List each antenna once in ``antenna_xds``, using its first FEED row, when the FEED
+  table has multiple rows per antenna, e.g. one per feed or time. Emit a
+  ``HeterogeneousFeedWarning`` if ``RECEPTOR_ANGLE``, ``POLARIZATION_TYPE`` or
+  ``FOCUS_LENGTH`` differ between these rows. Prefer FEED rows matching the
+  partition's ``SPECTRAL_WINDOW_ID`` over global (``-1``) rows (:issue:`186`, :pr:`187`).
+* Check that secondary columns have a single row shape in linear time,
+  instead of sorting all row shapes with ``np.unique``, and only read the
+  first row's shape of fixed shape columns. This reduces the time to open
+  a 4.6 million row MeerKAT Measurement Set with three secondary columns
+  by about 14 seconds.
 * Reduce CI minutes: test multiple python versions per runner with uv and pytest-xdist,
   test a reduced matrix on PRs, cancel superseded PR runs and fix the matrix OS
   being ignored. Make MSv4 test corpus downloads atomic (:pr:`181`).
+* Add ``pointing_xds`` support, from the ``POINTING`` sub-table.
+  POINTING rows overlapping each partition's time span are presented on their
+  native ``time_pointing`` axis, or on the correlated ``time`` axis
+  when ``interpolate="pointing"`` is passed to ``open_datatree``.
+  Only the indexing columns of ``POINTING`` are read in full and
+  POINTING data is read lazily. POINTING rows sharing a ``(TIME, ANTENNA_ID)``
+  key cannot be gridded: a ``DuplicateSubtableRowWarning`` is emitted and the
+  ``pointing_xds`` is omitted, rather than failing to open (:pr:`185`).
+* Add ``system_calibration_xds`` and ``weather_xds`` support, from the ``SYSCAL``
+  and ``WEATHER`` sub-tables, also accepting ``interpolate="sys_cal"`` and
+  ``interpolate="weather"``. Weather stations are identified by ``NS_WX_STATION_ID``,
+  where present and populated, and otherwise by ``ANTENNA_ID``. Only stations with
+  rows relevant to the partition are included. Sub-table rows with intervals
+  less than a tenth of their antenna's sampling cadence are considered
+  instantaneous samples, valid until the next sample (:pr:`190`).
 
 0.5.12 (02-10-2026)
 ------------------

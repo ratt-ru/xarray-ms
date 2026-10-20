@@ -9,6 +9,7 @@ from typing import (
   Dict,
   Generator,
   List,
+  Literal,
   Tuple,
 )
 
@@ -112,6 +113,9 @@ class MSStructureSimulator:
   nstate: int
   auto_corrs: bool
   phased_array: bool
+  pointing: bool
+  syscal: bool
+  weather: Literal["antenna", "station"] | None
   dump_rate: float
   time_chunks: int
   time_start: float
@@ -143,7 +147,11 @@ class MSStructureSimulator:
       "DATA_DESC_ID",
     ),
     auto_corrs: bool = True,
+    pointing: bool = False,
+    syscal: bool = False,
+    weather: Literal["antenna", "station"] | None = None,
     simulate_data: bool = True,
+    phased_array: bool = False,
     table_desc: Dict[str, Any] | None = None,
     transform_chunk_desc: ChunkDescriptorTransformerT | None = None,
     transform_data: DataTransformerT | None = None,
@@ -201,6 +209,10 @@ class MSStructureSimulator:
     self.nstate = nstate
     self.nproc = nproc
     self.auto_corrs = auto_corrs
+    self.pointing = pointing
+    self.syscal = syscal
+    self.weather = weather
+    self.phased_array = phased_array
     self.dump_rate = dump_rate
     self.time_chunks = time_chunks
     self.time_start = time_start
@@ -364,7 +376,17 @@ class MSStructureSimulator:
       )
       T.putcol("NAME", np.asarray([f"SOURCE-{i}" for i in range(self.nfield)]))
 
-    self._write_phased_array(output_ms)
+    if self.phased_array:
+      self._write_phased_array(output_ms)
+
+    if self.pointing:
+      self._write_pointing(output_ms)
+
+    if self.syscal:
+      self._write_syscal(output_ms)
+
+    if self.weather is not None:
+      self._write_weather(output_ms, self.weather)
 
   def _write_phased_array(self, output_ms: str) -> None:
     """Write a small PHASED_ARRAY table with variable-sized element arrays."""
@@ -396,6 +418,133 @@ class MSStructureSimulator:
 
         element_flag = np.tile(np.full(nelements, False, dtype=bool), (nreceptors, 1))
         T.putcol("ELEMENT_FLAG", element_flag[None, ...], index=index)
+
+  def _write_pointing(self, output_ms: str) -> None:
+    """Write a POINTING table sampled at twice the MAIN table dump rate.
+
+    The POINTING timesteps extend a timestep before and after the
+    MAIN timesteps, and the last antenna is only present
+    at every second POINTING timestep.
+    """
+    interval = self.dump_rate / 2
+    ntime = 2 * self.ntime + 4
+    time = self.time_start - 2 * interval + np.arange(ntime) * interval
+    time_index, antenna_id = np.meshgrid(
+      np.arange(ntime), np.arange(self.nantenna), indexing="ij"
+    )
+    time_index, antenna_id = time_index.ravel(), antenna_id.ravel()
+    keep = (antenna_id != self.nantenna - 1) | (time_index % 2 == 0)
+    time_index, antenna_id = time_index[keep], antenna_id[keep]
+    nrow = time_index.size
+
+    direction = np.stack([time_index * 0.01, antenna_id * 0.1], axis=-1)
+
+    pointing_table_desc = ms_descriptor("POINTING", complete=True)
+    pointing_table_desc["DIRECTION"]["keywords"]["MEASINFO"]["Ref"] = "AZELGEO"
+    pointing_table_desc["ENCODER"]["keywords"]["MEASINFO"]["Ref"] = "AZELGEO"
+    with Table.ms_from_descriptor(
+      output_ms, "POINTING", table_desc=pointing_table_desc
+    ) as T:
+      T.addrows(nrow)
+      T.putcol("ANTENNA_ID", antenna_id.astype(np.int32))
+      T.putcol("TIME", time[time_index])
+      T.putcol("INTERVAL", np.full(nrow, interval))
+      T.putcol("NUM_POLY", np.zeros(nrow, np.int32))
+      T.putcol("DIRECTION", direction[:, None, :])
+      T.putcol("TARGET", direction[:, None, :])
+      T.putcol("ENCODER", direction + 0.001)
+      T.putcol("OVER_THE_TOP", np.zeros(nrow, bool))
+
+  #: Number of channels in simulated SYSCAL spectra
+  SYSCAL_NCHAN = 3
+
+  def _write_syscal(self, output_ms: str) -> None:
+    """Write a SYSCAL table sampled at every second MAIN timestep,
+    extending two samples before and after the MAIN timesteps,
+    for every antenna and spectral window.
+
+    Values are ``spw * 100 + antenna * 10 + sample + receptor * 0.1``
+    (+ ``chan * 0.01`` for spectra). TANT_SPECTRUM is left undefined."""
+    interval = 2 * self.dump_rate
+    sample = np.arange(-2, (self.ntime + 1) // 2 + 2)
+    nreceptors = next(iter(self.feeds.values())).nreceptors
+    spw, antenna, sample = (
+      a.ravel()
+      for a in np.meshgrid(
+        np.arange(len(self.data_description)),
+        np.arange(self.nantenna),
+        sample,
+        indexing="ij",
+      )
+    )
+    nrow = spw.size
+    base = spw * 100.0 + antenna * 10.0 + sample
+    receptor = np.arange(nreceptors) * 0.1
+    chan = np.arange(self.SYSCAL_NCHAN) * 0.01
+    tsys_spectrum = base[:, None, None] + chan[None, :, None] + receptor[None, None, :]
+
+    syscal_table_desc = ms_descriptor("SYSCAL", complete=True)
+    with Table.ms_from_descriptor(
+      output_ms, "SYSCAL", table_desc=syscal_table_desc
+    ) as T:
+      T.addrows(nrow)
+      T.putcol("ANTENNA_ID", antenna.astype(np.int32))
+      T.putcol("FEED_ID", np.zeros(nrow, np.int32))
+      T.putcol("SPECTRAL_WINDOW_ID", spw.astype(np.int32))
+      T.putcol("TIME", self.time_start + sample * interval)
+      T.putcol("INTERVAL", np.full(nrow, interval))
+      T.putcol("TSYS_SPECTRUM", tsys_spectrum.astype(np.float32))
+      T.putcol("TRX", (base[:, None] + receptor[None, :]).astype(np.float32))
+      T.putcol("PHASE_DIFF", base.astype(np.float32))
+
+  def _write_weather(self, output_ms: str, mode: Literal["antenna", "station"]):
+    """Write a WEATHER table sampled at every third MAIN timestep,
+    with zero intervals.
+
+    In ``antenna`` mode, rows are identified by ``ANTENNA_ID``
+    and the last antenna has no rows. In ``station`` mode, rows are
+    identified by ``NS_WX_STATION_ID`` (2 stations, ids 5 and 7),
+    ``ANTENNA_ID`` is -1, and ``NS_WX_STATION_POSITION`` is provided.
+
+    PRESSURE is ``1000 + key + sample`` hPa."""
+    sample = np.arange((self.ntime + 2) // 3 + 1)
+    keys = np.arange(self.nantenna - 1) if mode == "antenna" else np.array([5, 7])
+    key, sample = (a.ravel() for a in np.meshgrid(keys, sample, indexing="ij"))
+    nrow = key.size
+
+    weather_table_desc = ms_descriptor("WEATHER", complete=True)
+    if mode == "station":
+      weather_table_desc["NS_WX_STATION_ID"] = {
+        **weather_table_desc["ANTENNA_ID"],
+        "comment": "Weather station id",
+      }
+      weather_table_desc["NS_WX_STATION_POSITION"] = {
+        "valueType": "double",
+        "dataManagerType": "StandardStMan",
+        "dataManagerGroup": "StandardStMan",
+        "option": 5,
+        "maxlen": 0,
+        "ndim": 1,
+        "shape": [3],
+        "comment": "Weather station position",
+        "keywords": {},
+      }
+
+    with Table.ms_from_descriptor(
+      output_ms, "WEATHER", table_desc=weather_table_desc
+    ) as T:
+      T.addrows(nrow)
+      T.putcol("TIME", self.time_start + sample * 3 * self.dump_rate)
+      T.putcol("INTERVAL", np.zeros(nrow))
+      T.putcol("PRESSURE", (1000.0 + key + sample).astype(np.float32))
+      T.putcol("TEMPERATURE", (280.0 + key + sample).astype(np.float32))
+      if mode == "antenna":
+        T.putcol("ANTENNA_ID", key.astype(np.int32))
+      else:
+        T.putcol("ANTENNA_ID", np.full(nrow, -1, np.int32))
+        T.putcol("NS_WX_STATION_ID", key.astype(np.int32))
+        position = np.stack([key * 1.0, key * 2.0, key * 3.0], axis=-1)
+        T.putcol("NS_WX_STATION_POSITION", position)
 
   def generate_descriptors(self) -> Generator[PartitionDescriptor, None, None]:
     """Generates a sequence of descriptors, each corresponding to a partition"""

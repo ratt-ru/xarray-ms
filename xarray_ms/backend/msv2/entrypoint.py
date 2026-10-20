@@ -20,14 +20,19 @@ from xarray.core.utils import try_read_magic_number_from_file_or_path
 from xarray_ms.backend.msv2.antenna_selection import select_partition_antennas
 from xarray_ms.backend.msv2.array import MainMSv2Array
 from xarray_ms.backend.msv2.entrypoint_utils import (
+  INTERPOLATABLE_DATASETS,
   CommonStoreArgs,
   resolve_driver_kwargs,
+  resolve_interpolate,
 )
 from xarray_ms.backend.msv2.factories import (
   AntennaFactory,
   CorrelatedFactory,
   FieldAndSourceFactory,
   PhasedArrayFactory,
+  PointingFactory,
+  SystemCalibrationFactory,
+  WeatherFactory,
 )
 from xarray_ms.backend.msv2.structure import (
   DEFAULT_PARTITION_COLUMNS,
@@ -48,6 +53,10 @@ if TYPE_CHECKING:
     MainTableFactory,
     PartitionKeyT,
     SubtableFactory,
+  )
+  from xarray_ms.backend.msv2.subtable_index import (
+    SubtableIndexFactory,
+    SubtableTableFactory,
   )
 
 
@@ -113,6 +122,8 @@ class MSv2Store(AbstractWritableDataStore):
   __slots__ = (
     "_table_factory",
     "_subtable_factories",
+    "_subtable_table_factories",
+    "_subtable_index_factories",
     "_structure_factory",
     "_partition_schema",
     "_partition_key",
@@ -127,6 +138,8 @@ class MSv2Store(AbstractWritableDataStore):
 
   _table_factory: MainTableFactory
   _subtable_factories: Dict[str, SubtableFactory]
+  _subtable_table_factories: Dict[str, SubtableTableFactory]
+  _subtable_index_factories: Dict[str, SubtableIndexFactory]
   _structure_factory: MSv2StructureFactory
   _partition_schema: List[str]
   _partition_key: PartitionKeyT
@@ -152,9 +165,13 @@ class MSv2Store(AbstractWritableDataStore):
     epoch: str,
     write_region: WriteRegionT,
     owns_factories: bool = True,
+    subtable_table_factories: Dict[str, SubtableTableFactory] | None = None,
+    subtable_index_factories: Dict[str, SubtableIndexFactory] | None = None,
   ):
     self._table_factory = table_factory
     self._subtable_factories = subtable_factories
+    self._subtable_table_factories = subtable_table_factories or {}
+    self._subtable_index_factories = subtable_index_factories or {}
     self._structure_factory = structure_factory
     self._partition_schema = partition_schema
     self._partition_key = partition_key
@@ -225,6 +242,8 @@ class MSv2Store(AbstractWritableDataStore):
       epoch=store_args.epoch,
       write_region=write_region,
       owns_factories=owns_factories,
+      subtable_table_factories=store_args.subtable_table_factories,
+      subtable_index_factories=store_args.subtable_index_factories,
     )
 
   def close(self, **kwargs):
@@ -233,13 +252,18 @@ class MSv2Store(AbstractWritableDataStore):
     # so this happens even when the factories are shared.
     self._table_factory.release()
 
-    # Structure and subtable data are derived, expensive to recompute and
-    # shared with any other store (or open DataTree) using the same
-    # Measurement Set. Only a store that created them may evict them.
+    # Structure, subtable data, subtable indices and subtable tables are
+    # derived, expensive to recompute and shared with any other store
+    # (or open DataTree) using the same Measurement Set.
+    # Only a store that created them may evict them.
     if self._owns_factories:
       self._structure_factory.release()
       for subtable_factory in self._subtable_factories.values():
         subtable_factory.release()
+      for index_factory in self._subtable_index_factories.values():
+        index_factory.release()
+      for table_factory in self._subtable_table_factories.values():
+        table_factory.release()
 
   def main_dataset_factory(self) -> CorrelatedFactory:
     return CorrelatedFactory(
@@ -493,7 +517,10 @@ class MSv2EntryPoint(BackendEntrypoint):
     store_entrypoint = StoreBackendEntrypoint()
     return store_entrypoint.open_dataset(store)
 
-  @format_docstring(DEFAULT_PARTITION_COLUMNS=DEFAULT_PARTITION_COLUMNS)
+  @format_docstring(
+    DEFAULT_PARTITION_COLUMNS=DEFAULT_PARTITION_COLUMNS,
+    INTERPOLATABLE_DATASETS=list(INTERPOLATABLE_DATASETS),
+  )
   def open_datatree(
     self,
     filename_or_obj: str | os.PathLike[Any] | BufferedIOBase | AbstractDataStore,
@@ -506,6 +533,7 @@ class MSv2EntryPoint(BackendEntrypoint):
     driver_kwargs: Dict[str, Any] | None = None,
     ninstances: int | None = None,
     epoch: str | None = None,
+    interpolate: str | Iterable[str] | None = None,
   ) -> DataTree:
     """Create a :class:`~xarray.core.datatree.DataTree` presenting an MSv4 view
     over multiple partitions of a MSv2 CASA Measurement Set.
@@ -572,6 +600,11 @@ class MSv2EntryPoint(BackendEntrypoint):
 
       epoch: A string uniquely identifying this Dataset.
         This should not normally be set by the user
+      interpolate: A sub-dataset name, or collection of sub-dataset names,
+        whose values should be associated with the time axis of the
+        correlated dataset, rather than retaining their native time axis.
+        Each timestep takes the most recently valid value.
+        Valid names are :code:`{INTERPOLATABLE_DATASETS}`.
 
     Returns:
       An xarray :class:`~xarray.core.datatree.DataTree`
@@ -588,6 +621,7 @@ class MSv2EntryPoint(BackendEntrypoint):
       driver=driver,
       driver_kwargs=driver_kwargs,
       epoch=epoch,
+      interpolate=interpolate,
     )
 
     dt = DataTree.from_dict(groups_dict)
@@ -670,6 +704,7 @@ class MSv2EntryPoint(BackendEntrypoint):
     ninstances: int | None = None,
     epoch: str | None = None,
     structure_factory: MSv2StructureFactory | None = None,
+    interpolate: str | Iterable[str] | None = None,
   ) -> Dict[str, Dataset]:
     """Create a dictionary of :class:`~xarray.Dataset` presenting an MSv4 view
     over a partition of a MSv2 CASA Measurement Set"""
@@ -680,6 +715,7 @@ class MSv2EntryPoint(BackendEntrypoint):
       raise ValueError("Measurement Set paths must be strings")
 
     driver_kwargs = resolve_driver_kwargs(driver, driver_kwargs, ninstances)
+    interpolate = resolve_interpolate(interpolate)
 
     store_args = CommonStoreArgs(
       ms,
@@ -732,6 +768,10 @@ class MSv2EntryPoint(BackendEntrypoint):
         partition_key, store_args.structure_factory, store_args.subtable_factories
       )
 
+      pointing = PointingFactory(
+        partition_key, store_args.structure_factory, store_args.subtable_factories
+      )
+
       partition = structure[partition_key]
       antenna_selection = select_partition_antennas(
         store_args.subtable_factories["ANTENNA"].instance,
@@ -753,6 +793,36 @@ class MSv2EntryPoint(BackendEntrypoint):
       )
       if phased_array_ds is not None:
         datasets[f"{path}/phased_array_xds"] = phased_array_ds
+
+      pointing_ds = pointing.get_dataset(
+        antenna_selection,
+        store_args.subtable_index_factories["POINTING"],
+        interpolate="pointing" in interpolate,
+      )
+      if pointing_ds is not None:
+        datasets[f"{path}/pointing_xds"] = pointing_ds
+
+      system_calibration_ds = SystemCalibrationFactory(
+        partition_key, store_args.structure_factory, store_args.subtable_factories
+      ).get_dataset(
+        antenna_selection,
+        antenna_ds,
+        store_args.subtable_index_factories["SYSCAL"],
+        interpolate="sys_cal" in interpolate,
+      )
+      if system_calibration_ds is not None:
+        datasets[f"{path}/system_calibration_xds"] = system_calibration_ds
+
+      weather_ds = WeatherFactory(
+        partition_key, store_args.structure_factory, store_args.subtable_factories
+      ).get_dataset(
+        antenna_selection,
+        antenna_ds,
+        store_args.subtable_index_factories["WEATHER"],
+        interpolate="weather" in interpolate,
+      )
+      if weather_ds is not None:
+        datasets[f"{path}/weather_xds"] = weather_ds
 
     self.postprocess_datasets(datasets)
 

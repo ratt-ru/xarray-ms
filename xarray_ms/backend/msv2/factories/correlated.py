@@ -74,9 +74,22 @@ MSV4_to_MSV2_COLUMN_SCHEMAS = {
   "WEIGHT": MSv2ColumnSchema(
     "WEIGHT_SPECTRUM", ("frequency", "polarization"), np.nan, None
   ),
+  "SIGMA_ROW": MSv2ColumnSchema(
+    "SIGMA",
+    ("frequency", "polarization"),
+    np.nan,
+    None,
+    low_res_dims=("polarization",),
+  ),
+  "SIGMA_SPECTRUM": MSv2ColumnSchema(
+    "SIGMA_SPECTRUM", ("frequency", "polarization"), np.nan, None
+  ),
 }
 
 FIXED_DIMENSION_SIZES = {"uvw_label": 3}
+
+# casacore ColumnDesc::FixedShape option bit
+FIXED_SHAPE_OPTION = 4
 
 PARTITIONING_LINK = "https://xarray-ms.readthedocs.io/en/latest/partitioning.html"
 
@@ -204,8 +217,16 @@ class CorrelatedFactory(DatasetFactory):
     variables = []
 
     for column in remaining_columns:
+      # Every row of a fixed shape column has the same shape,
+      # so the first row's shape is sufficient
+      desc = self._main_table_desc[column]
+      fixed_shape = isinstance(desc, Mapping) and bool(
+        desc.get("option", 0) & FIXED_SHAPE_OPTION
+      )
+      rows = partition_rows[:1] if fixed_shape else partition_rows
+
       try:
-        pa_row_shapes = self._ms_factory.instance.row_shapes(column, (partition_rows,))
+        pa_row_shapes = self._ms_factory.instance.row_shapes(column, (rows,))
       except pa.lib.ArrowInvalid as e:
         warnings.warn(
           f"Ignoring secondary column {column} due to {e}",
@@ -218,12 +239,14 @@ class CorrelatedFactory(DatasetFactory):
         pa_row_shapes = pa_row_shapes.filter(pac.is_valid(pa_row_shapes))
         pa_row_shapes = pac.list_flatten(pa_row_shapes, recursive=True)
         row_shapes = pa_row_shapes.to_numpy().reshape(-1, ndim)
-        row_shapes = np.unique(row_shapes, axis=0)
 
-        if row_shapes.shape[0] != 1:
+        # Comparing against the first row is linear in the number of rows,
+        # while np.unique(..., axis=0) sorts them. Only use the latter
+        # to report the distinct shapes
+        if row_shapes.shape[0] == 0 or not np.all(row_shapes == row_shapes[0]):
           warnings.warn(
             f"Ignoring secondary column {column} without "
-            f"a distinct row shape {row_shapes}",
+            f"a distinct row shape {np.unique(row_shapes, axis=0)}",
             ColumnShapeImputationWarning,
           )
           continue
@@ -349,6 +372,15 @@ class CorrelatedFactory(DatasetFactory):
     else:
       data_vars.append(("WEIGHT", self._variable_from_column("WEIGHT_ROW", dim_sizes)))
       processed_columns.add("WEIGHT_ROW")
+
+    if "SIGMA_SPECTRUM" in self._main_table_desc:
+      sigma = self._variable_from_column("SIGMA_SPECTRUM", dim_sizes)
+      data_vars.append(("SIGMA_SPECTRUM", sigma))
+      processed_columns.add("SIGMA_SPECTRUM")
+    elif "SIGMA" in self._main_table_desc:
+      sigma = self._variable_from_column("SIGMA_ROW", dim_sizes)
+      data_vars.append(("SIGMA_SPECTRUM", sigma))
+      processed_columns.add("SIGMA")
 
     data_vars.extend(self.secondary_variables(processed_columns, dim_sizes))
     field = maybe_impute_field_table(field, partition.field_ids)

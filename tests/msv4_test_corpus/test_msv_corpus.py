@@ -1,6 +1,7 @@
 import os.path
 import warnings
 
+import numpy as np
 import pytest
 import xarray
 
@@ -22,6 +23,48 @@ except ImportError:
 
 pmx = pytest.mark.xfail
 
+# Datasets with non-empty POINTING subtables overlapping the correlated data
+POINTING_DATASETS = {
+  "ea25_cal_small_before_fixed.split.ms",
+  "ea25_cal_small_after_fixed.split.ms",
+  "J1924-2914.ms.calibrated.split.SPW3",
+  "VLASS3.2.sb45755730.eb46170641.60480.16266136574.split.v6.ms",
+  "small_lofar.ms",
+  "59749_bp_8beams_pattern.ms",
+  "59750_altaz_2settings.ms",
+  "59754_altaz_2weights_0.ms",
+  "59754_altaz_2weights_15.ms",
+  "59755_eq_interleave_0.ms",
+  "59755_eq_interleave_15.ms",
+}
+
+# Datasets with non-empty SYSCAL subtables overlapping the correlated data
+SYSCAL_DATASETS = {
+  "VLBA_TL016B_split.ms",
+  "VLBA_TL016B_split_lsrk.ms",
+  "global_vlbi_gg084b_reduced.ms",
+}
+
+# Datasets with non-empty WEATHER subtables overlapping the correlated data
+WEATHER_DATASETS = {
+  "Antennae_North.cal.lsrk.ms",
+  "Antennae_North.cal.lsrk.split.ms",
+  "J1924-2914.ms.calibrated.split.SPW3",
+  "SNR_G55_10s.split.ms",
+  "VLASS3.2.sb45755730.eb46170641.60480.16266136574.split.v6.ms",
+  "VLBA_TL016B_split.ms",
+  "VLBA_TL016B_split_lsrk.ms",
+  "ea25_cal_small_after_fixed.split.ms",
+  "ea25_cal_small_before_fixed.split.ms",
+}
+
+# {sub-dataset node: (datasets, interpolate name)}
+SUBTABLE_DATASETS = {
+  "pointing_xds": (POINTING_DATASETS, "pointing"),
+  "system_calibration_xds": (SYSCAL_DATASETS, "sys_cal"),
+  "weather_xds": (WEATHER_DATASETS, "weather"),
+}
+
 
 @pytest.mark.msv4_test_corpus
 @pytest.mark.filterwarnings(
@@ -31,6 +74,8 @@ pmx = pytest.mark.xfail
 @pytest.mark.filterwarnings("ignore::xarray_ms.errors.ImputedMetadataWarning")
 @pytest.mark.filterwarnings("ignore::xarray_ms.errors.IrregularTimeGridWarning")
 @pytest.mark.filterwarnings("ignore::xarray_ms.errors.IrregularBaselineGridWarning")
+@pytest.mark.filterwarnings("ignore::xarray_ms.errors.HeterogeneousFeedWarning")
+@pytest.mark.filterwarnings("ignore::xarray_ms.errors.IrregularSubtableGridWarning")
 @pytest.mark.parametrize(
   "msv4_corpus_dataset, partition_schema",
   [
@@ -88,9 +133,23 @@ pmx = pytest.mark.xfail
 )
 def test_msv4_corpus(msv4_corpus_dataset, partition_schema):
   name, path = msv4_corpus_dataset
+  interpolate = [
+    interp for datasets, interp in SUBTABLE_DATASETS.values() if name in datasets
+  ]
+  interpolate = [None] + ([interpolate] if interpolate else [])
   for ps in partition_schema:
-    dt = xarray.open_datatree(f"{path}{os.path.sep}{name}", partition_schema=ps)
-    if xradio:
-      issues = list(check_datatree(dt))
-      assert not issues
-    dt.load()
+    for interp in interpolate:
+      dt = xarray.open_datatree(
+        f"{path}{os.path.sep}{name}", partition_schema=ps, interpolate=interp
+      )
+      if xradio:
+        issues = list(check_datatree(dt))
+        assert not issues
+      for node in dt.subtree:
+        if node.name == "antenna_xds":
+          antenna_names = node.antenna_name.values
+          assert len(antenna_names) == len(np.unique(antenna_names))
+      for node_name, (datasets, _) in SUBTABLE_DATASETS.items():
+        present = any(g.endswith(f"/{node_name}") for g in dt.groups)
+        assert present == (name in datasets), node_name
+      dt.load()
