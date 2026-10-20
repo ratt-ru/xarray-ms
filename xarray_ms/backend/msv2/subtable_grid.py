@@ -28,6 +28,10 @@ if TYPE_CHECKING:
 # for establishing the validity of a subtable row
 MINIMUM_INTERVAL = 1e-6
 
+# Intervals shorter than this fraction of the sampling cadence
+# are considered to describe instantaneous samples
+INSTANTANEOUS_FRACTION = 0.1
+
 
 @dataclass(frozen=True, slots=True)
 class SubtableGrid:
@@ -48,10 +52,16 @@ def effective_interval(
 ) -> npt.NDArray[np.float64]:
   """Returns an interval over which each subtable row is valid.
 
-  Some subtables record zero or near-zero intervals.
-  The median sampling cadence of the subtable is substituted
-  for such intervals, or an infinite interval if the cadence
-  cannot be determined.
+  Some subtables record intervals much shorter than their sampling cadence.
+  For example, POINTING intervals may be zero, while ALMA
+  records 0.048s intervals for WEATHER rows sampled every minute.
+  Such instantaneous samples, with intervals less than
+  :data:`INSTANTANEOUS_FRACTION` of the median sampling cadence of
+  their antenna, are considered valid until the next sample and their
+  intervals are extended to the cadence. The cadence is established per
+  antenna, as antennas (or weather stations) may sample at different rates.
+  Other intervals are retained. If the cadence of an antenna cannot be
+  determined, its zero or near-zero intervals are considered infinite.
 
   Args:
     time: Row times, sorted per antenna.
@@ -61,14 +71,19 @@ def effective_interval(
   Returns:
     Row intervals.
   """
-  if np.all(valid := interval > MINIMUM_INTERVAL):
-    return interval
+  result = np.where(interval > MINIMUM_INTERVAL, interval, np.inf)
+  bounds = np.flatnonzero(antenna_id[1:] != antenna_id[:-1]) + 1
+  starts = np.concatenate([[0], bounds])
+  ends = np.concatenate([bounds, [antenna_id.size]])
 
-  same_antenna = antenna_id[1:] == antenna_id[:-1]
-  diffs = np.diff(time)[same_antenna]
-  diffs = diffs[diffs > 0]
-  cadence = np.median(diffs) if diffs.size > 0 else np.inf
-  return np.where(valid, interval, cadence)
+  for start, end in zip(starts, ends):
+    diffs = np.diff(time[start:end])
+    if (diffs := diffs[diffs > 0]).size > 0:
+      cadence = np.median(diffs)
+      instantaneous = interval[start:end] < INSTANTANEOUS_FRACTION * cadence
+      result[start:end] = np.where(instantaneous, cadence, interval[start:end])
+
+  return result
 
 
 def select_rows(
@@ -316,7 +331,7 @@ def grid_subtable(
   # Measurement Set, omit it if it cannot be gridded unambiguously
   if has_duplicate_keys(time, antenna_id):
     warnings.warn(
-      f"Multiple rows of {index.name} share a (TIME, ANTENNA_ID) tuple, "
+      f"Multiple rows of {index.name} share a (TIME, {index.key_column}) tuple, "
       f"so it is not possible to establish a unique (time, antenna) grid. "
       f"{index.name} will be omitted for antennas {antenna_ids.tolist()} "
       f"over the time span {span}.",
