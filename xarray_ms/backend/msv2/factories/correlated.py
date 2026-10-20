@@ -74,6 +74,16 @@ MSV4_to_MSV2_COLUMN_SCHEMAS = {
   "WEIGHT": MSv2ColumnSchema(
     "WEIGHT_SPECTRUM", ("frequency", "polarization"), np.nan, None
   ),
+  "SIGMA_ROW": MSv2ColumnSchema(
+    "SIGMA",
+    ("frequency", "polarization"),
+    np.nan,
+    None,
+    low_res_dims=("polarization",),
+  ),
+  "SIGMA_SPECTRUM": MSv2ColumnSchema(
+    "SIGMA_SPECTRUM", ("frequency", "polarization"), np.nan, None
+  ),
 }
 
 FIXED_DIMENSION_SIZES = {"uvw_label": 3}
@@ -182,8 +192,8 @@ class CorrelatedFactory(DatasetFactory):
     import pyarrow.compute as pac
     from arcae.lib.arrow_tables import ms_descriptor
 
-    # Ignore all standard msv2 columns, except for CORRECTED_DATA,
-    # CORRECTED_WEIGHT_SPECTRUM, FLOAT_DATA, MODEL_DATA and SIGMA_SPECTRUM
+    # Ignore all standard msv2 columns, except
+    # for CORRECTED_DATA, CORRECTED_WEIGHT_SPECTRUM, FLOAT_DATA and MODEL_DATA
     ignored_msv2_column_set = {
       c for c in ms_descriptor("MAIN", complete=True).keys() if not c.startswith("_")
     }
@@ -192,7 +202,6 @@ class CorrelatedFactory(DatasetFactory):
       "CORRECTED_WEIGHT_SPECTRUM",
       "MODEL_DATA",
       "FLOAT_DATA",
-      "SIGMA_SPECTRUM",
     }
     remaining_columns = set(self._ms_factory.instance.columns())
     remaining_columns -= ignored_msv2_column_set
@@ -363,6 +372,15 @@ class CorrelatedFactory(DatasetFactory):
     else:
       data_vars.append(("WEIGHT", self._variable_from_column("WEIGHT_ROW", dim_sizes)))
       processed_columns.add("WEIGHT_ROW")
+
+    if "SIGMA_SPECTRUM" in self._main_table_desc:
+      sigma = self._variable_from_column("SIGMA_SPECTRUM", dim_sizes)
+      data_vars.append(("SIGMA_SPECTRUM", sigma))
+      processed_columns.add("SIGMA_SPECTRUM")
+    elif "SIGMA" in self._main_table_desc:
+      sigma = self._variable_from_column("SIGMA_ROW", dim_sizes)
+      data_vars.append(("SIGMA_SPECTRUM", sigma))
+      processed_columns.add("SIGMA")
 
     data_vars.extend(self.secondary_variables(processed_columns, dim_sizes))
     field = maybe_impute_field_table(field, partition.field_ids)

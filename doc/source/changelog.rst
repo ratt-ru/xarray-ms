@@ -5,8 +5,10 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
-* Expose the ``MAIN::SIGMA_SPECTRUM`` column, if present, as the
-  ``SIGMA_SPECTRUM`` variable on the correlated dataset (:pr:`195`).
+* Expose the ``SIGMA_SPECTRUM`` variable on the correlated dataset, read from
+  ``MAIN::SIGMA_SPECTRUM`` or, if it is missing, broadcast from ``MAIN::SIGMA``
+  over frequency, as ``WEIGHT`` is. Fix integer selections, e.g. ``isel(baseline_id=1)``,
+  on broadcast variables (:pr:`195`).
 * Re-introduce the simulator's ``phased_array`` option, so that the ``PHASED_ARRAY``
   sub-table is only simulated on request and no longer clutters the documentation (:pr:`194`).
 * Re-enable the documentation's navigation sidebar, listing every page,

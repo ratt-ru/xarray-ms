@@ -297,6 +297,80 @@ def test_low_resolution_read(simmed_ms):
     )
 
 
+def _add_sigma(chunk_desc, data_dict):
+  data_dict = data_dict.copy()
+
+  ddid = chunk_desc.DATA_DESC_ID.item()
+  _, ncorr = map(len, chunk_desc.data_description[ddid])
+  nrow = data_dict["DATA_DESC_ID"][-1].size
+
+  # Generate a ramp function in the SIGMA column
+  shape = (nrow, ncorr)
+  sigma = np.arange(np.prod(shape), dtype=np.float64).reshape(shape)
+  data_dict["SIGMA"] = ("row", sigma)
+
+  return data_dict
+
+
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [
+    {
+      "name": "backend.ms",
+      "data_description": [(8, ["XX", "XY", "YX", "YY"]), (4, ["RR", "LL"])],
+      "transform_data": _add_sigma,
+    }
+  ],
+  indirect=True,
+)
+def test_sigma_broadcast(simmed_ms):
+  """Test that a missing SIGMA_SPECTRUM results in a broadcasted SIGMA column"""
+  dt = xarray.open_datatree(simmed_ms, auto_corrs=True)
+
+  for p in ["000", "001"]:
+    node = dt[f"backend_partition_{p}"]
+    ntime, nbl, nfreq, npol = (
+      node.sizes[d] for d in ("time", "baseline_id", "frequency", "polarization")
+    )
+    values = np.arange(np.prod((ntime, nbl, npol)), dtype=np.float64).reshape(
+      ntime, nbl, 1, npol
+    )
+    assert node.SIGMA_SPECTRUM.dims == (
+      "time",
+      "baseline_id",
+      "frequency",
+      "polarization",
+    )
+    assert_array_equal(
+      np.broadcast_to(values, (ntime, nbl, nfreq, npol)), node.SIGMA_SPECTRUM.values
+    )
+
+
+@pytest.mark.parametrize(
+  "simmed_ms",
+  [
+    {
+      "name": "backend.ms",
+      "data_description": [(8, ["XX", "XY", "YX", "YY"])],
+      "table_desc": {"__remove_columns__": ["WEIGHT_SPECTRUM"]},
+      "transform_data": _remove_weight_spectrum_add_weight,
+    }
+  ],
+  indirect=True,
+)
+def test_broadcast_isel_integers(simmed_ms):
+  """Integer selections on a broadcasted WEIGHT column drop their dimensions"""
+  selection = {"time": 1, "baseline_id": -1, "frequency": slice(2, 5)}
+  dt = xarray.open_datatree(simmed_ms, auto_corrs=True)
+  node = dt["backend_partition_000"]
+  expected = node.WEIGHT.load().isel(**selection)
+
+  dt = xarray.open_datatree(simmed_ms, auto_corrs=True)
+  actual = dt["backend_partition_000"].WEIGHT.isel(**selection).load()
+  assert actual.dims == ("frequency", "polarization")
+  xarray.testing.assert_equal(actual, expected)
+
+
 @pytest.mark.parametrize(
   "simmed_ms",
   [
