@@ -3,8 +3,8 @@
 Changelog
 =========
 
-X.Y.Z (DD-MM-YYYY)
-------------------
+0.5.13 (20-10-2026)
+-------------------
 * Bump the minimum ``arcae`` version to 0.5.8 (:pr:`196`).
 * Expose the ``SIGMA_SPECTRUM`` variable on the correlated dataset, read from
   ``MAIN::SIGMA_SPECTRUM`` or, if it is missing, broadcast from ``MAIN::SIGMA``
