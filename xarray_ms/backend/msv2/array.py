@@ -277,7 +277,9 @@ class SubtableMSv2Array(MSv2Array):
     if reduce(mul, expected_shape, 1) == 0:
       return np.empty(expected_shape, dtype=self.dtype)
     # Map the (time, antenna) coordinates onto subtable rows
-    rows = self._grid_factory.instance.rows[key[:2]]
+    grid_rows = self._grid_factory.instance.rows
+    # Index each axis separately, as the key is an outer indexer
+    rows = grid_rows[key[0]][:, key[1]]
     # A row may occupy multiple grid cells, for example when it is valid
     # over multiple timesteps. Read each row once and then expand
     unique_rows, inverse = np.unique(rows.ravel(), return_inverse=True)

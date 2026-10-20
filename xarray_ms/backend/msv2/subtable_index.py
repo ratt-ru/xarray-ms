@@ -37,6 +37,7 @@ class SubtableIndex:
   _table_factory: SubtableTableFactory
   _table_desc: Dict[str, Any]
   _groups: Dict[PartitionKeyT, Dict[str, npt.NDArray]]
+  _column_types: Dict[Tuple[str, int], Tuple[Tuple[int, ...], np.dtype] | None]
 
   def __init__(
     self,
@@ -46,6 +47,7 @@ class SubtableIndex:
     self._table_factory = table_factory
     self._table_desc = {}
     self._groups = {}
+    self._column_types = {}
 
     try:
       table = table_factory.instance
@@ -108,16 +110,25 @@ class SubtableIndex:
     self, column: str, row: int
   ) -> Tuple[Tuple[int, ...], np.dtype] | None:
     """Returns the shape and dtype of ``column`` in subtable ``row``,
-    or None if the column is absent or its cell is undefined"""
-    if not self.has_column(column):
-      return None
-
+    or None if the column is absent or its cell is undefined.
+    Results are cached, as partitions commonly query the same rows"""
     try:
-      data = self._table_factory.instance.getcol(column, (np.array([row]),))
-    except (pa.lib.ArrowInvalid, TypeError):
-      return None
+      return self._column_types[(column, row)]
+    except KeyError:
+      pass
 
-    return data.shape[1:], data.dtype
+    result: Tuple[Tuple[int, ...], np.dtype] | None = None
+
+    if self.has_column(column):
+      try:
+        data = self._table_factory.instance.getcol(column, (np.array([row]),))
+      except (pa.lib.ArrowInvalid, TypeError):
+        pass
+      else:
+        result = data.shape[1:], data.dtype
+
+    self._column_types[(column, row)] = result
+    return result
 
 
 SubtableIndexFactory: TypeAlias = Multiton[SubtableIndex]

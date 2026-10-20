@@ -61,7 +61,11 @@ class PointingFactory(DatasetFactory):
     half_interval = partition.interval.max() / 2 if partition.interval.size else 0.0
     span = (partition.time.min() - half_interval, partition.time.max() + half_interval)
 
-    # Partitions sharing antennas and time span share the grid
+    # Partitions sharing antennas and time span share the grid.
+    # The grid is not released when the store is closed, but expires.
+    # Lazy reads after expiry recreate the grid, and the subtable index
+    # if necessary. This is rare, as the arrays are usually read soon after
+    # opening, and is preferred to holding grids for the lifetime of the store
     grid_factory = Multiton(
       grid_subtable,
       pointing_factory,

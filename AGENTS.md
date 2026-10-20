@@ -130,6 +130,9 @@ Signal when the grid cannot be made perfectly regular:
   missing for some timesteps; imputed with defaults (benign in most cases).
 - `IrregularSubtableGridWarning` — a time-keyed subtable (e.g. `POINTING`)
   does not populate every `(time, antenna)` cell; imputed with defaults.
+- `DuplicateSubtableRowWarning` — multiple rows of a time-keyed subtable
+  share a `(TIME, ANTENNA_ID)` key, so cannot be gridded; the dataset is
+  omitted rather than failing the open, as these subtables are optional.
 
 #### 6. Time-keyed subtables
 
@@ -149,6 +152,10 @@ that data columns are read for the selected rows only.
   subtable's own timesteps (e.g. `time_pointing`). Datasets named in
   `open_datatree(..., interpolate=...)` are instead gridded on the correlated
   `time` axis with a pyarrow as-of join, taking the most recently valid row.
+
+Selected rows sharing a `(TIME, ANTENNA_ID)` key make the grid ambiguous in
+both modes. `grid_subtable` emits `DuplicateSubtableRowWarning` and the dataset
+is omitted for that partition, unlike `row_map` where duplicates are an error.
 
 `grid_subtable` performs the selection and gridding, converting the grid into
 subtable row numbers. Factories call it through a `Multiton` keyed on

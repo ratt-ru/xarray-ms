@@ -25,7 +25,9 @@ X.Y.Z (DD-MM-YYYY)
   native ``time_pointing`` axis, or on the correlated ``time`` axis
   when ``interpolate="pointing"`` is passed to ``open_datatree``.
   Only the indexing columns of ``POINTING`` are read in full and
-  POINTING data is read lazily (:pr:`185`).
+  POINTING data is read lazily. POINTING rows sharing a ``(TIME, ANTENNA_ID)``
+  key cannot be gridded: a ``DuplicateSubtableRowWarning`` is emitted and the
+  ``pointing_xds`` is omitted, rather than failing to open (:pr:`185`).
 
 0.5.12 (02-10-2026)
 ------------------
