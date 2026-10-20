@@ -36,6 +36,21 @@ CASA_TO_NUMPY_MAP = {
   "STRING": object,
 }
 
+NUMPY_TO_CASA_MAP = {
+  np.bool_: "BOOL",
+  np.int8: "CHAR",
+  np.uint8: "UCHAR",
+  np.int16: "SHORT",
+  np.uint16: "USHORT",
+  np.int32: "INT",
+  np.uint32: "UINT",
+  np.float32: "FLOAT",
+  np.float64: "DOUBLE",
+  np.complex64: "COMPLEX",
+  np.complex128: "DCOMPLEX",
+  object: "STRING",
+}
+
 
 @dataclass
 class ColumnDesc:
