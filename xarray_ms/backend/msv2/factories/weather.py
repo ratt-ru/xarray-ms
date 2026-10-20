@@ -6,7 +6,11 @@ from xarray import Dataset, Variable
 
 from xarray_ms.backend.msv2.antenna_selection import PartitionAntennaSelection
 from xarray_ms.backend.msv2.factories.core import DatasetFactory
-from xarray_ms.backend.msv2.factories.subtable import LazySubtableColumns
+from xarray_ms.backend.msv2.factories.subtable import (
+  LazySubtableColumns,
+  partition_span,
+)
+from xarray_ms.backend.msv2.subtable_grid import select_rows
 from xarray_ms.backend.msv2.subtable_index import SubtableIndexFactory
 
 WEATHER_COLUMNS = (
@@ -29,6 +33,7 @@ def _hpa_to_pa(data: npt.NDArray) -> npt.NDArray:
 # {msv2_units: (msv4_units, transform)}
 UNIT_CONVERSIONS: Dict[str, tuple[str, Callable[[npt.NDArray], npt.NDArray] | None]] = {
   "hPa": ("Pa", _hpa_to_pa),
+  "mbar": ("Pa", _hpa_to_pa),
   "m-2": ("/m^2", None),
 }
 
@@ -47,8 +52,9 @@ class WeatherFactory(DatasetFactory):
     """Generate the weather_xds dataset for a partition.
 
     WEATHER rows are identified either by ``NS_WX_STATION_ID``, in which
-    case all weather stations are included, or by ``ANTENNA_ID``, in which
-    case the weather stations are the partition antennas with WEATHER rows.
+    case the weather stations are all stations, or by ``ANTENNA_ID``, in which
+    case the weather stations are the partition antennas. In both cases,
+    only stations with WEATHER rows relevant to the partition are included.
     WEATHER data is read lazily.
 
     Parameters
@@ -80,11 +86,23 @@ class WeatherFactory(DatasetFactory):
     ((group, index),) = weather.groups.items()
     partition = self._structure_factory.instance[self._partition_key]
 
+    # Stations with rows relevant to the partition
+    key = index["ANTENNA_ID"]
+    candidate_ids = np.unique(key[key >= 0])
+    selected = select_rows(
+      index["TIME"],
+      index["VALID_INTERVAL"],
+      key,
+      candidate_ids,
+      partition_span(partition),
+    )
+    relevant_ids = np.unique(key[selected])
+
     if weather.key_column == "NS_WX_STATION_ID":
-      station_ids, first = np.unique(index["ANTENNA_ID"], return_index=True)
+      station_ids = relevant_ids
       station_names = self._station_names(station_ids)
     else:
-      present = np.isin(selection.antenna_ids, index["ANTENNA_ID"])
+      present = np.isin(selection.antenna_ids, relevant_ids)
       station_ids = selection.antenna_ids[present]
       station_names = antenna_xds.station_name.values[present]
 
@@ -135,6 +153,7 @@ class WeatherFactory(DatasetFactory):
     }
 
     if weather.key_column == "NS_WX_STATION_ID":
+      first = np.searchsorted(key, station_ids, side="left")
       position = self._station_positions(weather, index, first)
     else:
       position = antenna_xds.ANTENNA_POSITION.values[present]
@@ -157,7 +176,7 @@ class WeatherFactory(DatasetFactory):
 
     if "name" in asdm_station.column_names:
       names = asdm_station["name"].to_numpy(zero_copy_only=False).astype(str)
-      if np.all(station_ids < len(names)):
+      if np.all((station_ids >= 0) & (station_ids < len(names))):
         return names[station_ids]
 
     return np.asarray([f"Station_{i}" for i in station_ids])

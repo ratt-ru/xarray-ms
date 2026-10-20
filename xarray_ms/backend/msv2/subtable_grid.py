@@ -28,6 +28,10 @@ if TYPE_CHECKING:
 # for establishing the validity of a subtable row
 MINIMUM_INTERVAL = 1e-6
 
+# Intervals shorter than this fraction of the sampling cadence
+# are considered to describe instantaneous samples
+INSTANTANEOUS_FRACTION = 0.1
+
 
 @dataclass(frozen=True, slots=True)
 class SubtableGrid:
@@ -51,9 +55,13 @@ def effective_interval(
   Some subtables record intervals much shorter than their sampling cadence.
   For example, POINTING intervals may be zero, while ALMA
   records 0.048s intervals for WEATHER rows sampled every minute.
-  Such intervals are extended to the median sampling cadence of the subtable.
-  If the cadence cannot be determined, zero or near-zero intervals
-  are considered infinite.
+  Such instantaneous samples, with intervals less than
+  :data:`INSTANTANEOUS_FRACTION` of the median sampling cadence of
+  their antenna, are considered valid until the next sample and their
+  intervals are extended to the cadence. The cadence is established per
+  antenna, as antennas (or weather stations) may sample at different rates.
+  Other intervals are retained. If the cadence of an antenna cannot be
+  determined, its zero or near-zero intervals are considered infinite.
 
   Args:
     time: Row times, sorted per antenna.
@@ -63,14 +71,19 @@ def effective_interval(
   Returns:
     Row intervals.
   """
-  same_antenna = antenna_id[1:] == antenna_id[:-1]
-  diffs = np.diff(time)[same_antenna]
-  diffs = diffs[diffs > 0]
+  result = np.where(interval > MINIMUM_INTERVAL, interval, np.inf)
+  bounds = np.flatnonzero(antenna_id[1:] != antenna_id[:-1]) + 1
+  starts = np.concatenate([[0], bounds])
+  ends = np.concatenate([bounds, [antenna_id.size]])
 
-  if diffs.size == 0:
-    return np.where(interval > MINIMUM_INTERVAL, interval, np.inf)
+  for start, end in zip(starts, ends):
+    diffs = np.diff(time[start:end])
+    if (diffs := diffs[diffs > 0]).size > 0:
+      cadence = np.median(diffs)
+      instantaneous = interval[start:end] < INSTANTANEOUS_FRACTION * cadence
+      result[start:end] = np.where(instantaneous, cadence, interval[start:end])
 
-  return np.maximum(interval, np.median(diffs))
+  return result
 
 
 def select_rows(

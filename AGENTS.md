@@ -140,7 +140,8 @@ Subtables keyed on `(ANTENNA_ID, TIME)`, such as `POINTING`, `SYSCAL` and
 `WEATHER`, can be much larger than the MAIN table and are not read in full.
 `INDEXED_SUBTABLES` in [entrypoint_utils.py](xarray_ms/backend/msv2/entrypoint_utils.py)
 lists them with their partitioning columns (`SYSCAL` by `SPECTRAL_WINDOW_ID`) and
-candidate key columns (`WEATHER` by `NS_WX_STATION_ID`, if present, else `ANTENNA_ID`). `SubtableIndex` in
+candidate key columns (`WEATHER` by `NS_WX_STATION_ID`, if present and populated,
+else `ANTENNA_ID`). `SubtableIndex` in
 [subtable_index.py](xarray_ms/backend/msv2/subtable_index.py) reads only their
 indexing columns and sorts them with `TablePartitioner`, retaining row numbers so
 that data columns are read for the selected rows only.
@@ -148,9 +149,11 @@ that data columns are read for the selected rows only.
 [subtable_grid.py](xarray_ms/backend/msv2/subtable_grid.py) then:
 
 - selects rows whose validity `[TIME - INTERVAL/2, TIME + INTERVAL/2]` overlaps
-  the partition's time span. `INTERVAL`s shorter than the subtable's median
-  sampling cadence (e.g. zero, or ALMA's 0.048s WEATHER intervals) are extended
-  to the cadence,
+  the partition's time span. `INTERVAL`s less than a tenth of their antenna's
+  (or station's) median sampling cadence (e.g. zero, or ALMA's 0.048s WEATHER
+  intervals) describe instantaneous samples, and are extended to the cadence
+  so that a sample is valid until the next. Rows up to a cadence before the
+  span may therefore be selected,
 - grids them as a `(time, antenna)` array of indices into the selected rows,
   `-1` meaning missing, analogous to `row_map`. By default the grid uses the
   subtable's own timesteps (e.g. `time_pointing`). Datasets named in

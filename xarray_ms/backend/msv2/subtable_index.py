@@ -7,6 +7,7 @@ from typing import Any, Dict, Mapping, Sequence, Tuple, TypeAlias
 import numpy as np
 import numpy.typing as npt
 import pyarrow as pa
+import pyarrow.compute as pc
 from arcae.lib.arrow_tables import Table
 from rarg_python_patterns.multiton import Multiton
 
@@ -30,8 +31,8 @@ class SubtableIndex:
   Some subtables key their rows on another identifier.
   For example, WEATHER may identify weather stations
   by ``NS_WX_STATION_ID`` rather than ``ANTENNA_ID``.
-  The first of ``key_columns`` present in the subtable
-  is used as the key and is presented as ``ANTENNA_ID``.
+  The first of ``key_columns`` present in the subtable and containing
+  non-negative ids is used as the key and is presented as ``ANTENNA_ID``.
 
   Only the indexing columns of the subtable are read. These are
   partitioned on ``partition_columns`` (e.g. ``SPECTRAL_WINDOW_ID``)
@@ -72,14 +73,19 @@ class SubtableIndex:
       return
 
     columns = set(table.columns())
-    self._key_column = next((c for c in key_columns if c in columns), key_columns[-1])
+    key_columns = [c for c in key_columns if c in columns] or [key_columns[-1]]
     partition_columns = list(partition_columns)
-    index_columns = partition_columns + [self._key_column, "TIME", "INTERVAL"]
+    index_columns = partition_columns + key_columns + ["TIME", "INTERVAL"]
 
     if missing := set(index_columns) - columns:
       raise ValueError(f"{table.name()} is missing indexing columns {sorted(missing)}")
 
     index = table.to_arrow(columns=index_columns)
+    # A key column may be present, but unpopulated (-1)
+    self._key_column = next(
+      (c for c in key_columns if pc.max(index[c]).as_py() >= 0), key_columns[-1]
+    )
+    index = index.drop_columns([c for c in key_columns if c != self._key_column])
 
     if self._key_column != "ANTENNA_ID":
       index = index.rename_columns(

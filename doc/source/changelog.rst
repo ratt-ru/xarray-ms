@@ -31,7 +31,10 @@ X.Y.Z (DD-MM-YYYY)
 * Add ``system_calibration_xds`` and ``weather_xds`` support, from the ``SYSCAL``
   and ``WEATHER`` sub-tables, also accepting ``interpolate="sys_cal"`` and
   ``interpolate="weather"``. Weather stations are identified by ``NS_WX_STATION_ID``,
-  where present, and otherwise by ``ANTENNA_ID`` (:pr:`190`).
+  where present and populated, and otherwise by ``ANTENNA_ID``. Only stations with
+  rows relevant to the partition are included. Sub-table rows with intervals
+  less than a tenth of their antenna's sampling cadence are considered
+  instantaneous samples, valid until the next sample (:pr:`190`).
 
 0.5.12 (02-10-2026)
 ------------------

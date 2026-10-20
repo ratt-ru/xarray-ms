@@ -2,6 +2,7 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 import xarray
+from arcae.lib.arrow_tables import Table, ms_descriptor
 
 from xarray_ms.backend.msv2.measures_encoders import EpochCoder
 from xarray_ms.testing.simulator import FIRST_FEB_2023_MJDS
@@ -99,3 +100,55 @@ def test_weather_ns_wx_stations(simmed_ms, interpolate):
 def test_weather_absent(simmed_ms):
   dt = xarray.open_datatree(simmed_ms)
   assert not any(path.endswith("weather_xds") for path in dt.groups)
+
+
+def write_weather(ms, antenna_id, station_id, time):
+  """Write a WEATHER table with an NS_WX_STATION_ID column"""
+  table_desc = ms_descriptor("WEATHER", complete=True)
+  table_desc["NS_WX_STATION_ID"] = {
+    **table_desc["ANTENNA_ID"],
+    "comment": "Weather station id",
+  }
+  with Table.ms_from_descriptor(ms, "WEATHER", table_desc=table_desc) as T:
+    T.addrows(time.size)
+    T.putcol("TIME", time)
+    T.putcol("INTERVAL", np.zeros(time.size))
+    T.putcol("ANTENNA_ID", antenna_id.astype(np.int32))
+    T.putcol("NS_WX_STATION_ID", station_id.astype(np.int32))
+    T.putcol("PRESSURE", np.arange(time.size, dtype=np.float32))
+
+
+@pytest.mark.parametrize(
+  "simmed_ms", [sim_params("weather_unset.ms", None)], indirect=True
+)
+def test_weather_unset_station_ids(simmed_ms):
+  """An unpopulated NS_WX_STATION_ID column falls back to ANTENNA_ID"""
+  time = FIRST_FEB_2023_MJDS + np.arange(NTIME) * DUMP_RATE
+  antenna_id = np.repeat(np.arange(NANTENNA), NTIME)
+  write_weather(
+    simmed_ms, antenna_id, np.full(antenna_id.size, -1), np.tile(time, NANTENNA)
+  )
+
+  dt = xarray.open_datatree(simmed_ms)
+  partition = dt["weather_unset_partition_000"]
+  weather = partition["weather_xds"].ds
+  antenna = partition["antenna_xds"].ds
+  npt.assert_array_equal(weather.station_name, antenna.station_name)
+
+
+@pytest.mark.parametrize(
+  "simmed_ms", [sim_params("weather_irrelevant.ms", None)], indirect=True
+)
+def test_weather_irrelevant_stations(simmed_ms):
+  """Stations with negative ids, or without rows during the
+  partition, are excluded from the station axis"""
+  start = FIRST_FEB_2023_MJDS
+  later = start + 100 * NTIME * DUMP_RATE
+  time = np.array([start, start + DUMP_RATE, start, later, later + DUMP_RATE])
+  station_id = np.array([5, 5, -1, 7, 7])
+  write_weather(simmed_ms, np.full(time.size, -1), station_id, time)
+
+  dt = xarray.open_datatree(simmed_ms)
+  weather = dt["weather_irrelevant_partition_000/weather_xds"].ds
+  npt.assert_array_equal(weather.station_name, ["Station_5"])
+  assert weather.sizes["time_weather"] == 2
