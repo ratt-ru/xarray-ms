@@ -5,6 +5,14 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Expose the ``SIGMA_SPECTRUM`` variable on the correlated dataset, read from
+  ``MAIN::SIGMA_SPECTRUM`` or, if it is missing, broadcast from ``MAIN::SIGMA``
+  over frequency, as ``WEIGHT`` is. Fix integer selections, e.g. ``isel(baseline_id=1)``,
+  on broadcast variables (:pr:`195`).
+* Re-introduce the simulator's ``phased_array`` option, so that the ``PHASED_ARRAY``
+  sub-table is only simulated on request and no longer clutters the documentation (:pr:`194`).
+* Re-enable the documentation's navigation sidebar, listing every page,
+  and narrow both sidebars to give more space to the page content (:issue:`20`, :pr:`193`).
 * Fix ``IndexError`` when selecting correlated data with arrays along both
   ``time`` and ``baseline_id``, e.g. ``isel(time=[0, 2], baseline_id=[0, 1])`` (:pr:`191`).
 * List each antenna once in ``antenna_xds``, using its first FEED row, when the FEED
