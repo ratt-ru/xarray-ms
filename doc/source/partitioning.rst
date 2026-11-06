@@ -157,9 +157,8 @@ and each is labelled in its own stored orientation.
 However, the orientation of a single baseline must be consistent within a partition.
 If a baseline is stored in both orientations within the same partition,
 a :class:`~xarray_ms.errors.PartitioningError` is raised.
-If it is stored in different orientations in different partitions,
-for example in two different observations,
-an :class:`~xarray_ms.errors.InconsistentBaselineOrientationWarning` is issued.
+A baseline may be stored in different orientations in different partitions,
+for example in two different observations.
 Each partition then labels the baseline in its own stored orientation,
 so that its labels differ between partitions.
 

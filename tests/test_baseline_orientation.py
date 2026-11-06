@@ -1,5 +1,7 @@
 """Baselines are labelled in the orientation in which they are stored (#199)"""
 
+import warnings
+
 import numpy as np
 import pytest
 import xarray
@@ -10,7 +12,6 @@ from rarg_python_patterns.multiton import Multiton
 from xarray_ms.backend.msv2.entrypoint_utils import subtable_factory
 from xarray_ms.backend.msv2.structure import MSv2Structure
 from xarray_ms.errors import (
-  InconsistentBaselineOrientationWarning,
   IrregularBaselineGridWarning,
   PartitioningError,
 )
@@ -162,7 +163,8 @@ def test_mixed_between_partitions(tmp_path):
     tmp_path, "flip.ms", nobs=2, transform_data=_transform([(0, 2)], flip_obs=[1])
   )
 
-  with pytest.warns(InconsistentBaselineOrientationWarning, match=r"\(0, 2\)"):
+  with warnings.catch_warnings():
+    warnings.simplefilter("error")
     dt = xarray.open_datatree(ms)
   ref_dt = xarray.open_datatree(ref_ms)
 

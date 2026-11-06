@@ -5,7 +5,6 @@ import dataclasses
 import logging
 import multiprocessing as mp
 import os.path
-import warnings
 from collections import defaultdict
 from functools import partial
 from numbers import Integral
@@ -34,7 +33,6 @@ from xarray_ms.backend.msv2.imputation import (
 )
 from xarray_ms.backend.msv2.partition import PartitionKeyT, TablePartitioner
 from xarray_ms.errors import (
-  InconsistentBaselineOrientationWarning,
   InvalidMeasurementSet,
   InvalidPartitionKey,
   PartitioningError,
@@ -883,17 +881,6 @@ class MSv2Structure(Mapping):
           sub_scan_numbers=time_subscan_nrs,
           row_map=row_map.reshape(utime.size, nbl),
           baseline_flipped=baseline_flipped,
-        )
-
-      if np.any(ms_pair_mixed):
-        warnings.warn(
-          f"Baselines {self.format_pairs(ms_pairs[ms_pair_mixed])} "
-          f"are stored as (ANTENNA1, ANTENNA2) in some partitions "
-          f"and as (ANTENNA2, ANTENNA1) in others. "
-          f"Each partition labels these baselines in the orientation "
-          f"in which they are stored in that partition, "
-          f"so their labels differ between partitions.",
-          InconsistentBaselineOrientationWarning,
         )
 
     logger.info("Reading %s structure in took %fs", ms_name, modtime.time() - start)
