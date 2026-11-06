@@ -10,9 +10,8 @@ X.Y.Z (DD-MM-YYYY)
   ``VISIBILITY`` and ``UVW``. Previously these baselines were labelled as
   ``ANTENNA1 < ANTENNA2`` but their data was left as stored.
   This changes the labels of such baselines.
-  Raise a ``PartitioningError`` if a baseline is stored in both orientations
-  within a partition, and emit an ``InconsistentBaselineOrientationWarning``
-  if its orientation differs between partitions (:issue:`199`, :pr:`200`).
+  Emit an ``InconsistentBaselineOrientationWarning`` if a baseline is stored
+  in both orientations, within a partition or between partitions (:issue:`199`, :pr:`200`).
 
 0.5.13 (20-10-2026)
 -------------------

@@ -162,9 +162,14 @@ def test_mixed_between_partitions(tmp_path):
     tmp_path, "flip.ms", nobs=2, transform_data=_transform([(0, 2)], flip_obs=[1])
   )
 
-  with pytest.warns(InconsistentBaselineOrientationWarning, match=r"\(0, 2\)"):
+  with pytest.warns(
+    InconsistentBaselineOrientationWarning, match=r"\(0, 2\) are labelled"
+  ) as record:
     dt = xarray.open_datatree(ms)
   ref_dt = xarray.open_datatree(ref_ms)
+
+  # Each partition is consistent, so only the cross-partition warning
+  assert not any("stored as both" in str(w.message) for w in record)
 
   pairs = [(r.ds, n.ds) for r, n in zip(ref_dt.children.values(), dt.children.values())]
   assert len(pairs) == 2
@@ -183,12 +188,25 @@ def test_mixed_between_partitions(tmp_path):
 
 
 def test_mixed_within_partition_different_times(tmp_path):
+  """A baseline stored in both orientations within a partition
+  is labelled (p, q) and its data is presented as stored"""
+  ref_ms = _simulate(tmp_path, "ref.ms")
   ms = _simulate(
     tmp_path, "flip.ms", transform_data=_transform([(0, 2)], flip_first_time=True)
   )
 
-  with pytest.raises(PartitioningError, match=r"\(0, 2\) are stored as both"):
-    xarray.open_datatree(ms)
+  with pytest.warns(
+    InconsistentBaselineOrientationWarning, match=r"\(0, 2\) are stored as both"
+  ) as record:
+    dt = xarray.open_datatree(ms)
+  ref_dt = xarray.open_datatree(ref_ms)
+
+  # Labels are the same in every partition, so only the per-partition warning
+  assert not any("in some partitions" in str(w.message) for w in record)
+
+  for ref_node, node in zip(ref_dt.children.values(), dt.children.values()):
+    _assert_same_data(node.ds, ref_node.ds)
+    assert _names(node.ds) == _names(ref_node.ds)
 
 
 def _add_reversed_duplicate(chunk_desc, data_dict):
@@ -205,11 +223,13 @@ def _add_reversed_duplicate(chunk_desc, data_dict):
 
 
 def test_mixed_within_partition_same_time(tmp_path):
-  """Both orientations at the same TIME are not reported as duplicates"""
+  """Both orientations at the same TIME occupy the same grid cell.
+  The duplicate error names the baselines stored in both orientations"""
   ms = _simulate(tmp_path, "flip.ms", transform_data=_add_reversed_duplicate)
 
-  with pytest.raises(PartitioningError, match=r"\(0, 1\) are stored as both"):
-    xarray.open_datatree(ms)
+  with pytest.warns(InconsistentBaselineOrientationWarning):
+    with pytest.raises(PartitioningError, match=r"\(0, 1\) are stored as both"):
+      xarray.open_datatree(ms)
 
 
 def _structure(ms, auto_corrs):

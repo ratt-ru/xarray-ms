@@ -86,8 +86,9 @@ well-defined:
   stored as `ANTENNA1 > ANTENNA2`, and `PartitionData.antenna_pairs` swaps the
   antennas there. Orientation is decided over the whole MS so that partitions
   without rows for a baseline label it consistently. A baseline stored in both
-  orientations within one partition raises `PartitioningError`; across
-  partitions, `InconsistentBaselineOrientationWarning`,
+  orientations within one partition is labelled `(p, q)` with its data as
+  stored, and `InconsistentBaselineOrientationWarning` is emitted for that
+  partition. It is also emitted if labels differ between partitions,
 - antenna IDs are remapped to a contiguous `0..antenna-1` range when
   `FEED::ANTENNA_ID` is not already contiguous.
 
@@ -139,9 +140,9 @@ Signal when the grid cannot be made perfectly regular:
   is set and a per-channel `CHANNEL_WIDTH` column is added.
 - `IrregularBaselineGridWarning` — `row_map` contains `-1`s, i.e. baselines
   missing for some timesteps; imputed with defaults (benign in most cases).
-- `InconsistentBaselineOrientationWarning` — a baseline is stored as
-  `ANTENNA1 > ANTENNA2` in some partitions and the other way round in others,
-  so its labels differ between partitions.
+- `InconsistentBaselineOrientationWarning` — a baseline is stored in both
+  orientations: within a partition, so some of its data does not match its
+  `(p, q)` label, or in different partitions, so its labels differ between them.
 - `IrregularSubtableGridWarning` — a time-keyed subtable (e.g. `POINTING`)
   does not populate every `(time, antenna)` cell; imputed with defaults.
 - `DuplicateSubtableRowWarning` — multiple rows of a time-keyed subtable

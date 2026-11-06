@@ -713,6 +713,9 @@ class MSv2Structure(Mapping):
 
       # Generate a PartitionData variable per partition
       self._partitions = {}
+      # Antenna pair keys labelled in each orientation, per partition
+      flipped_labels: List[npt.NDArray[np.int64]] = []
+      unflipped_labels: List[npt.NDArray[np.int64]] = []
 
       for key, partition in partitions.items():
         dkey = dict(key)
@@ -779,23 +782,20 @@ class MSv2Structure(Mapping):
         nbl = nr_of_baselines(na, auto_corrs)
         chunk = (len(rows) + ncpus - 1) // ncpus
 
-        # Establish the stored orientation of each baseline in the partition.
-        # This must precede the duplicate check below, as a pair stored
-        # both ways round at the same TIME would otherwise be reported
-        # as a duplicate
+        # Establish the stored orientation of each baseline in the partition
         p_pairs, p_pair_flipped, p_pair_mixed = self.pair_orientations(
           pool, ncpus, antenna1, antenna2
         )
 
         if np.any(p_pair_mixed):
-          raise PartitioningError(
+          warnings.warn(
             f"Baselines {self.format_pairs(p_pairs[p_pair_mixed])} "
             f"are stored as both (ANTENNA1, ANTENNA2) and (ANTENNA2, ANTENNA1) "
-            f"in partition {key}. xarray-ms labels each baseline in "
-            f"the orientation in which it is stored and cannot label "
-            f"a baseline stored in both orientations. "
-            f"A finer partition_schema will only help if it separates "
-            f"rows stored in different orientations."
+            f"in partition {key}. These baselines are labelled with "
+            f"ANTENNA1 < ANTENNA2, but their data is presented as stored, "
+            f"so rows stored as ANTENNA1 > ANTENNA2 do not match "
+            f"their labels.",
+            InconsistentBaselineOrientationWarning,
           )
 
         # Use the partition's orientation for baselines with rows in this
@@ -803,11 +803,15 @@ class MSv2Structure(Mapping):
         # Pairs with no rows, or mixed pairs, default to unflipped
         slot1, slot2 = np.triu_indices(na, 0 if auto_corrs else 1)
         slot_pairs = self.pair_keys(feed_antennas[slot1], feed_antennas[slot2])
-        p_found, p_flipped = self.lookup_pairs(p_pairs, p_pair_flipped, slot_pairs)
+        p_found, p_flipped = self.lookup_pairs(
+          p_pairs, p_pair_flipped & ~p_pair_mixed, slot_pairs
+        )
         _, ms_flipped = self.lookup_pairs(
           ms_pairs, ms_pair_flipped & ~ms_pair_mixed, slot_pairs
         )
         baseline_flipped = np.where(p_found, p_flipped, ms_flipped)
+        flipped_labels.append(slot_pairs[baseline_flipped])
+        unflipped_labels.append(slot_pairs[~baseline_flipped])
 
         # Populate row map and interval grids
         row_map = np.full(utime.size * nbl, -1, dtype=np.int64)
@@ -842,6 +846,12 @@ class MSv2Structure(Mapping):
             msg.append(f"Multiple STATE_ID {ustate_ids} are present")
           if len(time_field_ids) > 1:
             msg.append(f"Multiple FIELD_ID {time_field_ids}  are present")
+          if np.any(p_pair_mixed):
+            msg.append(
+              f"Baselines {self.format_pairs(p_pairs[p_pair_mixed])} "
+              f"are stored as both (ANTENNA1, ANTENNA2) and "
+              f"(ANTENNA2, ANTENNA1), possibly at the same TIME"
+            )
 
           msg_str = "\n  ".join(msg)
 
@@ -885,14 +895,18 @@ class MSv2Structure(Mapping):
           baseline_flipped=baseline_flipped,
         )
 
-      if np.any(ms_pair_mixed):
+      # Warn about baselines labelled differently in different partitions
+      inconsistent = np.intersect1d(
+        np.concatenate([np.empty(0, np.int64), *flipped_labels]),
+        np.concatenate([np.empty(0, np.int64), *unflipped_labels]),
+      )
+
+      if len(inconsistent) > 0:
         warnings.warn(
-          f"Baselines {self.format_pairs(ms_pairs[ms_pair_mixed])} "
-          f"are stored as (ANTENNA1, ANTENNA2) in some partitions "
-          f"and as (ANTENNA2, ANTENNA1) in others. "
-          f"Each partition labels these baselines in the orientation "
-          f"in which they are stored in that partition, "
-          f"so their labels differ between partitions.",
+          f"Baselines {self.format_pairs(inconsistent)} "
+          f"are labelled (ANTENNA1, ANTENNA2) in some partitions "
+          f"and (ANTENNA2, ANTENNA1) in others, as they are stored "
+          f"in different orientations in different partitions.",
           InconsistentBaselineOrientationWarning,
         )
 
