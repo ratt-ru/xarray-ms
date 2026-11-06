@@ -29,9 +29,8 @@ class DuplicateSubtableRowWarning(UserWarning):
 
 
 class InconsistentBaselineOrientationWarning(UserWarning):
-  """Warning raised when a baseline is stored as both ``(ANTENNA1, ANTENNA2)``
-  and ``(ANTENNA2, ANTENNA1)``. Either within a partition, so that some of
-  its data does not match its label, or in different partitions,
+  """Warning raised when a baseline is stored as ``(ANTENNA1, ANTENNA2)``
+  in some partitions and as ``(ANTENNA2, ANTENNA1)`` in others,
   so that its labels differ between partitions"""
 
 

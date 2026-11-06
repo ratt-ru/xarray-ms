@@ -152,20 +152,16 @@ for example with :func:`numpy.triu_indices`.
 Baselines without any rows in the MSv2 are labelled with
 ``ANTENNA1 < ANTENNA2``.
 
+Different baselines in a partition may be stored in different orientations,
+and each is labelled in its own stored orientation.
+However, the orientation of a single baseline must be consistent within a partition.
 If a baseline is stored in both orientations within the same partition,
-an :class:`~xarray_ms.errors.InconsistentBaselineOrientationWarning` is issued.
-The baseline is labelled with ``ANTENNA1 < ANTENNA2``,
-but its data is still presented as stored,
-so the rows stored as ``ANTENNA1 > ANTENNA2`` do not match the label.
-If both orientations are stored at the same ``TIME``,
-they occupy the same ``(time, baseline_id)`` grid cell
-and a :class:`~xarray_ms.errors.PartitioningError` is raised.
-
-If a baseline is stored in different orientations in different partitions,
+a :class:`~xarray_ms.errors.PartitioningError` is raised.
+If it is stored in different orientations in different partitions,
 for example in two different observations,
-each partition labels the baseline in its own stored orientation.
-An :class:`~xarray_ms.errors.InconsistentBaselineOrientationWarning`
-is issued, as the labels differ between partitions.
+an :class:`~xarray_ms.errors.InconsistentBaselineOrientationWarning` is issued.
+Each partition then labels the baseline in its own stored orientation,
+so that its labels differ between partitions.
 
 Irregular Grid Warnings
 -----------------------
