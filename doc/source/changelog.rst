@@ -3,6 +3,16 @@
 Changelog
 =========
 
+X.Y.Z (DD-MM-YYYY)
+------------------
+* Label baselines stored as ``ANTENNA1 > ANTENNA2`` in their stored orientation,
+  so that ``baseline_antenna1_name`` and ``baseline_antenna2_name`` match their
+  ``VISIBILITY`` and ``UVW``. Previously these baselines were labelled as
+  ``ANTENNA1 < ANTENNA2`` but their data was left as stored.
+  This changes the labels of such baselines.
+  Raise a ``PartitioningError`` if a baseline is stored in both orientations
+  within a partition (:issue:`199`, :pr:`200`).
+
 0.5.13 (20-10-2026)
 -------------------
 * Bump the minimum ``arcae`` version to 0.5.8 (:pr:`196`).

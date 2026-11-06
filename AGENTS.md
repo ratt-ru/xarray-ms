@@ -80,9 +80,20 @@ well-defined:
 
 - auto-correlations are dropped if the canonical grid excludes them,
 - antenna pairs with `ANTENNA1 > ANTENNA2` are swapped to the upper-triangle
-  convention,
+  convention. This only chooses the slot: the data is not conjugated, so the
+  baseline coordinates follow the stored orientation instead.
+  `PartitionData.baseline_flipped` records, per slot, whether the baseline is
+  stored as `ANTENNA1 > ANTENNA2`, and `PartitionData.antenna_pairs` swaps the
+  antennas there. Orientation is decided over the whole MS so that partitions
+  without rows for a baseline label it consistently. A baseline stored in both
+  orientations within one partition raises `PartitioningError`. Across
+  partitions it is allowed, silently, and each partition labels it as stored,
 - antenna IDs are remapped to a contiguous `0..antenna-1` range when
   `FEED::ANTENNA_ID` is not already contiguous.
+
+Identify baselines through `baseline_antenna{1,2}_name`, never through
+`baseline_id` or `np.triu_indices`: baselines are ordered by upper-triangular
+slot, but the antenna order within a baseline is not fixed.
 
 Two rows landing on the same `(time, baseline_id)` cell is an error: it means the
 partition cannot be expressed as a grid, and `PartitioningError` is raised. The

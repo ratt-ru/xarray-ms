@@ -201,6 +201,9 @@ class PartitionData:
 
   # Row to baseline map
   row_map: npt.NDArray[np.int64]
+  # Per upper-triangular baseline slot, True if the baseline
+  # is stored as ANTENNA1 > ANTENNA2
+  baseline_flipped: npt.NDArray[np.bool_]
 
   @property
   def ntime(self) -> int:
@@ -229,10 +232,13 @@ class PartitionData:
 
   @property
   def antenna_pairs(self) -> Tuple[npt.NDArray[np.int32], npt.NDArray[np.int32]]:
-    """Return per-baseline antenna pairs"""
+    """Return per-baseline antenna pairs, in the orientation
+    in which each baseline is stored in the Measurement Set"""
     a1, a2 = np.triu_indices(self.na, 0 if self.auto_corrs else 1)
     aids = np.asarray(self.antenna_ids, np.int32)
-    return aids[a1], aids[a2]
+    a1, a2 = aids[a1], aids[a2]
+    flipped = self.baseline_flipped
+    return np.where(flipped, a2, a1), np.where(flipped, a1, a2)
 
 
 class MSv2Structure(Mapping):
@@ -471,6 +477,77 @@ class MSv2Structure(Mapping):
     return np.unique(antenna_ids[mask])
 
   @staticmethod
+  def pair_keys(
+    lo: npt.NDArray[np.integer], hi: npt.NDArray[np.integer]
+  ) -> npt.NDArray[np.int64]:
+    """Encodes unordered antenna pairs ``lo <= hi`` as int64 keys"""
+    return (lo.astype(np.int64) << 32) | hi.astype(np.int64)
+
+  @staticmethod
+  def pair_orientations(
+    pool: cf.Executor,
+    ncpus: int,
+    antenna1: npt.NDArray[np.integer],
+    antenna2: npt.NDArray[np.integer],
+  ) -> Tuple[npt.NDArray[np.int64], npt.NDArray[np.bool_], npt.NDArray[np.bool_]]:
+    """Classifies the unordered antenna pairs of the given rows
+    by the orientation in which they are stored.
+
+    Returns:
+      A tuple :code:`(keys, flipped, mixed)` where :code:`keys` are the
+      sorted unique pair keys produced by :meth:`pair_keys`,
+      :code:`flipped` is True where a pair is always stored as
+      ``ANTENNA1 > ANTENNA2`` and :code:`mixed` is True where a pair
+      is stored in both orientations.
+    """
+
+    def chunk_codes(a1, a2):
+      flipped = a1 > a2
+      keys = MSv2Structure.pair_keys(np.minimum(a1, a2), np.maximum(a1, a2))
+      return np.unique((keys << 1) | flipped)
+
+    chunk = max((len(antenna1) + ncpus - 1) // ncpus, 1)
+    codes = list(
+      pool.map(
+        chunk_codes,
+        partition_args(antenna1, chunk),
+        partition_args(antenna2, chunk),
+      )
+    )
+    codes = np.unique(np.concatenate(codes)) if codes else np.empty(0, np.int64)
+    keys, first, counts = np.unique(codes >> 1, return_index=True, return_counts=True)
+    # Mixed pairs have codes ending in both 0 and 1:
+    # the first of these is unflipped
+    return keys, (codes[first] & 1).astype(np.bool_), counts > 1
+
+  @staticmethod
+  def lookup_pairs(
+    keys: npt.NDArray[np.int64],
+    values: npt.NDArray[np.bool_],
+    query: npt.NDArray[np.int64],
+  ) -> Tuple[npt.NDArray[np.bool_], npt.NDArray[np.bool_]]:
+    """Looks up :code:`query` keys in sorted :code:`keys`.
+
+    Returns:
+      A tuple :code:`(found, value)`, where :code:`value`
+      is False if the query key was not found.
+    """
+    if len(keys) == 0:
+      false = np.zeros(query.shape, np.bool_)
+      return false, false.copy()
+    idx = np.minimum(np.searchsorted(keys, query), len(keys) - 1)
+    found = keys[idx] == query
+    return found, values[idx] & found
+
+  @staticmethod
+  def format_pairs(keys: npt.NDArray[np.int64], limit: int = 10) -> str:
+    """Formats pair keys as a string of ``(ANTENNA1, ANTENNA2)`` tuples"""
+    pairs = [f"({k >> 32}, {k & 0xFFFFFFFF})" for k in keys[:limit].tolist()]
+    if len(keys) > limit:
+      pairs.append(f"... and {len(keys) - limit} more")
+    return ", ".join(pairs)
+
+  @staticmethod
   def gen_row_interval_grids(
     time_ids: npt.NDArray[np.int32],
     antenna1: npt.NDArray[np.int32],
@@ -495,9 +572,12 @@ class MSv2Structure(Mapping):
       rows = rows[mask]
       intervals = intervals[mask]
 
-    # Normalise the baseline direction
-    if np.any(mask := antenna1 > antenna2):
-      antenna1[mask], antenna2[mask] = antenna2[mask], antenna1[mask]
+    # Place ANTENNA1 > ANTENNA2 rows in their upper-triangular slot.
+    # This only chooses the slot: the baseline's stored orientation
+    # is recorded in PartitionData.baseline_flipped.
+    # Copy, rather than swap in place, as the inputs are views
+    # of the partition's sorted columns
+    antenna1, antenna2 = np.minimum(antenna1, antenna2), np.maximum(antenna1, antenna2)
 
     # Maybe normalise the antenna id's to np.arange(feed_antennas)
     normed_antennas = np.arange(feed_antennas.size, dtype=feed_antennas.dtype)
@@ -573,6 +653,15 @@ class MSv2Structure(Mapping):
 
     ncpus = mp.cpu_count()
     with cf.ThreadPoolExecutor(max_workers=ncpus) as pool:
+      # Decide the orientation of each baseline over the whole
+      # Measurement Set, so that baselines are labelled consistently
+      # in partitions that lack rows for them
+      ms_pairs, ms_pair_flipped, ms_pair_mixed = self.pair_orientations(
+        pool,
+        ncpus,
+        arrow_table["ANTENNA1"].to_numpy(),
+        arrow_table["ANTENNA2"].to_numpy(),
+      )
 
       def subtable_column_group(s):
         """Return the group that the subtable column should be assigned to"""
@@ -688,6 +777,36 @@ class MSv2Structure(Mapping):
         nbl = nr_of_baselines(na, auto_corrs)
         chunk = (len(rows) + ncpus - 1) // ncpus
 
+        # Establish the stored orientation of each baseline in the partition.
+        # This must precede the duplicate check below, as a pair stored
+        # both ways round at the same TIME would otherwise be reported
+        # as a duplicate
+        p_pairs, p_pair_flipped, p_pair_mixed = self.pair_orientations(
+          pool, ncpus, antenna1, antenna2
+        )
+
+        if np.any(p_pair_mixed):
+          raise PartitioningError(
+            f"Baselines {self.format_pairs(p_pairs[p_pair_mixed])} "
+            f"are stored as both (ANTENNA1, ANTENNA2) and (ANTENNA2, ANTENNA1) "
+            f"in partition {key}. xarray-ms labels each baseline in "
+            f"the orientation in which it is stored and cannot label "
+            f"a baseline stored in both orientations. "
+            f"A finer partition_schema will only help if it separates "
+            f"rows stored in different orientations."
+          )
+
+        # Use the partition's orientation for baselines with rows in this
+        # partition, otherwise the orientation over the whole Measurement Set.
+        # Pairs with no rows, or mixed pairs, default to unflipped
+        slot1, slot2 = np.triu_indices(na, 0 if auto_corrs else 1)
+        slot_pairs = self.pair_keys(feed_antennas[slot1], feed_antennas[slot2])
+        p_found, p_flipped = self.lookup_pairs(p_pairs, p_pair_flipped, slot_pairs)
+        _, ms_flipped = self.lookup_pairs(
+          ms_pairs, ms_pair_flipped & ~ms_pair_mixed, slot_pairs
+        )
+        baseline_flipped = np.where(p_found, p_flipped, ms_flipped)
+
         # Populate row map and interval grids
         row_map = np.full(utime.size * nbl, -1, dtype=np.int64)
         interval_grid = np.full(utime.size * nbl, -1.0, dtype=np.float64)
@@ -761,6 +880,7 @@ class MSv2Structure(Mapping):
           obs_mode=str(dkey["OBS_MODE"]),
           sub_scan_numbers=time_subscan_nrs,
           row_map=row_map.reshape(utime.size, nbl),
+          baseline_flipped=baseline_flipped,
         )
 
     logger.info("Reading %s structure in took %fs", ms_name, modtime.time() - start)
