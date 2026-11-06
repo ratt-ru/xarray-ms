@@ -131,6 +131,36 @@ auto-correlations are requested, but none are present in the data.
 ``xarray-ms`` will impute these missing data points with default values
 (``nan`` in the case of data, ``1`` in the case of flags).
 
+.. _baseline-orientation:
+
+Baseline Orientation
+--------------------
+
+``baseline_id`` orders baselines in upper-triangular order of their antennas,
+but each baseline is labelled in the orientation in which it is stored in the MSv2.
+If the MSv2 stores a baseline as ``ANTENNA1 > ANTENNA2``,
+``baseline_antenna1_name`` holds the name of ``ANTENNA1``
+and ``baseline_antenna2_name`` that of ``ANTENNA2``, and the data is exactly as stored:
+``VISIBILITY`` is not conjugated and ``UVW`` is not negated.
+Most Measurement Sets store ``ANTENNA1 <= ANTENNA2``, for which this makes no difference.
+
+Always identify the antennas of a baseline through ``baseline_antenna1_name``
+and ``baseline_antenna2_name``.
+Do not assume they can be reconstructed from ``baseline_id``,
+for example with :func:`numpy.triu_indices`.
+
+Baselines without any rows in the MSv2 are labelled with
+``ANTENNA1 < ANTENNA2``.
+
+The orientation of a baseline must be consistent within a partition.
+If a baseline is stored in both orientations within the same partition,
+a :class:`~xarray_ms.errors.PartitioningError` is raised.
+If it is stored in different orientations in different partitions,
+for example in two different observations,
+an :class:`~xarray_ms.errors.InconsistentBaselineOrientationWarning` is issued.
+Each partition then labels the baseline in its own stored orientation,
+so that its labels differ between partitions.
+
 Irregular Grid Warnings
 -----------------------
 

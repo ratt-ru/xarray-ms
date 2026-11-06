@@ -28,6 +28,12 @@ class DuplicateSubtableRowWarning(UserWarning):
   The associated dataset is omitted"""
 
 
+class InconsistentBaselineOrientationWarning(UserWarning):
+  """Warning raised when a baseline is stored as ``(ANTENNA1, ANTENNA2)``
+  in some partitions and as ``(ANTENNA2, ANTENNA1)`` in others,
+  so that its labels differ between partitions"""
+
+
 class MissingMetadataWarning(UserWarning):
   """Warning raised when metadata is missing"""
 
