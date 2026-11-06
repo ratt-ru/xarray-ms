@@ -12,7 +12,7 @@ X.Y.Z (DD-MM-YYYY)
   This changes the labels of such baselines.
   Raise a ``PartitioningError`` if a baseline is stored in both orientations
   within a partition, and emit an ``InconsistentBaselineOrientationWarning``
-  if its orientation differs between partitions (:issue:`199`, :pr:`PRNUM`).
+  if its orientation differs between partitions (:issue:`199`, :pr:`200`).
 
 0.5.13 (20-10-2026)
 -------------------
