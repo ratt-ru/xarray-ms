@@ -115,7 +115,11 @@ while a real weight is Hermitian. So a secondary column of unknown orientation
 is omitted, with a `BaselineOrientationWarning`, from partitions that contain
 flipped cells, unless the user declares one via
 `open_datatree(..., baseline_orientation={...})`. Every orientation is its own
-inverse, so the same transform applies on write.
+inverse, so the same transform applies on write, in `MainMSv2Array.__setitem__`.
+Writes cannot omit data, so `MSv2Store.prepare_variable` raises
+`BaselineOrientationError` for a column of unknown orientation, and
+`__setitem__` raises it for a cross-hand without its partner.
+`baseline_orientation` travels in the dataset encoding.
 
 #### 4. `-1` means "missing row"
 

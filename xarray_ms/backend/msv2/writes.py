@@ -317,6 +317,7 @@ def msv2_store_from_dataset(ds: Dataset, region="auto") -> MSv2Store:
     structure_factory=store_args.structure_factory,
     write_region=region,
     owns_factories=False,
+    baseline_orientation=ds.encoding.get("baseline_orientation"),
   )
 
 

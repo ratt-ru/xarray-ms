@@ -16,7 +16,7 @@ from xarray.core.indexing import (
 )
 
 from xarray_ms.casa_types import BaselineOrientation
-from xarray_ms.errors import MismatchedWriteRegion
+from xarray_ms.errors import BaselineOrientationError, MismatchedWriteRegion
 from xarray_ms.msv4_types import MAIN_PREFIX_DIMS
 
 if TYPE_CHECKING:
@@ -174,8 +174,12 @@ class MainMSv2Array(MSv2Array):
 
     assert len(shape) >= len(MAIN_PREFIX_DIMS), f"{MAIN_PREFIX_DIMS} required"
     assert pol_axis is None or 2 <= pol_axis < len(shape)
+    # Write targets have the shape of the written region,
+    # but pol_perm spans every correlation of the partition
     assert pol_axis is None or (
-      self._pol_perm is not None and self._pol_perm.shape == (shape[pol_axis],)
+      self._pol_perm is not None
+      and self._pol_perm.ndim == 1
+      and self._pol_perm.size >= shape[pol_axis]
     )
 
   def __getitem__(self, key) -> npt.NDArray:
@@ -231,13 +235,49 @@ class MainMSv2Array(MSv2Array):
     return self._transform(result) if self._transform else result
 
   def __setitem__(self, key, value: npt.NDArray) -> None:
-    key = expanded_indexer(key, len(self.shape))
+    key, _ = self.promote_integer_dims(expanded_indexer(key, len(self.shape)))
     expected_shape = tuple(slice_length(k, s, "write") for k, s in zip(key, self.shape))
-    rows = self._structure_factory.instance[self._partition].row_map[key[:2]]
-    row_key = (rows.ravel(),) + key[2:]
-    row_shape = (rows.size,) + expected_shape[2:]
+    # Index each axis separately, as the key is an outer indexer
+    partition = self._structure_factory.instance[self._partition]
+    rows = partition.row_map[key[0]][:, key[1]]
+    flip = self._flipped_cells(partition.flipped, key)
     value = self._transform(value) if self._transform else value
-    value = value.reshape(row_shape)
+    value = np.reshape(value, rows.shape + expected_shape[2:])
+
+    if flip is None:
+      self._putcol(rows, key, value)
+    elif (pol_axis := self._hermitian_pol_axis) is not None:
+      # Flipped cells hold the correlations measured on the reversed
+      # baseline, so write them separately, onto those correlations
+      assert self._pol_perm is not None
+      # The key indexes the partition's correlations, not the region's
+      requested = np.arange(self._pol_perm.size)[key[pol_axis]]
+      partners = self._pol_perm[requested]
+      if np.any(partners < 0):
+        unpaired = requested[partners < 0].tolist()
+        raise BaselineOrientationError(
+          f"Cannot write correlations {unpaired} of {self._column} "
+          f"to baselines stored as ANTENNA1 > ANTENNA2 in partition "
+          f"{self._partition}, as the correlations measured on the "
+          f"reversed baselines are not present"
+        )
+      flipped_key = list(key)
+      flipped_key[pol_axis] = partners
+      self._putcol(np.where(flip, -1, rows), key, value)
+      if np.iscomplexobj(value):
+        value = np.conj(value)
+      self._putcol(np.where(flip, rows, -1), tuple(flipped_key), value)
+    else:
+      # Every orientation is its own inverse
+      self._putcol(rows, key, self._orient(np.array(value, copy=True), flip))
+
+  def _putcol(self, rows: npt.NDArray, key, value: npt.NDArray) -> None:
+    """Writes ``(time, baseline_id, ...)`` values to ``rows``, a
+    ``(time, baseline_id)`` array of row numbers. arcae skips negative rows"""
+    if np.all(rows < 0):
+      return
+    row_key = (rows.ravel(),) + tuple(key[2:])
+    value = value.reshape((rows.size,) + value.shape[2:])
     with rethrow_arcae_exceptions():
       self._table_factory.instance.putcol(self._column, value, index=row_key)
 

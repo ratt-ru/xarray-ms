@@ -14,6 +14,12 @@ X.Y.Z (DD-MM-YYYY)
   orientation is declared with ``baseline_orientation``.
   A baseline stored in both orientations at the same time now raises
   a specific ``PartitioningError`` (:issue:`199`, :pr:`201`).
+* Convert values written to rows stored as ``ANTENNA1 > ANTENNA2`` back to
+  the stored orientation, the inverse of the conversion on read.
+  ``baseline_orientation`` is retained in the dataset encoding for writes.
+  Writing a column of unknown orientation, or a cross-hand correlation
+  whose partner is absent, to such rows raises a
+  ``BaselineOrientationError`` (:issue:`199`).
 
 0.5.13 (20-10-2026)
 -------------------

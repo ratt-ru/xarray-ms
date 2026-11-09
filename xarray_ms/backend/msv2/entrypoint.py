@@ -40,7 +40,12 @@ from xarray_ms.backend.msv2.structure import (
   MSv2Structure,
   MSv2StructureFactory,
 )
-from xarray_ms.errors import FrameConversionWarning, InvalidPartitionKey
+from xarray_ms.casa_types import BaselineOrientation
+from xarray_ms.errors import (
+  BaselineOrientationError,
+  FrameConversionWarning,
+  InvalidPartitionKey,
+)
 from xarray_ms.msv4_types import CORRELATED_DATASET_TYPES
 from xarray_ms.utils import format_docstring, function_arguments
 
@@ -59,7 +64,6 @@ if TYPE_CHECKING:
     SubtableIndexFactory,
     SubtableTableFactory,
   )
-  from xarray_ms.casa_types import BaselineOrientation
 
 
 WriteRegionT = Mapping[str, slice | Literal["auto"]] | Literal["auto"]
@@ -334,6 +338,9 @@ class MSv2Store(AbstractWritableDataStore):
         "partition_schema": self._partition_schema,
       },
       "partition_key": self._partition_key,
+      "baseline_orientation": {
+        c: o.value for c, o in self._baseline_orientation.items()
+      },
     }
 
   def set_dimensions(self, variables, unlimited_dims=None):
@@ -374,6 +381,28 @@ class MSv2Store(AbstractWritableDataStore):
 
     Overrides AbstractWritableDataStore.prepare_variable.
     """
+    partition = self._structure_factory.instance[self._partition_key]
+    orientation = BaselineOrientation.INVARIANT
+    pol_axis = pol_perm = None
+
+    # Values on baselines stored as ANTENNA1 > ANTENNA2 must be
+    # converted back to that orientation
+    if partition.flipped is not None:
+      factory = self.main_dataset_factory()
+      if (resolved := factory.column_orientation(name)) is None:
+        raise BaselineOrientationError(
+          f"Cannot write {name} to partition {self._partition_key}, "
+          f"which contains baselines stored as ANTENNA1 > ANTENNA2. "
+          f"It is not known how {name} transforms when its baseline "
+          f"is reversed. Specify this with open_datatree(..., "
+          f"baseline_orientation={{{name!r}: 'hermitian' | "
+          f"'antisymmetric' | 'invariant'}})"
+        )
+      orientation = resolved
+      if "polarization" in variable.dims:
+        pol_axis = variable.dims.index("polarization")
+        pol_perm = factory.polarisations().transpose_permutation()
+
     target = MainMSv2Array(
       self._table_factory,
       self._structure_factory,
@@ -381,6 +410,9 @@ class MSv2Store(AbstractWritableDataStore):
       name,
       variable.shape,
       variable.dtype,
+      orientation=orientation,
+      pol_axis=pol_axis,
+      pol_perm=pol_perm,
     )
     return target, variable.data
 

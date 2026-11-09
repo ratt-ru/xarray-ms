@@ -193,6 +193,20 @@ as each ``(time, baseline_id)`` cell is converted independently.
 A baseline stored in both orientations at the *same* time
 raises a :class:`~xarray_ms.errors.PartitioningError`.
 
+Writes apply the same conversion, as every orientation is its own inverse:
+values written on the upper-triangular baseline are stored in the
+orientation of the existing row.
+As data cannot be omitted on write, a
+:class:`~xarray_ms.errors.BaselineOrientationError` is raised
+when writing to partitions that contain baselines stored as
+``ANTENNA1 > ANTENNA2``
+
+* a column whose orientation is unknown. Declare it with
+  ``baseline_orientation`` when opening the Measurement Set,
+  even if the column will only be created on write.
+* a cross-hand correlation whose partner is absent, for example ``XY``
+  without ``YX``.
+
 Irregular Grid Warnings
 -----------------------
 

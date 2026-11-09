@@ -126,6 +126,11 @@ SECONDARY_COLUMN_ORIENTATIONS = {
   "CORRECTED_WEIGHT_SPECTRUM": BaselineOrientation.HERMITIAN,
 }
 
+# How the standard MAIN columns transform when their baseline is reversed
+STANDARD_COLUMN_ORIENTATIONS = {
+  schema.name: schema.orientation for schema in MSV4_to_MSV2_COLUMN_SCHEMAS.values()
+}
+
 FIXED_DIMENSION_SIZES = {"uvw_label": 3}
 
 # casacore ColumnDesc::FixedShape option bit
@@ -388,6 +393,19 @@ class CorrelatedFactory(DatasetFactory):
       return BaselineOrientation.ANTISYMMETRIC
     return None
 
+  def column_orientation(self, column: str) -> BaselineOrientation | None:
+    """Returns how the MAIN table ``column`` transforms when its
+    baseline is reversed, or None if this is not known"""
+    if (orientation := STANDARD_COLUMN_ORIENTATIONS.get(column)) is not None:
+      return orientation
+    return self._secondary_orientation(column, self._coder_factory.create(column))
+
+  def polarisations(self) -> Polarisations:
+    """Returns the correlations of this partition"""
+    pol_id = self._structure_factory.instance[self._partition_key].pol_id
+    pol = self._subtable_factories["POLARIZATION"].instance.take([pol_id])
+    return Polarisations.from_values(pol["CORR_TYPE"][0].as_py())
+
   def get_variables(self) -> Mapping[str, Variable]:
     structure = self._structure_factory.instance
     partition = structure[self._partition_key]
@@ -400,9 +418,7 @@ class CorrelatedFactory(DatasetFactory):
     ant2_names = ant_names[ant2]
 
     spw_id = partition.spw_id
-    pol_id = partition.pol_id
     spw = self._subtable_factories["SPECTRAL_WINDOW"].instance.take([spw_id])
-    pol = self._subtable_factories["POLARIZATION"].instance.take([pol_id])
     field = self._subtable_factories["FIELD"].instance
     partition_intents = list(s.strip() for s in partition.obs_mode.split(","))
 
@@ -415,7 +431,7 @@ class CorrelatedFactory(DatasetFactory):
     freq_coder = spw_coder_factory.create("CHAN_FREQ")
     ref_freq_coder = spw_coder_factory.create("REF_FREQUENCY")
 
-    polarisations = Polarisations.from_values(pol["CORR_TYPE"][0].as_py())
+    polarisations = self.polarisations()
     corr_type = polarisations.to_str()
     pol_perm = polarisations.transpose_permutation()
 

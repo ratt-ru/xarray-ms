@@ -18,6 +18,13 @@ class BaselineOrientationWarning(UserWarning):
   upper-triangular orientation"""
 
 
+class BaselineOrientationError(ValueError):
+  """Raised when data cannot be written to baselines stored as
+  ``ANTENNA1 > ANTENNA2``, because it is not known how it transforms
+  when its baseline is reversed, or because the transformed
+  correlations are not present"""
+
+
 class IrregularChannelGridWarning(IrregularGridWarning):
   """Warning raised when an irregular channel grid
   is encountered"""
