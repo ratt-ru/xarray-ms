@@ -32,6 +32,9 @@ X.Y.Z (DD-MM-YYYY)
   Writing a column of unknown orientation, or a cross-hand correlation
   whose partner is absent, to such rows raises a
   ``BaselineOrientationError`` (:issue:`199`).
+* Write the correlated data of the standard data groups to its MSv2 column,
+  ``VISIBILITY_CORRECTED`` to ``CORRECTED_DATA`` and ``VISIBILITY_MODEL``
+  to ``MODEL_DATA``, rather than creating new columns.
 
 0.5.13 (20-10-2026)
 -------------------

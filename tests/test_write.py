@@ -159,6 +159,41 @@ def test_indexed_write(simmed_ms):
         ds.to_msv2(compute=True)
 
 
+@pytest.mark.parametrize(
+  "simmed_ms", [{"name": "standard-data-groups.ms"}], indirect=True
+)
+def test_write_standard_data_groups(simmed_ms):
+  """The correlated data of the standard data groups is written
+  to its MSv2 column, e.g. VISIBILITY_CORRECTED to CORRECTED_DATA"""
+  values = {"VISIBILITY_CORRECTED": 4 + 5j, "VISIBILITY_MODEL": 6 + 7j}
+
+  with xarray.open_datatree(simmed_ms, auto_corrs=True) as xdt:
+    for node in xdt.subtree:
+      if node.attrs.get("type") in CORRELATED_DATASET_TYPES:
+        assert not set(values).intersection(node.ds.data_vars)
+        ds = node.ds.assign(
+          {v: xarray.full_like(node.VISIBILITY, x) for v, x in values.items()}
+        )
+        xdt[node.path] = DataTree(ds)
+
+    xdt.sync_msv2()
+    xdt.to_msv2()
+
+  with arcae.table(simmed_ms) as T:
+    columns = set(T.columns())
+    assert {"CORRECTED_DATA", "MODEL_DATA"}.issubset(columns)
+    assert not set(values).intersection(columns)
+    np.testing.assert_array_equal(T.getcol("CORRECTED_DATA"), 4 + 5j)
+    np.testing.assert_array_equal(T.getcol("MODEL_DATA"), 6 + 7j)
+
+  with xarray.open_datatree(simmed_ms, auto_corrs=True) as xdt:
+    for node in xdt.subtree:
+      if node.attrs.get("type") in CORRELATED_DATASET_TYPES:
+        assert {"base", "corrected", "model"} == set(node.attrs["data_groups"])
+        for v, x in values.items():
+          np.testing.assert_array_equal(node[v], x)
+
+
 @pytest.mark.parametrize("simmed_ms", [{"name": "canonical-column.ms"}], indirect=True)
 def test_sync_canonical_column(simmed_ms):
   """Columns in the canonical MAIN descriptor that are absent from the

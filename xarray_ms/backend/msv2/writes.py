@@ -13,6 +13,10 @@ from xarray.backends.common import ArrayWriter
 
 from xarray_ms.backend.msv2.entrypoint import MSv2Store
 from xarray_ms.backend.msv2.entrypoint_utils import CommonStoreArgs
+from xarray_ms.backend.msv2.factories.correlated import (
+  STANDARD_DATA_GROUPS,
+  MSV4_to_MSV2_COLUMN_SCHEMAS,
+)
 from xarray_ms.casa_types import NUMPY_TO_CASA_MAP
 from xarray_ms.errors import (
   ColumnCreationError,
@@ -44,9 +48,11 @@ DataVariableInfoMap = Dict[Tuple[str, str], DataVariableInfo]
 
 MSV4_WRITE_MAP = {
   "UVW": "UVW",
-  "VISIBILITY": "DATA",
   "WEIGHT": "WEIGHT_SPECTRUM",
   "FLAG": "FLAG",
+  # The correlated data of the standard data groups,
+  # e.g. VISIBILITY -> DATA, VISIBILITY_CORRECTED -> CORRECTED_DATA
+  **{v: MSV4_to_MSV2_COLUMN_SCHEMAS[v].name for v in STANDARD_DATA_GROUPS.values()},
 }
 
 

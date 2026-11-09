@@ -140,13 +140,13 @@ def test_write_partial_polarization_region(reference_and_flipped):
   indirect=True,
 )
 def test_write_secondary_columns(reference_and_flipped):
-  """Known and declared secondary columns are converted on write.
+  """Standard data groups and declared secondary columns are converted on write.
   Columns of unknown orientation cannot be written to flipped baselines"""
   _, flipped = reference_and_flipped
 
   def add_columns(ds):
     return ds.assign(
-      CORRECTED_DATA=ds.VISIBILITY * 3,
+      VISIBILITY_CORRECTED=ds.VISIBILITY * 3,
       RESIDUAL=ds.VISIBILITY - 1,
     )
 
@@ -155,7 +155,7 @@ def test_write_secondary_columns(reference_and_flipped):
   _write_all(flipped, add_columns, baseline_orientation=orientation)
 
   ds = _open(flipped, baseline_orientation=orientation).load()
-  for v in ("CORRECTED_DATA", "RESIDUAL", "BASELINE_PHASE"):
+  for v in ("VISIBILITY_CORRECTED", "RESIDUAL", "BASELINE_PHASE"):
     assert_array_equal(ds[v].values, expected[v].values)
 
   raw, ant1, ant2 = _raw(flipped, "RESIDUAL")
