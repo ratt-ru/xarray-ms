@@ -86,7 +86,10 @@ def resolve_interpolate(interpolate: str | Iterable[str] | None) -> FrozenSet[st
 
 
 def resolve_baseline_orientation(
-  baseline_orientation: Mapping[str, str | BaselineOrientation] | None,
+  baseline_orientation: Mapping[
+    str, Literal["invariant", "hermitian", "antisymmetric"] | BaselineOrientation
+  ]
+  | None,
 ) -> Dict[str, BaselineOrientation]:
   """Normalise the ``baseline_orientation`` argument into a
   ``{column: BaselineOrientation}`` dictionary"""

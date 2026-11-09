@@ -190,7 +190,10 @@ class MSv2Store(AbstractWritableDataStore):
     driver_kwargs: Dict[str, Any] | None = None,
     epoch: str | None = None,
     structure_factory: MSv2StructureFactory | None = None,
-    baseline_orientation: Mapping[str, str | BaselineOrientation] | None = None,
+    baseline_orientation: Mapping[
+      str, Literal["invariant", "hermitian", "antisymmetric"] | BaselineOrientation
+    ]
+    | None = None,
   ):
     if not isinstance(ms, str):
       raise ValueError("Measurement Sets paths must be strings")
@@ -334,7 +337,10 @@ class MSv2EntryPoint(BackendEntrypoint):
     ninstances: int | None = None,
     epoch: str | None = None,
     structure_factory: MSv2StructureFactory | None = None,
-    baseline_orientation: Mapping[str, str] | None = None,
+    baseline_orientation: Mapping[
+      str, Literal["invariant", "hermitian", "antisymmetric"]
+    ]
+    | None = None,
   ) -> Dataset:
     """Create a :class:`~xarray.Dataset` presenting an MSv4 view
     over a partition of a MSv2 CASA Measurement Set
@@ -430,7 +436,10 @@ class MSv2EntryPoint(BackendEntrypoint):
     ninstances: int | None = None,
     epoch: str | None = None,
     interpolate: str | Iterable[str] | None = None,
-    baseline_orientation: Mapping[str, str] | None = None,
+    baseline_orientation: Mapping[
+      str, Literal["invariant", "hermitian", "antisymmetric"]
+    ]
+    | None = None,
   ) -> DataTree:
     """Create a :class:`~xarray.core.datatree.DataTree` presenting an MSv4 view
     over multiple partitions of a MSv2 CASA Measurement Set.
@@ -612,7 +621,10 @@ class MSv2EntryPoint(BackendEntrypoint):
     epoch: str | None = None,
     structure_factory: MSv2StructureFactory | None = None,
     interpolate: str | Iterable[str] | None = None,
-    baseline_orientation: Mapping[str, str] | None = None,
+    baseline_orientation: Mapping[
+      str, Literal["invariant", "hermitian", "antisymmetric"]
+    ]
+    | None = None,
   ) -> Dict[str, Dataset]:
     """Create a dictionary of :class:`~xarray.Dataset` presenting an MSv4 view
     over a partition of a MSv2 CASA Measurement Set"""

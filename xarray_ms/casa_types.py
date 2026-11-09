@@ -345,9 +345,9 @@ class Stokes(IntEnum):
     """The correlation measured on the reversed baseline,
     e.g. ``XY`` for ``YX``. Parallel hands and Stokes parameters
     of the sky brightness, e.g. ``I``, map onto themselves."""
-    name = self.name
-    if len(name) == 2 and all(c in "RLXYPQ" for c in name):
-      return Stokes[name[::-1]]
+    # RR to QQ are correlations of two receptors
+    if Stokes.RR <= self <= Stokes.QQ:
+      return Stokes[self.name[::-1]]
     return self
 
 

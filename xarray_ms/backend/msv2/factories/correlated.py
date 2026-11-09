@@ -44,8 +44,6 @@ from xarray_ms.errors import (
   IrregularTimeGridWarning,
 )
 
-HERMITIAN = BaselineOrientation.HERMITIAN
-
 
 @dataclasses.dataclass
 class MSv2ColumnSchema:
@@ -74,14 +72,18 @@ MSV4_to_MSV2_COLUMN_SCHEMAS = {
     "FLAG_ROW", ("frequency", "polarization"), 1, None, low_res_dims=()
   ),
   "FLAG": MSv2ColumnSchema(
-    "FLAG", ("frequency", "polarization"), 1, None, orientation=HERMITIAN
+    "FLAG",
+    ("frequency", "polarization"),
+    1,
+    None,
+    orientation=BaselineOrientation.HERMITIAN,
   ),
   "VISIBILITY": MSv2ColumnSchema(
     "DATA",
     ("frequency", "polarization"),
     np.nan + np.nan * 1j,
     VisibilityCoder(),
-    orientation=HERMITIAN,
+    orientation=BaselineOrientation.HERMITIAN,
   ),
   "WEIGHT_ROW": MSv2ColumnSchema(
     "WEIGHT",
@@ -89,14 +91,14 @@ MSV4_to_MSV2_COLUMN_SCHEMAS = {
     np.nan,
     None,
     low_res_dims=("polarization",),
-    orientation=HERMITIAN,
+    orientation=BaselineOrientation.HERMITIAN,
   ),
   "WEIGHT": MSv2ColumnSchema(
     "WEIGHT_SPECTRUM",
     ("frequency", "polarization"),
     np.nan,
     None,
-    orientation=HERMITIAN,
+    orientation=BaselineOrientation.HERMITIAN,
   ),
   "SIGMA_ROW": MSv2ColumnSchema(
     "SIGMA",
@@ -104,24 +106,24 @@ MSV4_to_MSV2_COLUMN_SCHEMAS = {
     np.nan,
     None,
     low_res_dims=("polarization",),
-    orientation=HERMITIAN,
+    orientation=BaselineOrientation.HERMITIAN,
   ),
   "SIGMA_SPECTRUM": MSv2ColumnSchema(
     "SIGMA_SPECTRUM",
     ("frequency", "polarization"),
     np.nan,
     None,
-    orientation=HERMITIAN,
+    orientation=BaselineOrientation.HERMITIAN,
   ),
 }
 
 # How the standard secondary MAIN columns transform
 # when their baseline is reversed
 SECONDARY_COLUMN_ORIENTATIONS = {
-  "CORRECTED_DATA": HERMITIAN,
-  "MODEL_DATA": HERMITIAN,
-  "FLOAT_DATA": HERMITIAN,
-  "CORRECTED_WEIGHT_SPECTRUM": HERMITIAN,
+  "CORRECTED_DATA": BaselineOrientation.HERMITIAN,
+  "MODEL_DATA": BaselineOrientation.HERMITIAN,
+  "FLOAT_DATA": BaselineOrientation.HERMITIAN,
+  "CORRECTED_WEIGHT_SPECTRUM": BaselineOrientation.HERMITIAN,
 }
 
 FIXED_DIMENSION_SIZES = {"uvw_label": 3}
