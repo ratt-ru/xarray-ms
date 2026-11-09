@@ -601,13 +601,13 @@ def test_additional_columns(simmed_ms):
       )
       assert node["FLOAT_DATA"].equals(node["VISIBILITY"].real)
 
-      assert node["MODEL_DATA"].dims == (
+      assert node["VISIBILITY_MODEL"].dims == (
         "time",
         "baseline_id",
         "frequency",
         "polarization",
       )
-      assert node["MODEL_DATA"].equals(node["VISIBILITY"])
+      assert node["VISIBILITY_MODEL"].equals(node["VISIBILITY"])
 
       assert node["SIGMA_SPECTRUM"].dims == (
         "time",
