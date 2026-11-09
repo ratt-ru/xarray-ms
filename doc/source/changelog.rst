@@ -12,7 +12,7 @@ X.Y.Z (DD-MM-YYYY)
   Add a ``data_groups`` argument to ``open_dataset`` and ``open_datatree``
   that adds custom data groups, or overrides standard data groups.
   Each data group refers to its own ``field_and_source_<data_group>_xds``.
-  ``open_dataset`` now also presents the ``data_groups`` attribute.
+  ``open_dataset`` now also presents the ``data_groups`` attribute (:pr:`203`).
 * Convert rows stored as ``ANTENNA1 > ANTENNA2`` to their upper-triangular
   baseline on read: ``VISIBILITY`` is conjugated with its cross-hand
   correlations swapped, ``UVW`` is negated, and the cross-hands of ``FLAG``,
