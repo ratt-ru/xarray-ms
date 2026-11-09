@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, MutableSet, Sequence
 from dataclasses import dataclass
-from enum import IntEnum
+from enum import Enum, IntEnum
 from numbers import Integral
 from pprint import pformat
 from typing import Any, Dict, Iterable, List, Tuple, overload
@@ -265,6 +265,25 @@ class DataType(IntEnum):
   TpArrayInt64 = 30
 
 
+class BaselineOrientation(str, Enum):
+  """How a ``(time, baseline_id, ...)`` variable transforms when
+  its baseline is reversed, i.e. when a row is stored as
+  ``ANTENNA1 > ANTENNA2`` but presented as ``(ANTENNA2, ANTENNA1)``.
+
+  The visibilities on the reversed baseline are the Hermitian transpose
+  of the 2x2 correlation matrix: ``V_qp = V_pq^H``.
+  """
+
+  #: Unchanged, e.g. ``TIME``, ``EXPOSURE`` or ``FLAG_ROW``
+  INVARIANT = "invariant"
+  #: Cross-hand correlations are swapped (``XY <-> YX``) and complex values
+  #: conjugated, e.g. ``DATA``. For real and boolean per-correlation values
+  #: such as ``WEIGHT`` or ``FLAG``, only the cross-hands are swapped
+  HERMITIAN = "hermitian"
+  #: Negated, e.g. ``UVW``
+  ANTISYMMETRIC = "antisymmetric"
+
+
 class Stokes(IntEnum):
   """
   Enumeration of stokes types as defined in
@@ -321,6 +340,15 @@ class Stokes(IntEnum):
       raise TypeError(
         f"Cannot convert {stokes} of type {type(stokes)} to a Stokes Enumeration"
       )
+
+  def transpose(self) -> Stokes:
+    """The correlation measured on the reversed baseline,
+    e.g. ``XY`` for ``YX``. Parallel hands and Stokes parameters
+    of the sky brightness, e.g. ``I``, map onto themselves."""
+    # RR to QQ are correlations of two receptors
+    if Stokes.RR <= self <= Stokes.QQ:
+      return Stokes[self.name[::-1]]
+    return self
 
 
 class Polarisations(Sequence):
@@ -391,6 +419,13 @@ class Polarisations(Sequence):
     """Derive correlation product"""
     pol_map = {p: i for i, p in enumerate(self.polarisation_types())}
     return [tuple(pol_map[ct] for ct in pols) for pols in self.to_str()]
+
+  def transpose_permutation(self) -> npt.NDArray[np.intp]:
+    """Returns, for each correlation, the index of the correlation
+    measured on the reversed baseline, e.g. the index of ``YX`` for ``XY``,
+    or -1 if that correlation is not present"""
+    index = {p: i for i, p in enumerate(self._pols)}
+    return np.asarray([index.get(p.transpose(), -1) for p in self._pols], np.intp)
 
   def to_ints(self) -> List[int]:
     return [s.value for s in self._pols]

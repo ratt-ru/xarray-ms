@@ -21,6 +21,7 @@ from xarray_ms.backend.msv2.antenna_selection import select_partition_antennas
 from xarray_ms.backend.msv2.entrypoint_utils import (
   INTERPOLATABLE_DATASETS,
   CommonStoreArgs,
+  resolve_baseline_orientation,
   resolve_driver_kwargs,
   resolve_interpolate,
 )
@@ -57,6 +58,7 @@ if TYPE_CHECKING:
     SubtableIndexFactory,
     SubtableTableFactory,
   )
+  from xarray_ms.casa_types import BaselineOrientation
 
 
 def promote_chunks(
@@ -128,6 +130,7 @@ class MSv2Store(AbstractWritableDataStore):
     "_driver",
     "_driver_kwargs",
     "_epoch",
+    "_baseline_orientation",
   )
 
   _table_factory: MainTableFactory
@@ -142,6 +145,7 @@ class MSv2Store(AbstractWritableDataStore):
   _driver: str
   _driver_kwargs: Dict[str, Any]
   _epoch: str
+  _baseline_orientation: Mapping[str, BaselineOrientation]
 
   def __init__(
     self,
@@ -157,6 +161,7 @@ class MSv2Store(AbstractWritableDataStore):
     epoch: str,
     subtable_table_factories: Dict[str, SubtableTableFactory] | None = None,
     subtable_index_factories: Dict[str, SubtableIndexFactory] | None = None,
+    baseline_orientation: Mapping[str, BaselineOrientation] | None = None,
   ):
     self._table_factory = table_factory
     self._subtable_factories = subtable_factories
@@ -170,6 +175,7 @@ class MSv2Store(AbstractWritableDataStore):
     self._driver = driver
     self._driver_kwargs = driver_kwargs
     self._epoch = epoch
+    self._baseline_orientation = baseline_orientation or {}
 
   @classmethod
   def open(
@@ -184,6 +190,10 @@ class MSv2Store(AbstractWritableDataStore):
     driver_kwargs: Dict[str, Any] | None = None,
     epoch: str | None = None,
     structure_factory: MSv2StructureFactory | None = None,
+    baseline_orientation: Mapping[
+      str, Literal["invariant", "hermitian", "antisymmetric"] | BaselineOrientation
+    ]
+    | None = None,
   ):
     if not isinstance(ms, str):
       raise ValueError("Measurement Sets paths must be strings")
@@ -228,6 +238,7 @@ class MSv2Store(AbstractWritableDataStore):
       epoch=store_args.epoch,
       subtable_table_factories=store_args.subtable_table_factories,
       subtable_index_factories=store_args.subtable_index_factories,
+      baseline_orientation=resolve_baseline_orientation(baseline_orientation),
     )
 
   def close(self, **kwargs):
@@ -247,6 +258,7 @@ class MSv2Store(AbstractWritableDataStore):
       self._table_factory,
       self._subtable_factories,
       self._structure_factory,
+      self._baseline_orientation,
     )
 
   def get_variables(self):
@@ -286,6 +298,7 @@ class MSv2EntryPoint(BackendEntrypoint):
     "ninstances",
     "epoch",
     "structure_factory",
+    "baseline_orientation",
   ]
   description = "Opens v2 CASA Measurement Sets in Xarray"
   url = "https://xarray-ms.readthedocs.io/"
@@ -324,6 +337,10 @@ class MSv2EntryPoint(BackendEntrypoint):
     ninstances: int | None = None,
     epoch: str | None = None,
     structure_factory: MSv2StructureFactory | None = None,
+    baseline_orientation: Mapping[
+      str, Literal["invariant", "hermitian", "antisymmetric"]
+    ]
+    | None = None,
   ) -> Dataset:
     """Create a :class:`~xarray.Dataset` presenting an MSv4 view
     over a partition of a MSv2 CASA Measurement Set
@@ -369,6 +386,15 @@ class MSv2EntryPoint(BackendEntrypoint):
         This should not normally need to be set by the user
       structure_factory: A factory for creating MSv2Structure objects.
         This should not normally need to be set by the user
+      baseline_orientation: Maps the names of non-standard MAIN table columns,
+        such as :code:`"BITFLAG"`, onto how their values transform when
+        their baseline is reversed: :code:`"hermitian"`,
+        :code:`"antisymmetric"` or :code:`"invariant"`.
+        Rows stored as :code:`ANTENNA1 > ANTENNA2` are presented on the
+        upper-triangular baseline :code:`(ANTENNA2, ANTENNA1)` and their
+        data converted accordingly. Non-standard columns without an
+        orientation are omitted from partitions containing such rows.
+        See :ref:`baseline-orientation`.
 
     Returns:
       A :class:`~xarray.Dataset` referring to the unique
@@ -388,6 +414,7 @@ class MSv2EntryPoint(BackendEntrypoint):
       driver_kwargs=driver_kwargs,
       epoch=epoch,
       structure_factory=structure_factory,
+      baseline_orientation=baseline_orientation,
     )
     store_entrypoint = StoreBackendEntrypoint()
     return store_entrypoint.open_dataset(store)
@@ -409,6 +436,10 @@ class MSv2EntryPoint(BackendEntrypoint):
     ninstances: int | None = None,
     epoch: str | None = None,
     interpolate: str | Iterable[str] | None = None,
+    baseline_orientation: Mapping[
+      str, Literal["invariant", "hermitian", "antisymmetric"]
+    ]
+    | None = None,
   ) -> DataTree:
     """Create a :class:`~xarray.core.datatree.DataTree` presenting an MSv4 view
     over multiple partitions of a MSv2 CASA Measurement Set.
@@ -480,6 +511,15 @@ class MSv2EntryPoint(BackendEntrypoint):
         correlated dataset, rather than retaining their native time axis.
         Each timestep takes the most recently valid value.
         Valid names are :code:`{INTERPOLATABLE_DATASETS}`.
+      baseline_orientation: Maps the names of non-standard MAIN table columns,
+        such as :code:`"BITFLAG"`, onto how their values transform when
+        their baseline is reversed: :code:`"hermitian"`,
+        :code:`"antisymmetric"` or :code:`"invariant"`.
+        Rows stored as :code:`ANTENNA1 > ANTENNA2` are presented on the
+        upper-triangular baseline :code:`(ANTENNA2, ANTENNA1)` and their
+        data converted accordingly. Non-standard columns without an
+        orientation are omitted from partitions containing such rows.
+        See :ref:`baseline-orientation`.
 
     Returns:
       An xarray :class:`~xarray.core.datatree.DataTree`
@@ -497,6 +537,7 @@ class MSv2EntryPoint(BackendEntrypoint):
       driver_kwargs=driver_kwargs,
       epoch=epoch,
       interpolate=interpolate,
+      baseline_orientation=baseline_orientation,
     )
 
     dt = DataTree.from_dict(groups_dict)
@@ -580,6 +621,10 @@ class MSv2EntryPoint(BackendEntrypoint):
     epoch: str | None = None,
     structure_factory: MSv2StructureFactory | None = None,
     interpolate: str | Iterable[str] | None = None,
+    baseline_orientation: Mapping[
+      str, Literal["invariant", "hermitian", "antisymmetric"]
+    ]
+    | None = None,
   ) -> Dict[str, Dataset]:
     """Create a dictionary of :class:`~xarray.Dataset` presenting an MSv4 view
     over a partition of a MSv2 CASA Measurement Set"""
@@ -627,6 +672,7 @@ class MSv2EntryPoint(BackendEntrypoint):
         driver_kwargs=store_args.driver_kwargs,
         epoch=store_args.epoch,
         structure_factory=store_args.structure_factory,
+        baseline_orientation=baseline_orientation,
       )
 
       antenna_factory = AntennaFactory(

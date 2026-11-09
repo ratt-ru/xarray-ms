@@ -201,6 +201,9 @@ class PartitionData:
 
   # Row to baseline map
   row_map: npt.NDArray[np.int64]
+  # (time, baseline_id) cells whose row is stored as ANTENNA1 > ANTENNA2,
+  # or None if no row in the partition is stored in that orientation
+  flipped: npt.NDArray[np.bool_] | None = None
 
   @property
   def ntime(self) -> int:
@@ -483,8 +486,14 @@ class MSv2Structure(Mapping):
     na: int,
     nbl: int,
     auto_corrs: bool,
-  ) -> None:
-    """Populate the row map and interval grids"""
+  ) -> Tuple[npt.NDArray[np.int64], npt.NDArray[np.bool_]]:
+    """Populate the row map and interval grids.
+
+    Returns:
+      A tuple :code:`(index, flipped)` holding the flattened
+      grid cell of each row and whether it is stored as
+      ``ANTENNA1 > ANTENNA2``.
+    """
 
     # If the row_map contains no auto-correlations
     # they must be stripped out of the data
@@ -495,9 +504,12 @@ class MSv2Structure(Mapping):
       rows = rows[mask]
       intervals = intervals[mask]
 
-    # Normalise the baseline direction
-    if np.any(mask := antenna1 > antenna2):
-      antenna1[mask], antenna2[mask] = antenna2[mask], antenna1[mask]
+    # Place ANTENNA1 > ANTENNA2 rows in their upper-triangular slot.
+    # Their data is converted to the upper-triangular orientation on read.
+    # Copy, rather than swap in place, as the inputs are views
+    # of the partition's sorted columns
+    flipped = antenna1 > antenna2
+    antenna1, antenna2 = np.minimum(antenna1, antenna2), np.maximum(antenna1, antenna2)
 
     # Maybe normalise the antenna id's to np.arange(feed_antennas)
     normed_antennas = np.arange(feed_antennas.size, dtype=feed_antennas.dtype)
@@ -510,7 +522,7 @@ class MSv2Structure(Mapping):
     row_map[index] = rows
     interval_grid[index] = intervals
 
-    return index
+    return index, flipped
 
   @staticmethod
   def read_subtable(
@@ -692,7 +704,7 @@ class MSv2Structure(Mapping):
         row_map = np.full(utime.size * nbl, -1, dtype=np.int64)
         interval_grid = np.full(utime.size * nbl, -1.0, dtype=np.float64)
 
-        index_list = list(
+        index_flips = list(
           pool.map(
             partial(
               self.gen_row_interval_grids,
@@ -711,9 +723,32 @@ class MSv2Structure(Mapping):
           )
         )
 
-        indices = np.concatenate(index_list)
+        indices = np.concatenate([i for i, _ in index_flips])
+        flips = np.concatenate([f for _, f in index_flips])
+        counts = np.bincount(indices)
 
-        if np.any(np.bincount(indices) > 1):
+        if np.any(duplicates := counts > 1):
+          # A baseline stored in both orientations at the same TIME
+          # lands twice in the same cell
+          flip_counts = np.bincount(indices, weights=flips, minlength=counts.size)
+          mixed = duplicates & (flip_counts > 0) & (flip_counts < counts)
+
+          if np.any(mixed):
+            time_ids_mixed, bl_ids_mixed = np.divmod(np.flatnonzero(mixed), nbl)
+            slot1, slot2 = np.triu_indices(na, 0 if auto_corrs else 1)
+            examples = ", ".join(
+              f"({feed_antennas[slot1[b]]}, {feed_antennas[slot2[b]]}) "
+              f"at TIME {utime[t]}"
+              for t, b in zip(time_ids_mixed[:5], bl_ids_mixed[:5])
+            )
+            raise PartitioningError(
+              f"Baselines are stored as both (ANTENNA1, ANTENNA2) "
+              f"and (ANTENNA2, ANTENNA1) at the same TIME "
+              f"in partition {key}: {examples}. "
+              f"These rows describe the same baseline and "
+              f"cannot both be placed on the (time, baseline) grid."
+            )
+
           msg = []
           if len(ufeeds) > 1:
             msg.append(f"Multiple feeds {ufeeds} are present")
@@ -745,6 +780,12 @@ class MSv2Structure(Mapping):
         uinterval = self.par_unique(pool, ncpus, interval_grid.ravel())
         uinterval = uinterval[uinterval >= 0]
 
+        flipped: npt.NDArray[np.bool_] | None = None
+        if np.any(flips):
+          flipped = np.zeros(utime.size * nbl, dtype=np.bool_)
+          flipped[indices] = flips
+          flipped = flipped.reshape(utime.size, nbl)
+
         self._partitions[tuple(sorted(dkey.items()))] = PartitionData(
           time=utime,
           interval=uinterval,
@@ -761,6 +802,7 @@ class MSv2Structure(Mapping):
           obs_mode=str(dkey["OBS_MODE"]),
           sub_scan_numbers=time_subscan_nrs,
           row_map=row_map.reshape(utime.size, nbl),
+          flipped=flipped,
         )
 
     logger.info("Reading %s structure in took %fs", ms_name, modtime.time() - start)

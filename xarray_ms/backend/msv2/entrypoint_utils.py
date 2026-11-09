@@ -1,7 +1,7 @@
 import os.path
 import warnings
 from copy import deepcopy
-from typing import Any, Dict, FrozenSet, Iterable, List, Literal, Tuple
+from typing import Any, Dict, FrozenSet, Iterable, List, Literal, Mapping, Tuple
 
 import pyarrow as pa
 from arcae.lib.arrow_tables import Table
@@ -20,6 +20,7 @@ from xarray_ms.backend.msv2.subtable_index import (
   SubtableIndexFactory,
   SubtableTableFactory,
 )
+from xarray_ms.casa_types import BaselineOrientation
 
 #: Backend drivers currently supported by xarray-ms.
 SUPPORTED_DRIVERS = ("arcae",)
@@ -82,6 +83,38 @@ def resolve_interpolate(interpolate: str | Iterable[str] | None) -> FrozenSet[st
     )
 
   return names
+
+
+def resolve_baseline_orientation(
+  baseline_orientation: Mapping[
+    str, Literal["invariant", "hermitian", "antisymmetric"] | BaselineOrientation
+  ]
+  | None,
+) -> Dict[str, BaselineOrientation]:
+  """Normalise the ``baseline_orientation`` argument into a
+  ``{column: BaselineOrientation}`` dictionary"""
+  if baseline_orientation is None:
+    return {}
+
+  if not isinstance(baseline_orientation, Mapping):
+    raise TypeError(
+      f"baseline_orientation {baseline_orientation} must be a "
+      f"mapping of column names to baseline orientations"
+    )
+
+  valid = [o.value for o in BaselineOrientation]
+  result = {}
+
+  for column, orientation in baseline_orientation.items():
+    try:
+      result[column] = BaselineOrientation(orientation)
+    except ValueError:
+      raise ValueError(
+        f"Invalid baseline_orientation {orientation!r} for column {column}. "
+        f"Valid values are {valid}"
+      ) from None
+
+  return result
 
 
 def resolve_driver_kwargs(

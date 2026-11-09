@@ -12,6 +12,12 @@ class IrregularBaselineGridWarning(IrregularGridWarning):
   present in the Measurement Set"""
 
 
+class BaselineOrientationWarning(UserWarning):
+  """Warning raised when data on baselines stored as
+  ``ANTENNA1 > ANTENNA2`` cannot be converted to the
+  upper-triangular orientation"""
+
+
 class IrregularChannelGridWarning(IrregularGridWarning):
   """Warning raised when an irregular channel grid
   is encountered"""
