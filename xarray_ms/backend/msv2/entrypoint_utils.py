@@ -1,7 +1,17 @@
 import os.path
 import warnings
 from copy import deepcopy
-from typing import Any, Dict, FrozenSet, Iterable, List, Literal, Mapping, Tuple
+from typing import (
+  Any,
+  Dict,
+  FrozenSet,
+  Iterable,
+  List,
+  Literal,
+  Mapping,
+  Tuple,
+  TypeGuard,
+)
 
 import pyarrow as pa
 from arcae.lib.arrow_tables import Table
@@ -11,6 +21,7 @@ from xarray_ms.backend.msv2.factories.correlated import (
   DATA_GROUP_KEYS,
   DATA_GROUP_VARIABLE_KEYS,
   STANDARD_DATA_GROUPS,
+  DataGroupColumnT,
   DataGroupVariableT,
   data_group_renames,
 )
@@ -124,19 +135,32 @@ def resolve_baseline_orientation(
   return result
 
 
+def _is_data_group_pair(value: Any) -> TypeGuard[DataGroupColumnT]:
+  """Is this a ``(data_group_name, correlated_data_column)`` tuple?"""
+  return (
+    isinstance(value, tuple)
+    and len(value) == 2
+    and all(isinstance(v, str) for v in value)
+  )
+
+
 def resolve_data_groups(
   data_groups: str
-  | Iterable[str]
+  | DataGroupColumnT
+  | Iterable[str | DataGroupColumnT]
   | Mapping[str, Mapping[str, DataGroupVariableT]]
   | None,
 ) -> Dict[str, Dict[str, DataGroupVariableT]]:
   """Normalise the ``data_groups`` argument into a
   ``{data_group_name: {data_group_key: variable}}`` dictionary.
 
-  A string, or iterable of strings, names custom data groups whose
-  correlated data is the variable of the same name.
+  A string names a custom data group whose correlated data
+  is the column of the same name.
+  A ``(data_group_name, correlated_data_column)`` tuple names a data group
+  whose correlated data is the given column.
+  An iterable of these specifies multiple data groups.
   Standard data groups are always present if their column is present,
-  but can be overridden with the mapping form.
+  but can be overridden with the tuple or mapping forms.
   In the mapping form, a variable is either a variable name,
   or a ``(source, destination)`` tuple renaming the non-standard
   ``source`` column to the ``destination`` variable.
@@ -144,29 +168,41 @@ def resolve_data_groups(
   if data_groups is None:
     return {}
 
-  if isinstance(data_groups, str):
+  if isinstance(data_groups, str) or _is_data_group_pair(data_groups):
     data_groups = [data_groups]
 
   if isinstance(data_groups, Mapping):
     items = list(data_groups.items())
   elif isinstance(data_groups, Iterable):
-    names = list(data_groups)
+    items = []
 
-    if not all(isinstance(n, str) for n in names):
-      raise TypeError(f"data_groups {names} must be strings")
+    for entry in data_groups:
+      if isinstance(entry, str):
+        if entry in STANDARD_DATA_GROUPS:
+          raise ValueError(
+            f"{entry!r} is a standard data group, which is present if "
+            f"its column is present. It can be overridden with a "
+            f"(data_group_name, correlated_data_column) tuple or a mapping, "
+            f"e.g. data_groups={{{entry!r}: {{'weight': 'WEIGHT'}}}}"
+          )
+        items.append((entry, {"correlated_data": entry}))
+      elif _is_data_group_pair(entry):
+        name, column = entry
+        items.append((name, {"correlated_data": column}))
+      else:
+        raise TypeError(
+          f"data_groups entry {entry!r} must be a string or a "
+          f"(data_group_name, correlated_data_column) tuple of strings"
+        )
 
-    if standard := [n for n in names if n in STANDARD_DATA_GROUPS]:
-      raise ValueError(
-        f"{standard} are standard data groups, which are present if "
-        f"their column is present. They can be overridden with a mapping, "
-        f"e.g. data_groups={{{standard[0]!r}: {{'weight': 'WEIGHT'}}}}"
-      )
-
-    items = [(n, {"correlated_data": n}) for n in names]
+    names = [n for n, _ in items]
+    if duplicates := sorted({n for n in names if names.count(n) > 1}):
+      raise ValueError(f"Data groups {duplicates} are specified multiple times")
   else:
     raise TypeError(
       f"data_groups {data_groups} must be a string, "
-      f"an iterable of strings, or a mapping of data group names "
+      f"a (data_group_name, correlated_data_column) tuple, "
+      f"an iterable of these, or a mapping of data group names "
       f"onto mappings of data group keys and variable names"
     )
 

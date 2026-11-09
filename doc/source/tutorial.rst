@@ -174,13 +174,24 @@ Each data group refers to its own ``field_and_source_<data_group>_xds``
 child dataset.
 
 The ``data_groups`` argument adds custom data groups, or overrides
-standard data groups. A string, or iterable of strings, adds custom data groups
-whose correlated data is the non-standard column of the same name,
-and whose flag, weight and uvw are those of the ``base`` data group:
+standard data groups. A string adds a custom data group whose correlated
+data is the non-standard column of the same name, and whose flag, weight
+and uvw are those of the ``base`` data group.
+A ``(data_group_name, correlated_data_column)`` tuple does likewise under
+a different data group name, and a list of these adds multiple data groups:
 
 .. code-block:: python
 
   dt = xarray.open_datatree(ms, data_groups="RESIDUAL_DATA")
+  dt = xarray.open_datatree(ms, data_groups=("residual", "RESIDUAL_DATA"))
+  dt = xarray.open_datatree(ms, data_groups=[
+    ("residual", "RESIDUAL_DATA"),
+    "BITFLAG_DATA",
+  ])
+
+.. note:: A tuple of two strings is always interpreted as a single
+  ``(data_group_name, correlated_data_column)`` pair.
+  Use a list to specify multiple string data groups.
 
 A mapping specifies the ``correlated_data``, ``flag``, ``weight``, ``uvw``
 and ``description`` keys of each data group. Keys specified for a standard

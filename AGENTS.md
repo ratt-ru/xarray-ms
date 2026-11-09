@@ -172,7 +172,10 @@ MSv4 `data_groups` attribute. `STANDARD_DATA_GROUPS` (`base`, `corrected`,
 (`DATA`, `CORRECTED_DATA`, `MODEL_DATA`) is present. The user's
 `open_datatree(..., data_groups=...)` is normalised by `resolve_data_groups`
 in [entrypoint_utils.py](xarray_ms/backend/msv2/entrypoint_utils.py): strings
-add custom groups named after their correlated data variable, and mappings
+add custom groups named after their correlated data variable,
+`(data_group_name, correlated_data_column)` tuples add or override a group's
+correlated data (a 2-tuple of strings is always one pair; lists hold several),
+and mappings
 override standard groups or add custom ones, which inherit `flag`, `weight`
 and `uvw` from `base`. A mapping value may be a `(source, destination)` tuple
 (`data_group_renames`), renaming a secondary variable, i.e. a non-standard

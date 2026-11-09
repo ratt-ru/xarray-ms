@@ -156,6 +156,10 @@ DATA_GROUP_KEYS = DATA_GROUP_VARIABLE_KEYS + ("description",)
 #: (source, destination) tuple renaming a secondary column
 DataGroupVariableT = str | Tuple[str, str]
 
+#: A (data_group_name, correlated_data_column) tuple, naming a data group
+#: whose correlated data is the given column
+DataGroupColumnT = Tuple[str, str]
+
 
 def data_group_renames(
   data_groups: Mapping[str, Mapping[str, DataGroupVariableT]],

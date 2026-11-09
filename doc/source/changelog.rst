@@ -10,7 +10,9 @@ X.Y.Z (DD-MM-YYYY)
   **Breaking**: these columns are now presented as the ``VISIBILITY_CORRECTED``
   and ``VISIBILITY_MODEL`` variables, instead of under their MSv2 names.
   Add a ``data_groups`` argument to ``open_dataset`` and ``open_datatree``
-  that adds custom data groups, or overrides standard data groups.
+  that adds custom data groups, or overrides standard data groups,
+  via strings, ``(data_group_name, correlated_data_column)`` tuples,
+  lists of these, or mappings.
   ``(source, destination)`` tuples in this argument rename non-standard
   columns, e.g. ``("RESIDUAL_DATA", "VISIBILITY_RESIDUAL")``.
   Each data group refers to its own ``field_and_source_<data_group>_xds``.

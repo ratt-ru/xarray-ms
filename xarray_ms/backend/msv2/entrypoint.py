@@ -49,7 +49,10 @@ if TYPE_CHECKING:
 
   from xarray.backends.common import AbstractDataStore
 
-  from xarray_ms.backend.msv2.factories.correlated import DataGroupVariableT
+  from xarray_ms.backend.msv2.factories.correlated import (
+    DataGroupColumnT,
+    DataGroupVariableT,
+  )
   from xarray_ms.backend.msv2.structure import (
     DEFAULT_PARTITION_COLUMNS,
     MainTableFactory,
@@ -201,7 +204,8 @@ class MSv2Store(AbstractWritableDataStore):
     ]
     | None = None,
     data_groups: str
-    | Iterable[str]
+    | DataGroupColumnT
+    | Iterable[str | DataGroupColumnT]
     | Mapping[str, Mapping[str, DataGroupVariableT]]
     | None = None,
   ):
@@ -355,7 +359,8 @@ class MSv2EntryPoint(BackendEntrypoint):
     ]
     | None = None,
     data_groups: str
-    | Iterable[str]
+    | DataGroupColumnT
+    | Iterable[str | DataGroupColumnT]
     | Mapping[str, Mapping[str, DataGroupVariableT]]
     | None = None,
   ) -> Dataset:
@@ -417,9 +422,12 @@ class MSv2EntryPoint(BackendEntrypoint):
         The standard :code:`"base"`, :code:`"corrected"` and :code:`"model"`
         data groups are present if their :code:`DATA`, :code:`CORRECTED_DATA`
         and :code:`MODEL_DATA` columns are present.
-        A string, or iterable of strings, adds custom data groups whose
-        correlated data is the variable of the same name, and whose
-        flag, weight and uvw are those of the base data group.
+        A string adds a custom data group whose correlated data is
+        the column of the same name, and whose flag, weight and uvw
+        are those of the base data group.
+        A :code:`(data_group_name, correlated_data_column)` tuple
+        does likewise, under a different data group name.
+        A list of these adds multiple data groups.
         A mapping specifies the keys and variable names of each data group,
         overriding the defaults of standard data groups.
         A :code:`(source, destination)` tuple in place of a variable name
@@ -429,7 +437,8 @@ class MSv2EntryPoint(BackendEntrypoint):
         .. code-block:: python
 
           "RESIDUAL_DATA"
-          ["RESIDUAL_DATA", "BITFLAG_DATA"]
+          ("residual", "RESIDUAL_DATA")
+          ["RESIDUAL_DATA", ("bitflag", "BITFLAG_DATA")]
           {{
             "residual": {{
               "correlated_data": ("RESIDUAL_DATA", "VISIBILITY_RESIDUAL"),
@@ -485,7 +494,8 @@ class MSv2EntryPoint(BackendEntrypoint):
     ]
     | None = None,
     data_groups: str
-    | Iterable[str]
+    | DataGroupColumnT
+    | Iterable[str | DataGroupColumnT]
     | Mapping[str, Mapping[str, DataGroupVariableT]]
     | None = None,
   ) -> DataTree:
@@ -573,9 +583,12 @@ class MSv2EntryPoint(BackendEntrypoint):
         The standard :code:`"base"`, :code:`"corrected"` and :code:`"model"`
         data groups are present if their :code:`DATA`, :code:`CORRECTED_DATA`
         and :code:`MODEL_DATA` columns are present.
-        A string, or iterable of strings, adds custom data groups whose
-        correlated data is the variable of the same name, and whose
-        flag, weight and uvw are those of the base data group.
+        A string adds a custom data group whose correlated data is
+        the column of the same name, and whose flag, weight and uvw
+        are those of the base data group.
+        A :code:`(data_group_name, correlated_data_column)` tuple
+        does likewise, under a different data group name.
+        A list of these adds multiple data groups.
         A mapping specifies the keys and variable names of each data group,
         overriding the defaults of standard data groups.
         A :code:`(source, destination)` tuple in place of a variable name
@@ -585,7 +598,8 @@ class MSv2EntryPoint(BackendEntrypoint):
         .. code-block:: python
 
           "RESIDUAL_DATA"
-          ["RESIDUAL_DATA", "BITFLAG_DATA"]
+          ("residual", "RESIDUAL_DATA")
+          ["RESIDUAL_DATA", ("bitflag", "BITFLAG_DATA")]
           {{
             "residual": {{
               "correlated_data": ("RESIDUAL_DATA", "VISIBILITY_RESIDUAL"),
@@ -687,7 +701,8 @@ class MSv2EntryPoint(BackendEntrypoint):
     ]
     | None = None,
     data_groups: str
-    | Iterable[str]
+    | DataGroupColumnT
+    | Iterable[str | DataGroupColumnT]
     | Mapping[str, Mapping[str, DataGroupVariableT]]
     | None = None,
   ) -> Dict[str, Dataset]:

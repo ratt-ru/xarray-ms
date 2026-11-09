@@ -98,6 +98,50 @@ def test_base_data_group_only(simmed_ms):
 
 
 @pytest.mark.parametrize("simmed_ms", [DATA_GROUP_MS], indirect=True)
+@pytest.mark.parametrize(
+  "data_groups", [("residual", "RESIDUAL_DATA"), [("residual", "RESIDUAL_DATA")]]
+)
+def test_tuple_data_group(simmed_ms, data_groups):
+  """(data_group_name, correlated_data_column) tuples name custom data groups"""
+  dt = xarray.open_datatree(simmed_ms, data_groups=data_groups)
+  for node in _correlated_nodes(dt):
+    groups = node.attrs["data_groups"]
+    assert list(groups.keys()) == ["base", "corrected", "model", "residual"]
+    assert _variables(groups["residual"]) == {
+      "correlated_data": "RESIDUAL_DATA",
+      "flag": "FLAG",
+      "weight": "WEIGHT",
+      "uvw": "UVW",
+    }
+    path = groups["residual"]["field_and_source"]
+    assert path == f"{node.name}/field_and_source_residual_xds"
+    assert dt[path].attrs["type"] == "field_and_source"
+
+
+@pytest.mark.parametrize("simmed_ms", [DATA_GROUP_MS], indirect=True)
+def test_mixed_data_groups(simmed_ms):
+  """Lists mix strings and tuples, and tuples may override
+  the correlated data of standard data groups"""
+  data_groups = [
+    "RESIDUAL_DATA",
+    ("model", "RESIDUAL_DATA"),
+    ("other", "RESIDUAL_DATA"),
+  ]
+  dt = xarray.open_datatree(simmed_ms, data_groups=data_groups)
+  for node in _correlated_nodes(dt):
+    groups = node.attrs["data_groups"]
+    assert list(groups.keys()) == [
+      "base",
+      "corrected",
+      "model",
+      "RESIDUAL_DATA",
+      "other",
+    ]
+    for name in ("model", "RESIDUAL_DATA", "other"):
+      assert groups[name]["correlated_data"] == "RESIDUAL_DATA"
+
+
+@pytest.mark.parametrize("simmed_ms", [DATA_GROUP_MS], indirect=True)
 @pytest.mark.parametrize("data_groups", ["RESIDUAL_DATA", ["RESIDUAL_DATA"]])
 def test_bare_custom_data_group(simmed_ms, data_groups):
   """Strings name custom data groups that inherit from the base data group"""
@@ -206,8 +250,12 @@ def test_override_absent_standard_data_group(simmed_ms):
       "which is not a variable",
     ),
     ({"residual": {"correlated": "RESIDUAL_DATA"}}, ValueError, "Invalid keys"),
-    ("model", ValueError, "standard data groups"),
-    (["model", "RESIDUAL_DATA"], ValueError, "standard data groups"),
+    ("model", ValueError, "is a standard data group"),
+    (["model", "RESIDUAL_DATA"], ValueError, "is a standard data group"),
+    (["RESIDUAL_DATA", ("RESIDUAL_DATA", "MODEL_DATA")], ValueError, "multiple times"),
+    (("residual", "MISSING_DATA"), ValueError, "which is not a variable"),
+    ([("residual", 1)], TypeError, "must be a string or a"),
+    ([("a", "b", "c")], TypeError, "must be a string or a"),
     ({"residual": "RESIDUAL_DATA"}, TypeError, "must map"),
     ({"residual": {"correlated_data": 1}}, TypeError, "must be a variable name"),
     (1, TypeError, "must be a string"),
