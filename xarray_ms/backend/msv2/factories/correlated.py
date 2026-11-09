@@ -85,6 +85,20 @@ MSV4_to_MSV2_COLUMN_SCHEMAS = {
     VisibilityCoder(),
     orientation=BaselineOrientation.HERMITIAN,
   ),
+  "VISIBILITY_CORRECTED": MSv2ColumnSchema(
+    "CORRECTED_DATA",
+    ("frequency", "polarization"),
+    np.nan + np.nan * 1j,
+    VisibilityCoder(),
+    orientation=BaselineOrientation.HERMITIAN,
+  ),
+  "VISIBILITY_MODEL": MSv2ColumnSchema(
+    "MODEL_DATA",
+    ("frequency", "polarization"),
+    np.nan + np.nan * 1j,
+    VisibilityCoder(),
+    orientation=BaselineOrientation.HERMITIAN,
+  ),
   "WEIGHT_ROW": MSv2ColumnSchema(
     "WEIGHT",
     ("frequency", "polarization"),
@@ -120,11 +134,23 @@ MSV4_to_MSV2_COLUMN_SCHEMAS = {
 # How the standard secondary MAIN columns transform
 # when their baseline is reversed
 SECONDARY_COLUMN_ORIENTATIONS = {
-  "CORRECTED_DATA": BaselineOrientation.HERMITIAN,
-  "MODEL_DATA": BaselineOrientation.HERMITIAN,
   "FLOAT_DATA": BaselineOrientation.HERMITIAN,
   "CORRECTED_WEIGHT_SPECTRUM": BaselineOrientation.HERMITIAN,
 }
+
+#: The correlated data variable of each standard data group.
+#: A standard data group is present if the MSv2 column
+#: of its correlated data variable is present
+STANDARD_DATA_GROUPS = {
+  "base": "VISIBILITY",
+  "corrected": "VISIBILITY_CORRECTED",
+  "model": "VISIBILITY_MODEL",
+}
+
+#: Data group keys that refer to variables of the correlated dataset
+DATA_GROUP_VARIABLE_KEYS = ("correlated_data", "flag", "weight", "uvw")
+#: Data group keys that may be specified by the user
+DATA_GROUP_KEYS = DATA_GROUP_VARIABLE_KEYS + ("description",)
 
 FIXED_DIMENSION_SIZES = {"uvw_label": 3}
 
@@ -147,6 +173,7 @@ class CorrelatedFactory(DatasetFactory):
   _main_table_desc: Dict[str, Collection[str]]
   _coder_factory: MSv2CoderFactory
   _baseline_orientation: Mapping[str, BaselineOrientation]
+  _data_groups: Mapping[str, Mapping[str, str]]
 
   def __init__(
     self,
@@ -156,11 +183,13 @@ class CorrelatedFactory(DatasetFactory):
     subtable_factories: Dict[str, SubtableFactory],
     structure_factory: MSv2StructureFactory,
     baseline_orientation: Mapping[str, BaselineOrientation] | None = None,
+    data_groups: Mapping[str, Mapping[str, str]] | None = None,
   ):
     super().__init__(partition_key, structure_factory, subtable_factories)
     self._preferred_chunks = preferred_chunks
     self._ms_factory = ms_factory
     self._baseline_orientation = baseline_orientation or {}
+    self._data_groups = data_groups or {}
 
     ms = ms_factory.instance
     self._main_table_desc = ms.tabledesc()
@@ -253,16 +282,11 @@ class CorrelatedFactory(DatasetFactory):
     from arcae.lib.arrow_tables import ms_descriptor
 
     # Ignore all standard msv2 columns, except
-    # for CORRECTED_DATA, CORRECTED_WEIGHT_SPECTRUM, FLOAT_DATA and MODEL_DATA
+    # for CORRECTED_WEIGHT_SPECTRUM and FLOAT_DATA
     ignored_msv2_column_set = {
       c for c in ms_descriptor("MAIN", complete=True).keys() if not c.startswith("_")
     }
-    ignored_msv2_column_set -= {
-      "CORRECTED_DATA",
-      "CORRECTED_WEIGHT_SPECTRUM",
-      "MODEL_DATA",
-      "FLOAT_DATA",
-    }
+    ignored_msv2_column_set -= {"CORRECTED_WEIGHT_SPECTRUM", "FLOAT_DATA"}
     remaining_columns = set(self._ms_factory.instance.columns())
     remaining_columns -= ignored_msv2_column_set
     remaining_columns -= processed_columns
@@ -471,6 +495,14 @@ class CorrelatedFactory(DatasetFactory):
       for v in STANDARD_VARIABLES
     ]
 
+    # Add the correlated data of other standard data groups, if present
+    for v in STANDARD_DATA_GROUPS.values():
+      if (column := MSV4_to_MSV2_COLUMN_SCHEMAS[v].name) in processed_columns:
+        continue
+      if column in self._main_table_desc:
+        data_vars.append((v, self._variable_from_column(v, dim_sizes, pol_perm)))
+        processed_columns.add(column)
+
     if "FLAG" in self._main_table_desc:
       data_vars.append(
         ("FLAG", self._variable_from_column("FLAG", dim_sizes, pol_perm))
@@ -633,7 +665,67 @@ class CorrelatedFactory(DatasetFactory):
     frequency.attrs.update(freq_attrs)
     coordinates.append(("frequency", frequency))
 
+    variable_names = {n for n, _ in data_vars}
+
+    for name, group in self.data_groups().items():
+      for key in DATA_GROUP_VARIABLE_KEYS:
+        if (var_name := group[key]) not in variable_names:
+          raise ValueError(
+            f"Data group {name!r} refers to {key}={var_name!r}, "
+            f"which is not a variable of partition {self._partition_key}. "
+            f"Available variables are {sorted(variable_names)}"
+          )
+
     return FrozenDict(sorted(data_vars + coordinates))
+
+  def data_groups(self) -> Dict[str, Dict[str, str]]:
+    """Returns the data groups of this partition, mapping their names onto
+    the data group keys in :data:`DATA_GROUP_KEYS`.
+
+    Standard data groups are present if the MSv2 column of their
+    correlated data is present, and are updated with any user
+    overrides. User data groups that are not standard inherit
+    their flag, weight and uvw from the base data group."""
+    groups: Dict[str, Dict[str, str]] = {}
+
+    for name, var_name in STANDARD_DATA_GROUPS.items():
+      override = self._data_groups.get(name, {})
+      column = MSV4_to_MSV2_COLUMN_SCHEMAS[var_name].name
+      present = name == "base" or column in self._main_table_desc
+
+      if present or "correlated_data" in override:
+        groups[name] = {
+          "correlated_data": var_name,
+          "flag": "FLAG",
+          "weight": "WEIGHT",
+          "uvw": "UVW",
+          **override,
+        }
+      elif override:
+        raise ValueError(
+          f"Unable to override standard data group {name!r} "
+          f"as the {column} column is not present. "
+          f"Specify its correlated_data in order to create it"
+        )
+
+    base = groups["base"]
+
+    for name, group in self._data_groups.items():
+      if name not in STANDARD_DATA_GROUPS:
+        groups[name] = {
+          "flag": base["flag"],
+          "weight": base["weight"],
+          "uvw": base["uvw"],
+        }
+        groups[name].update(group)
+
+    for group in groups.values():
+      group.setdefault(
+        "description",
+        f"Data group associated with the {group['correlated_data']} variable",
+      )
+
+    return groups
 
   def _observation_info(self) -> Dict[str, Any]:
     partition = self._structure_factory.instance[self._partition_key]
@@ -675,8 +767,24 @@ class CorrelatedFactory(DatasetFactory):
       )
     )
 
+  def _data_groups_attr(self) -> Dict[str, Dict[str, str]]:
+    date = datetime.now(timezone.utc).isoformat()
+    return {
+      name: dict(
+        sorted(
+          {
+            **group,
+            "date": date,
+            "field_and_source": f"field_and_source_{name}_xds",
+          }.items()
+        )
+      )
+      for name, group in self.data_groups().items()
+    }
+
   def get_attrs(self) -> Dict[Any, Any]:
     return {
+      "data_groups": self._data_groups_attr(),
       "observation_info": self._observation_info(),
       "processor_info": self._processor_info(),
     }

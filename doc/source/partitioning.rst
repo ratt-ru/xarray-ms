@@ -158,7 +158,7 @@ each variable is transformed according to its
     - Cross-hand correlations are swapped (``XY`` ↔ ``YX``, ``RL`` ↔ ``LR``)
       and complex values are conjugated
     - ``VISIBILITY``, ``FLAG``, ``WEIGHT``, ``SIGMA_SPECTRUM``,
-      ``CORRECTED_DATA``, ``MODEL_DATA``, ``FLOAT_DATA``,
+      ``VISIBILITY_CORRECTED``, ``VISIBILITY_MODEL``, ``FLOAT_DATA``,
       ``CORRECTED_WEIGHT_SPECTRUM``
   * - ``antisymmetric``
     - Values are negated

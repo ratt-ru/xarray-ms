@@ -163,6 +163,22 @@ Signal when the grid cannot be made perfectly regular:
   share a `(TIME, ANTENNA_ID)` key, so cannot be gridded; the dataset is
   omitted rather than failing the open, as these subtables are optional.
 
+#### Data groups
+
+`CorrelatedFactory.data_groups` in
+[correlated.py](xarray_ms/backend/msv2/factories/correlated.py) builds the
+MSv4 `data_groups` attribute. `STANDARD_DATA_GROUPS` (`base`, `corrected`,
+`model`) are present if the MSv2 column of their correlated data variable
+(`DATA`, `CORRECTED_DATA`, `MODEL_DATA`) is present. The user's
+`open_datatree(..., data_groups=...)` is normalised by `resolve_data_groups`
+in [entrypoint_utils.py](xarray_ms/backend/msv2/entrypoint_utils.py): strings
+add custom groups named after their correlated data variable, and mappings
+override standard groups or add custom ones, which inherit `flag`, `weight`
+and `uvw` from `base`. Each group's `field_and_source` is relative
+(`field_and_source_<group>_xds`); `postprocess_datasets` presents the
+partition's `field_and_source_xds` under each group's name, and rewrites the
+reference to its path in the DataTree.
+
 #### 6. Time-keyed subtables
 
 Subtables keyed on `(ANTENNA_ID, TIME)`, such as `POINTING`, `SYSCAL` and

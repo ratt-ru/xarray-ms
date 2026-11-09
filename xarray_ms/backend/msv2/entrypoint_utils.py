@@ -7,6 +7,10 @@ import pyarrow as pa
 from arcae.lib.arrow_tables import Table
 from rarg_python_patterns.multiton import Multiton
 
+from xarray_ms.backend.msv2.factories.correlated import (
+  DATA_GROUP_KEYS,
+  STANDARD_DATA_GROUPS,
+)
 from xarray_ms.backend.msv2.structure import (
   DEFAULT_PARTITION_COLUMNS,
   MainTableFactory,
@@ -113,6 +117,72 @@ def resolve_baseline_orientation(
         f"Invalid baseline_orientation {orientation!r} for column {column}. "
         f"Valid values are {valid}"
       ) from None
+
+  return result
+
+
+def resolve_data_groups(
+  data_groups: str | Iterable[str] | Mapping[str, Mapping[str, str]] | None,
+) -> Dict[str, Dict[str, str]]:
+  """Normalise the ``data_groups`` argument into a
+  ``{data_group_name: {data_group_key: variable_name}}`` dictionary.
+
+  A string, or iterable of strings, names custom data groups whose
+  correlated data is the variable of the same name.
+  Standard data groups are always present if their column is present,
+  but can be overridden with the mapping form.
+  """
+  if data_groups is None:
+    return {}
+
+  if isinstance(data_groups, str):
+    data_groups = [data_groups]
+
+  if isinstance(data_groups, Mapping):
+    items = list(data_groups.items())
+  elif isinstance(data_groups, Iterable):
+    names = list(data_groups)
+
+    if not all(isinstance(n, str) for n in names):
+      raise TypeError(f"data_groups {names} must be strings")
+
+    if standard := [n for n in names if n in STANDARD_DATA_GROUPS]:
+      raise ValueError(
+        f"{standard} are standard data groups, which are present if "
+        f"their column is present. They can be overridden with a mapping, "
+        f"e.g. data_groups={{{standard[0]!r}: {{'weight': 'WEIGHT'}}}}"
+      )
+
+    items = [(n, {"correlated_data": n}) for n in names]
+  else:
+    raise TypeError(
+      f"data_groups {data_groups} must be a string, "
+      f"an iterable of strings, or a mapping of data group names "
+      f"onto mappings of data group keys and variable names"
+    )
+
+  result = {}
+
+  for name, group in items:
+    if not isinstance(name, str) or not isinstance(group, Mapping):
+      raise TypeError(
+        f"data_groups entry {name!r}: {group!r} must map a data group name "
+        f"onto a mapping of data group keys and variable names"
+      )
+
+    if invalid := set(group.keys()) - set(DATA_GROUP_KEYS):
+      raise ValueError(
+        f"Invalid keys {sorted(invalid)} in data group {name!r}. "
+        f"Valid keys are {list(DATA_GROUP_KEYS)}"
+      )
+
+    if not all(isinstance(v, str) for v in group.values()):
+      raise TypeError(f"Values of data group {name!r} {dict(group)} must be strings")
+
+    if name not in STANDARD_DATA_GROUPS and "correlated_data" not in group:
+      raise ValueError(f"Data group {name!r} must specify its correlated_data")
+
+    result[name] = dict(group)
 
   return result
 

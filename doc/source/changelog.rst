@@ -5,6 +5,14 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Add the standard ``corrected`` and ``model`` data groups to correlated
+  datasets if the ``CORRECTED_DATA`` and ``MODEL_DATA`` columns are present.
+  **Breaking**: these columns are now presented as the ``VISIBILITY_CORRECTED``
+  and ``VISIBILITY_MODEL`` variables, instead of under their MSv2 names.
+  Add a ``data_groups`` argument to ``open_dataset`` and ``open_datatree``
+  that adds custom data groups, or overrides standard data groups.
+  Each data group refers to its own ``field_and_source_<data_group>_xds``.
+  ``open_dataset`` now also presents the ``data_groups`` attribute.
 * Convert rows stored as ``ANTENNA1 > ANTENNA2`` to their upper-triangular
   baseline on read: ``VISIBILITY`` is conjugated with its cross-hand
   correlations swapped, ``UVW`` is negated, and the cross-hands of ``FLAG``,
