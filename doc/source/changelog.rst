@@ -3,7 +3,7 @@
 Changelog
 =========
 
-X.Y.Z (DD-MM-YYYY)
+0.5.14 (09-11-2026)
 ------------------
 * Add the standard ``corrected`` and ``model`` data groups to correlated
   datasets if the ``CORRECTED_DATA`` and ``MODEL_DATA`` columns are present.
