@@ -392,10 +392,10 @@ def test_secondary_columns(reference_and_flipped):
   assert "BASELINE_PHASE" not in ds
   bl = _baseline_mask(ds, FLIPPED_PAIRS)
   perm = [0, 2, 1, 3]
-  # CORRECTED_DATA has a known orientation
+  # VISIBILITY_CORRECTED has a known orientation
   assert_array_equal(
-    ds.CORRECTED_DATA.values[:, bl],
-    _hermitian(ref.CORRECTED_DATA.values[:, bl], perm),
+    ds.VISIBILITY_CORRECTED.values[:, bl],
+    _hermitian(ref.VISIBILITY_CORRECTED.values[:, bl], perm),
   )
 
   ds = _open(flipped, baseline_orientation={"BASELINE_PHASE": "antisymmetric"}).load()

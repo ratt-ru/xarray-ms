@@ -143,6 +143,84 @@ all subtables, but per-table overrides can be specified under the reserved
   ``driver_kwargs={"table_overrides": {"MAIN": {"ninstances": N}}}`` instead.
 
 
+.. _data-groups:
+
+Data groups
+-----------
+
+MSv4 data groups associate a correlated data variable with the flag, weight
+and uvw variables, and the ``field_and_source_xds``, that describe it.
+They are listed in the ``data_groups`` attribute of each correlated dataset.
+The following standard data groups are present if their MSv2 column is present:
+
+.. list-table::
+  :header-rows: 1
+
+  * - Data group
+    - MSv2 column
+    - Correlated data
+  * - ``base``
+    - ``DATA``
+    - ``VISIBILITY``
+  * - ``corrected``
+    - ``CORRECTED_DATA``
+    - ``VISIBILITY_CORRECTED``
+  * - ``model``
+    - ``MODEL_DATA``
+    - ``VISIBILITY_MODEL``
+
+Their flag, weight and uvw are ``FLAG``, ``WEIGHT`` and ``UVW``.
+Each data group refers to its own ``field_and_source_<data_group>_xds``
+child dataset.
+
+The ``data_groups`` argument adds custom data groups, or overrides
+standard data groups. A string adds a custom data group whose correlated
+data is the non-standard column of the same name, and whose flag, weight
+and uvw are those of the ``base`` data group.
+A ``(data_group_name, correlated_data_column)`` tuple does likewise under
+a different data group name, and a list of these adds multiple data groups:
+
+.. code-block:: python
+
+  dt = xarray.open_datatree(ms, data_groups="RESIDUAL_DATA")
+  dt = xarray.open_datatree(ms, data_groups=("residual", "RESIDUAL_DATA"))
+  dt = xarray.open_datatree(ms, data_groups=[
+    ("residual", "RESIDUAL_DATA"),
+    "BITFLAG_DATA",
+  ])
+
+.. note:: A tuple of two strings is always interpreted as a single
+  ``(data_group_name, correlated_data_column)`` pair.
+  Use a list to specify multiple string data groups.
+
+A mapping specifies the ``correlated_data``, ``flag``, ``weight``, ``uvw``
+and ``description`` keys of each data group. Keys specified for a standard
+data group override its defaults, while custom data groups must specify
+their ``correlated_data``:
+
+.. code-block:: python
+
+  dt = xarray.open_datatree(ms, data_groups={
+    "residual": {"correlated_data": "RESIDUAL_DATA"},
+    "corrected": {"weight": "CORRECTED_WEIGHT_SPECTRUM"},
+  })
+
+A ``(source, destination)`` tuple in place of a variable name renames
+the non-standard ``source`` column to the ``destination`` variable.
+Only non-standard columns, which are otherwise presented under their
+MSv2 names, can be renamed:
+
+.. code-block:: python
+
+  dt = xarray.open_datatree(ms, data_groups={
+    "residual": {"correlated_data": ("RESIDUAL_DATA", "VISIBILITY_RESIDUAL")},
+  })
+
+A ``ValueError`` is raised if a data group refers to a variable
+that is not present on the correlated dataset,
+or if renames conflict with each other or with existing variables.
+
+
 Writing a DataTree to Zarr
 --------------------------
 

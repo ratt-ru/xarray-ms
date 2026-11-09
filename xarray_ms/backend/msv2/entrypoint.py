@@ -22,6 +22,7 @@ from xarray_ms.backend.msv2.entrypoint_utils import (
   INTERPOLATABLE_DATASETS,
   CommonStoreArgs,
   resolve_baseline_orientation,
+  resolve_data_groups,
   resolve_driver_kwargs,
   resolve_interpolate,
 )
@@ -48,6 +49,10 @@ if TYPE_CHECKING:
 
   from xarray.backends.common import AbstractDataStore
 
+  from xarray_ms.backend.msv2.factories.correlated import (
+    DataGroupColumnT,
+    DataGroupVariableT,
+  )
   from xarray_ms.backend.msv2.structure import (
     DEFAULT_PARTITION_COLUMNS,
     MainTableFactory,
@@ -131,6 +136,7 @@ class MSv2Store(AbstractWritableDataStore):
     "_driver_kwargs",
     "_epoch",
     "_baseline_orientation",
+    "_data_groups",
   )
 
   _table_factory: MainTableFactory
@@ -146,6 +152,7 @@ class MSv2Store(AbstractWritableDataStore):
   _driver_kwargs: Dict[str, Any]
   _epoch: str
   _baseline_orientation: Mapping[str, BaselineOrientation]
+  _data_groups: Mapping[str, Mapping[str, DataGroupVariableT]]
 
   def __init__(
     self,
@@ -162,6 +169,7 @@ class MSv2Store(AbstractWritableDataStore):
     subtable_table_factories: Dict[str, SubtableTableFactory] | None = None,
     subtable_index_factories: Dict[str, SubtableIndexFactory] | None = None,
     baseline_orientation: Mapping[str, BaselineOrientation] | None = None,
+    data_groups: Mapping[str, Mapping[str, DataGroupVariableT]] | None = None,
   ):
     self._table_factory = table_factory
     self._subtable_factories = subtable_factories
@@ -176,6 +184,7 @@ class MSv2Store(AbstractWritableDataStore):
     self._driver_kwargs = driver_kwargs
     self._epoch = epoch
     self._baseline_orientation = baseline_orientation or {}
+    self._data_groups = data_groups or {}
 
   @classmethod
   def open(
@@ -193,6 +202,11 @@ class MSv2Store(AbstractWritableDataStore):
     baseline_orientation: Mapping[
       str, Literal["invariant", "hermitian", "antisymmetric"] | BaselineOrientation
     ]
+    | None = None,
+    data_groups: str
+    | DataGroupColumnT
+    | Iterable[str | DataGroupColumnT]
+    | Mapping[str, Mapping[str, DataGroupVariableT]]
     | None = None,
   ):
     if not isinstance(ms, str):
@@ -239,6 +253,7 @@ class MSv2Store(AbstractWritableDataStore):
       subtable_table_factories=store_args.subtable_table_factories,
       subtable_index_factories=store_args.subtable_index_factories,
       baseline_orientation=resolve_baseline_orientation(baseline_orientation),
+      data_groups=resolve_data_groups(data_groups),
     )
 
   def close(self, **kwargs):
@@ -259,6 +274,7 @@ class MSv2Store(AbstractWritableDataStore):
       self._subtable_factories,
       self._structure_factory,
       self._baseline_orientation,
+      self._data_groups,
     )
 
   def get_variables(self):
@@ -299,6 +315,7 @@ class MSv2EntryPoint(BackendEntrypoint):
     "epoch",
     "structure_factory",
     "baseline_orientation",
+    "data_groups",
   ]
   description = "Opens v2 CASA Measurement Sets in Xarray"
   url = "https://xarray-ms.readthedocs.io/"
@@ -340,6 +357,11 @@ class MSv2EntryPoint(BackendEntrypoint):
     baseline_orientation: Mapping[
       str, Literal["invariant", "hermitian", "antisymmetric"]
     ]
+    | None = None,
+    data_groups: str
+    | DataGroupColumnT
+    | Iterable[str | DataGroupColumnT]
+    | Mapping[str, Mapping[str, DataGroupVariableT]]
     | None = None,
   ) -> Dataset:
     """Create a :class:`~xarray.Dataset` presenting an MSv4 view
@@ -395,6 +417,36 @@ class MSv2EntryPoint(BackendEntrypoint):
         data converted accordingly. Non-standard columns without an
         orientation are omitted from partitions containing such rows.
         See :ref:`baseline-orientation`.
+      data_groups: Custom data groups to add to, or standard data groups
+        to override on, the correlated dataset.
+        The standard :code:`"base"`, :code:`"corrected"` and :code:`"model"`
+        data groups are present if their :code:`DATA`, :code:`CORRECTED_DATA`
+        and :code:`MODEL_DATA` columns are present.
+        A string adds a custom data group whose correlated data is
+        the column of the same name, and whose flag, weight and uvw
+        are those of the base data group.
+        A :code:`(data_group_name, correlated_data_column)` tuple
+        does likewise, under a different data group name.
+        A list of these adds multiple data groups.
+        A mapping specifies the keys and variable names of each data group,
+        overriding the defaults of standard data groups.
+        A :code:`(source, destination)` tuple in place of a variable name
+        renames the non-standard :code:`source` column to the
+        :code:`destination` variable, e.g.
+
+        .. code-block:: python
+
+          "RESIDUAL_DATA"
+          ("residual", "RESIDUAL_DATA")
+          ["RESIDUAL_DATA", ("bitflag", "BITFLAG_DATA")]
+          {{
+            "residual": {{
+              "correlated_data": ("RESIDUAL_DATA", "VISIBILITY_RESIDUAL"),
+            }},
+            "corrected": {{"weight": "CORRECTED_WEIGHT_SPECTRUM"}},
+          }}
+
+        See :ref:`data-groups`.
 
     Returns:
       A :class:`~xarray.Dataset` referring to the unique
@@ -415,6 +467,7 @@ class MSv2EntryPoint(BackendEntrypoint):
       epoch=epoch,
       structure_factory=structure_factory,
       baseline_orientation=baseline_orientation,
+      data_groups=data_groups,
     )
     store_entrypoint = StoreBackendEntrypoint()
     return store_entrypoint.open_dataset(store)
@@ -439,6 +492,11 @@ class MSv2EntryPoint(BackendEntrypoint):
     baseline_orientation: Mapping[
       str, Literal["invariant", "hermitian", "antisymmetric"]
     ]
+    | None = None,
+    data_groups: str
+    | DataGroupColumnT
+    | Iterable[str | DataGroupColumnT]
+    | Mapping[str, Mapping[str, DataGroupVariableT]]
     | None = None,
   ) -> DataTree:
     """Create a :class:`~xarray.core.datatree.DataTree` presenting an MSv4 view
@@ -520,6 +578,36 @@ class MSv2EntryPoint(BackendEntrypoint):
         data converted accordingly. Non-standard columns without an
         orientation are omitted from partitions containing such rows.
         See :ref:`baseline-orientation`.
+      data_groups: Custom data groups to add to, or standard data groups
+        to override on, the correlated dataset.
+        The standard :code:`"base"`, :code:`"corrected"` and :code:`"model"`
+        data groups are present if their :code:`DATA`, :code:`CORRECTED_DATA`
+        and :code:`MODEL_DATA` columns are present.
+        A string adds a custom data group whose correlated data is
+        the column of the same name, and whose flag, weight and uvw
+        are those of the base data group.
+        A :code:`(data_group_name, correlated_data_column)` tuple
+        does likewise, under a different data group name.
+        A list of these adds multiple data groups.
+        A mapping specifies the keys and variable names of each data group,
+        overriding the defaults of standard data groups.
+        A :code:`(source, destination)` tuple in place of a variable name
+        renames the non-standard :code:`source` column to the
+        :code:`destination` variable, e.g.
+
+        .. code-block:: python
+
+          "RESIDUAL_DATA"
+          ("residual", "RESIDUAL_DATA")
+          ["RESIDUAL_DATA", ("bitflag", "BITFLAG_DATA")]
+          {{
+            "residual": {{
+              "correlated_data": ("RESIDUAL_DATA", "VISIBILITY_RESIDUAL"),
+            }},
+            "corrected": {{"weight": "CORRECTED_WEIGHT_SPECTRUM"}},
+          }}
+
+        See :ref:`data-groups`.
 
     Returns:
       An xarray :class:`~xarray.core.datatree.DataTree`
@@ -538,6 +626,7 @@ class MSv2EntryPoint(BackendEntrypoint):
       epoch=epoch,
       interpolate=interpolate,
       baseline_orientation=baseline_orientation,
+      data_groups=data_groups,
     )
 
     dt = DataTree.from_dict(groups_dict)
@@ -564,33 +653,19 @@ class MSv2EntryPoint(BackendEntrypoint):
     for path, dataset in list(datasets.items()):
       # Post-process visibility datasets
       if (ds_attrs := dataset.attrs).get("type") in CORRELATED_DATASET_TYPES:
-        # Create a base data group
-        if "data_groups" not in ds_attrs:
-          assert {"VISIBILITY", "UVW", "FLAG", "WEIGHT"}.issubset(
-            dataset.data_vars.keys()
-          )
+        field_and_source_path = f"{path}/field_and_source_xds"
+        try:
+          field_and_source = datasets.pop(field_and_source_path)
+        except KeyError:
+          raise RuntimeError(f"{field_and_source_path} not present in DataTree")
 
-          field_and_source_path = f"{path}/field_and_source_xds"
-          try:
-            field_and_source = datasets.pop(field_and_source_path)
-          except KeyError:
-            raise RuntimeError(f"{field_and_source_path} not present in DataTree")
-
-          data_group_name = "base"
-          base_field_and_source_path = f"{path}/field_and_source_{data_group_name}_xds"
-          datasets[base_field_and_source_path] = field_and_source
-
-          ds_attrs["data_groups"] = {
-            data_group_name: {
-              "correlated_data": "VISIBILITY",
-              "description": "Data group associated with the VISIBILITY DataArray",
-              "date": datetime.now(timezone.utc).isoformat(),
-              "field_and_source": base_field_and_source_path,
-              "uvw": "UVW",
-              "flag": "FLAG",
-              "weight": "WEIGHT",
-            }
-          }
+        # Each data group refers to a field_and_source dataset,
+        # relative to the correlated dataset. Present the same dataset
+        # for each data group and refer to it from the root of the tree
+        for data_group in ds_attrs["data_groups"].values():
+          group_path = f"{path}/{data_group['field_and_source']}"
+          datasets[group_path] = field_and_source
+          data_group["field_and_source"] = group_path
 
         # We may need to fix the UVW frame if it's set to ITRF
         if (uvw_attrs := dataset.UVW.attrs)["frame"] == "ITRF":
@@ -625,6 +700,11 @@ class MSv2EntryPoint(BackendEntrypoint):
       str, Literal["invariant", "hermitian", "antisymmetric"]
     ]
     | None = None,
+    data_groups: str
+    | DataGroupColumnT
+    | Iterable[str | DataGroupColumnT]
+    | Mapping[str, Mapping[str, DataGroupVariableT]]
+    | None = None,
   ) -> Dict[str, Dataset]:
     """Create a dictionary of :class:`~xarray.Dataset` presenting an MSv4 view
     over a partition of a MSv2 CASA Measurement Set"""
@@ -636,6 +716,8 @@ class MSv2EntryPoint(BackendEntrypoint):
 
     driver_kwargs = resolve_driver_kwargs(driver, driver_kwargs, ninstances)
     interpolate = resolve_interpolate(interpolate)
+    # Resolve early, in case of single-pass iterables
+    data_groups = resolve_data_groups(data_groups)
 
     store_args = CommonStoreArgs(
       ms,
@@ -673,6 +755,7 @@ class MSv2EntryPoint(BackendEntrypoint):
         epoch=store_args.epoch,
         structure_factory=store_args.structure_factory,
         baseline_orientation=baseline_orientation,
+        data_groups=data_groups,
       )
 
       antenna_factory = AntennaFactory(
