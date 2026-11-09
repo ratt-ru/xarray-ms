@@ -139,6 +139,38 @@ def test_mapping_data_groups(simmed_ms):
 
 
 @pytest.mark.parametrize("simmed_ms", [DATA_GROUP_MS], indirect=True)
+@pytest.mark.parametrize(
+  "rename",
+  [("RESIDUAL_DATA", "VISIBILITY_RESIDUAL"), ["RESIDUAL_DATA", "VISIBILITY_RESIDUAL"]],
+)
+def test_renamed_data_groups(simmed_ms, rename):
+  """(source, destination) tuples rename secondary columns"""
+  data_groups = {
+    "residual": {"correlated_data": rename},
+    # A consistent rename in another data group
+    "residual_corrected": {
+      "correlated_data": ("RESIDUAL_DATA", "VISIBILITY_RESIDUAL"),
+      "weight": "SIGMA_SPECTRUM",
+    },
+  }
+  dt = xarray.open_datatree(simmed_ms, data_groups=data_groups)
+  for node in _correlated_nodes(dt):
+    groups = node.attrs["data_groups"]
+    assert _variables(groups["residual"]) == {
+      "correlated_data": "VISIBILITY_RESIDUAL",
+      "flag": "FLAG",
+      "weight": "WEIGHT",
+      "uvw": "UVW",
+    }
+    assert groups["residual_corrected"]["correlated_data"] == "VISIBILITY_RESIDUAL"
+    assert groups["residual"]["description"] == (
+      "Data group associated with the VISIBILITY_RESIDUAL variable"
+    )
+    assert "RESIDUAL_DATA" not in node
+    assert_array_equal(node.VISIBILITY_RESIDUAL.values, 4 * node.VISIBILITY.values)
+
+
+@pytest.mark.parametrize("simmed_ms", [DATA_GROUP_MS], indirect=True)
 def test_open_dataset_data_groups(simmed_ms):
   """open_dataset presents data groups with relative field_and_source names"""
   ds = xarray.open_dataset(simmed_ms, data_groups="RESIDUAL_DATA")
@@ -177,8 +209,59 @@ def test_override_absent_standard_data_group(simmed_ms):
     ("model", ValueError, "standard data groups"),
     (["model", "RESIDUAL_DATA"], ValueError, "standard data groups"),
     ({"residual": "RESIDUAL_DATA"}, TypeError, "must map"),
-    ({"residual": {"correlated_data": 1}}, TypeError, "must be strings"),
+    ({"residual": {"correlated_data": 1}}, TypeError, "must be a variable name"),
     (1, TypeError, "must be a string"),
+    # Renames
+    (
+      {"residual": {"correlated_data": ("DATA", "VIS")}},
+      ValueError,
+      "not secondary variables",
+    ),
+    (
+      {"residual": {"correlated_data": ("MISSING_DATA", "VIS")}},
+      ValueError,
+      "not secondary variables",
+    ),
+    (
+      {"residual": {"correlated_data": ("RESIDUAL_DATA", "VISIBILITY_MODEL")}},
+      ValueError,
+      "already exist",
+    ),
+    (
+      {
+        "a": {"correlated_data": ("RESIDUAL_DATA", "A")},
+        "b": {"correlated_data": ("RESIDUAL_DATA", "B")},
+      },
+      ValueError,
+      "also renamed to A",
+    ),
+    (
+      {
+        "a": {"correlated_data": ("RESIDUAL_DATA", "A")},
+        "b": {"correlated_data": ("CORRECTED_WEIGHT_SPECTRUM", "A")},
+      },
+      ValueError,
+      "is also renamed to A",
+    ),
+    (
+      # The source is no longer a variable once renamed
+      {
+        "a": {"correlated_data": ("RESIDUAL_DATA", "A")},
+        "b": {"correlated_data": "RESIDUAL_DATA"},
+      },
+      ValueError,
+      "which is not a variable",
+    ),
+    (
+      {"residual": {"correlated_data": ("RESIDUAL_DATA",)}},
+      TypeError,
+      "source, destination",
+    ),
+    (
+      {"residual": {"correlated_data": "RESIDUAL_DATA", "description": ("a", "b")}},
+      TypeError,
+      "must be a string",
+    ),
   ],
 )
 def test_invalid_data_groups(simmed_ms, data_groups, exception, match):

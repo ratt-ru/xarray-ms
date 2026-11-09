@@ -194,8 +194,20 @@ their ``correlated_data``:
     "corrected": {"weight": "CORRECTED_WEIGHT_SPECTRUM"},
   })
 
+A ``(source, destination)`` tuple in place of a variable name renames
+the non-standard ``source`` column to the ``destination`` variable.
+Only non-standard columns, which are otherwise presented under their
+MSv2 names, can be renamed:
+
+.. code-block:: python
+
+  dt = xarray.open_datatree(ms, data_groups={
+    "residual": {"correlated_data": ("RESIDUAL_DATA", "VISIBILITY_RESIDUAL")},
+  })
+
 A ``ValueError`` is raised if a data group refers to a variable
-that is not present on the correlated dataset.
+that is not present on the correlated dataset,
+or if renames conflict with each other or with existing variables.
 
 
 Writing a DataTree to Zarr

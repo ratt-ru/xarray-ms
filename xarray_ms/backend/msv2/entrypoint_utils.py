@@ -9,7 +9,10 @@ from rarg_python_patterns.multiton import Multiton
 
 from xarray_ms.backend.msv2.factories.correlated import (
   DATA_GROUP_KEYS,
+  DATA_GROUP_VARIABLE_KEYS,
   STANDARD_DATA_GROUPS,
+  DataGroupVariableT,
+  data_group_renames,
 )
 from xarray_ms.backend.msv2.structure import (
   DEFAULT_PARTITION_COLUMNS,
@@ -122,15 +125,21 @@ def resolve_baseline_orientation(
 
 
 def resolve_data_groups(
-  data_groups: str | Iterable[str] | Mapping[str, Mapping[str, str]] | None,
-) -> Dict[str, Dict[str, str]]:
+  data_groups: str
+  | Iterable[str]
+  | Mapping[str, Mapping[str, DataGroupVariableT]]
+  | None,
+) -> Dict[str, Dict[str, DataGroupVariableT]]:
   """Normalise the ``data_groups`` argument into a
-  ``{data_group_name: {data_group_key: variable_name}}`` dictionary.
+  ``{data_group_name: {data_group_key: variable}}`` dictionary.
 
   A string, or iterable of strings, names custom data groups whose
   correlated data is the variable of the same name.
   Standard data groups are always present if their column is present,
   but can be overridden with the mapping form.
+  In the mapping form, a variable is either a variable name,
+  or a ``(source, destination)`` tuple renaming the non-standard
+  ``source`` column to the ``destination`` variable.
   """
   if data_groups is None:
     return {}
@@ -176,14 +185,33 @@ def resolve_data_groups(
         f"Valid keys are {list(DATA_GROUP_KEYS)}"
       )
 
-    if not all(isinstance(v, str) for v in group.values()):
-      raise TypeError(f"Values of data group {name!r} {dict(group)} must be strings")
+    resolved: Dict[str, DataGroupVariableT] = {}
+
+    for key, value in group.items():
+      if isinstance(value, str):
+        resolved[key] = value
+      elif (
+        key in DATA_GROUP_VARIABLE_KEYS
+        and isinstance(value, (tuple, list))
+        and len(value) == 2
+        and all(isinstance(v, str) for v in value)
+      ):
+        resolved[key] = (value[0], value[1])
+      elif key in DATA_GROUP_VARIABLE_KEYS:
+        raise TypeError(
+          f"Data group {name!r} {key}={value!r} must be a variable name "
+          f"or a (source, destination) tuple of strings"
+        )
+      else:
+        raise TypeError(f"Data group {name!r} {key}={value!r} must be a string")
 
     if name not in STANDARD_DATA_GROUPS and "correlated_data" not in group:
       raise ValueError(f"Data group {name!r} must specify its correlated_data")
 
-    result[name] = dict(group)
+    result[name] = resolved
 
+  # Check for conflicting renames
+  data_group_renames(result)
   return result
 
 

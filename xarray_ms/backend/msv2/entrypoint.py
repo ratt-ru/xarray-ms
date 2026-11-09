@@ -49,6 +49,7 @@ if TYPE_CHECKING:
 
   from xarray.backends.common import AbstractDataStore
 
+  from xarray_ms.backend.msv2.factories.correlated import DataGroupVariableT
   from xarray_ms.backend.msv2.structure import (
     DEFAULT_PARTITION_COLUMNS,
     MainTableFactory,
@@ -148,7 +149,7 @@ class MSv2Store(AbstractWritableDataStore):
   _driver_kwargs: Dict[str, Any]
   _epoch: str
   _baseline_orientation: Mapping[str, BaselineOrientation]
-  _data_groups: Mapping[str, Mapping[str, str]]
+  _data_groups: Mapping[str, Mapping[str, DataGroupVariableT]]
 
   def __init__(
     self,
@@ -165,7 +166,7 @@ class MSv2Store(AbstractWritableDataStore):
     subtable_table_factories: Dict[str, SubtableTableFactory] | None = None,
     subtable_index_factories: Dict[str, SubtableIndexFactory] | None = None,
     baseline_orientation: Mapping[str, BaselineOrientation] | None = None,
-    data_groups: Mapping[str, Mapping[str, str]] | None = None,
+    data_groups: Mapping[str, Mapping[str, DataGroupVariableT]] | None = None,
   ):
     self._table_factory = table_factory
     self._subtable_factories = subtable_factories
@@ -199,7 +200,10 @@ class MSv2Store(AbstractWritableDataStore):
       str, Literal["invariant", "hermitian", "antisymmetric"] | BaselineOrientation
     ]
     | None = None,
-    data_groups: str | Iterable[str] | Mapping[str, Mapping[str, str]] | None = None,
+    data_groups: str
+    | Iterable[str]
+    | Mapping[str, Mapping[str, DataGroupVariableT]]
+    | None = None,
   ):
     if not isinstance(ms, str):
       raise ValueError("Measurement Sets paths must be strings")
@@ -350,7 +354,10 @@ class MSv2EntryPoint(BackendEntrypoint):
       str, Literal["invariant", "hermitian", "antisymmetric"]
     ]
     | None = None,
-    data_groups: str | Iterable[str] | Mapping[str, Mapping[str, str]] | None = None,
+    data_groups: str
+    | Iterable[str]
+    | Mapping[str, Mapping[str, DataGroupVariableT]]
+    | None = None,
   ) -> Dataset:
     """Create a :class:`~xarray.Dataset` presenting an MSv4 view
     over a partition of a MSv2 CASA Measurement Set
@@ -414,14 +421,19 @@ class MSv2EntryPoint(BackendEntrypoint):
         correlated data is the variable of the same name, and whose
         flag, weight and uvw are those of the base data group.
         A mapping specifies the keys and variable names of each data group,
-        overriding the defaults of standard data groups, e.g.
+        overriding the defaults of standard data groups.
+        A :code:`(source, destination)` tuple in place of a variable name
+        renames the non-standard :code:`source` column to the
+        :code:`destination` variable, e.g.
 
         .. code-block:: python
 
           "RESIDUAL_DATA"
           ["RESIDUAL_DATA", "BITFLAG_DATA"]
           {{
-            "residual": {{"correlated_data": "RESIDUAL_DATA"}},
+            "residual": {{
+              "correlated_data": ("RESIDUAL_DATA", "VISIBILITY_RESIDUAL"),
+            }},
             "corrected": {{"weight": "CORRECTED_WEIGHT_SPECTRUM"}},
           }}
 
@@ -472,7 +484,10 @@ class MSv2EntryPoint(BackendEntrypoint):
       str, Literal["invariant", "hermitian", "antisymmetric"]
     ]
     | None = None,
-    data_groups: str | Iterable[str] | Mapping[str, Mapping[str, str]] | None = None,
+    data_groups: str
+    | Iterable[str]
+    | Mapping[str, Mapping[str, DataGroupVariableT]]
+    | None = None,
   ) -> DataTree:
     """Create a :class:`~xarray.core.datatree.DataTree` presenting an MSv4 view
     over multiple partitions of a MSv2 CASA Measurement Set.
@@ -562,14 +577,19 @@ class MSv2EntryPoint(BackendEntrypoint):
         correlated data is the variable of the same name, and whose
         flag, weight and uvw are those of the base data group.
         A mapping specifies the keys and variable names of each data group,
-        overriding the defaults of standard data groups, e.g.
+        overriding the defaults of standard data groups.
+        A :code:`(source, destination)` tuple in place of a variable name
+        renames the non-standard :code:`source` column to the
+        :code:`destination` variable, e.g.
 
         .. code-block:: python
 
           "RESIDUAL_DATA"
           ["RESIDUAL_DATA", "BITFLAG_DATA"]
           {{
-            "residual": {{"correlated_data": "RESIDUAL_DATA"}},
+            "residual": {{
+              "correlated_data": ("RESIDUAL_DATA", "VISIBILITY_RESIDUAL"),
+            }},
             "corrected": {{"weight": "CORRECTED_WEIGHT_SPECTRUM"}},
           }}
 
@@ -666,7 +686,10 @@ class MSv2EntryPoint(BackendEntrypoint):
       str, Literal["invariant", "hermitian", "antisymmetric"]
     ]
     | None = None,
-    data_groups: str | Iterable[str] | Mapping[str, Mapping[str, str]] | None = None,
+    data_groups: str
+    | Iterable[str]
+    | Mapping[str, Mapping[str, DataGroupVariableT]]
+    | None = None,
   ) -> Dict[str, Dataset]:
     """Create a dictionary of :class:`~xarray.Dataset` presenting an MSv4 view
     over a partition of a MSv2 CASA Measurement Set"""

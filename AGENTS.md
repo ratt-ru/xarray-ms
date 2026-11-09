@@ -174,7 +174,10 @@ MSv4 `data_groups` attribute. `STANDARD_DATA_GROUPS` (`base`, `corrected`,
 in [entrypoint_utils.py](xarray_ms/backend/msv2/entrypoint_utils.py): strings
 add custom groups named after their correlated data variable, and mappings
 override standard groups or add custom ones, which inherit `flag`, `weight`
-and `uvw` from `base`. Each group's `field_and_source` is relative
+and `uvw` from `base`. A mapping value may be a `(source, destination)` tuple
+(`data_group_renames`), renaming a secondary variable, i.e. a non-standard
+MSv2 column, in `CorrelatedFactory._rename_secondary_variables`; data groups
+then refer to the destination. Each group's `field_and_source` is relative
 (`field_and_source_<group>_xds`); `postprocess_datasets` presents the
 partition's `field_and_source_xds` under each group's name, and rewrites the
 reference to its path in the DataTree.

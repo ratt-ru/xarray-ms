@@ -152,6 +152,46 @@ DATA_GROUP_VARIABLE_KEYS = ("correlated_data", "flag", "weight", "uvw")
 #: Data group keys that may be specified by the user
 DATA_GROUP_KEYS = DATA_GROUP_VARIABLE_KEYS + ("description",)
 
+#: A data group variable, either a variable name or a
+#: (source, destination) tuple renaming a secondary column
+DataGroupVariableT = str | Tuple[str, str]
+
+
+def data_group_renames(
+  data_groups: Mapping[str, Mapping[str, DataGroupVariableT]],
+) -> Dict[str, str]:
+  """Returns the :code:`{source: destination}` secondary column
+  renames specified by :code:`(source, destination)` tuples in the data groups.
+
+  Raises:
+    ValueError: If a source is renamed to different destinations,
+      or different sources are renamed to the same destination.
+  """
+  renames: Dict[str, str] = {}
+  sources: Dict[str, str] = {}
+
+  for name, group in data_groups.items():
+    for key, value in group.items():
+      if not isinstance(value, tuple):
+        continue
+
+      source, destination = value
+
+      if renames.setdefault(source, destination) != destination:
+        raise ValueError(
+          f"Data group {name!r} renames {source} to {destination}, "
+          f"but it is also renamed to {renames[source]}"
+        )
+
+      if sources.setdefault(destination, source) != source:
+        raise ValueError(
+          f"Data group {name!r} renames {source} to {destination}, "
+          f"but {sources[destination]} is also renamed to {destination}"
+        )
+
+  return renames
+
+
 FIXED_DIMENSION_SIZES = {"uvw_label": 3}
 
 # casacore ColumnDesc::FixedShape option bit
@@ -173,7 +213,7 @@ class CorrelatedFactory(DatasetFactory):
   _main_table_desc: Dict[str, Collection[str]]
   _coder_factory: MSv2CoderFactory
   _baseline_orientation: Mapping[str, BaselineOrientation]
-  _data_groups: Mapping[str, Mapping[str, str]]
+  _data_groups: Mapping[str, Mapping[str, DataGroupVariableT]]
 
   def __init__(
     self,
@@ -183,7 +223,7 @@ class CorrelatedFactory(DatasetFactory):
     subtable_factories: Dict[str, SubtableFactory],
     structure_factory: MSv2StructureFactory,
     baseline_orientation: Mapping[str, BaselineOrientation] | None = None,
-    data_groups: Mapping[str, Mapping[str, str]] | None = None,
+    data_groups: Mapping[str, Mapping[str, DataGroupVariableT]] | None = None,
   ):
     super().__init__(partition_key, structure_factory, subtable_factories)
     self._preferred_chunks = preferred_chunks
@@ -534,7 +574,8 @@ class CorrelatedFactory(DatasetFactory):
       data_vars.append(("SIGMA_SPECTRUM", sigma))
       processed_columns.add("SIGMA")
 
-    data_vars.extend(self.secondary_variables(processed_columns, dim_sizes, pol_perm))
+    secondary_vars = self.secondary_variables(processed_columns, dim_sizes, pol_perm)
+    data_vars.extend(self._rename_secondary_variables(secondary_vars))
     field = maybe_impute_field_table(field, partition.field_ids)
     field_names = field.take(partition.field_ids)["NAME"].to_numpy().astype(str)
 
@@ -667,6 +708,14 @@ class CorrelatedFactory(DatasetFactory):
 
     variable_names = {n for n, _ in data_vars}
 
+    if len(variable_names) != len(data_vars):
+      names = [n for n, _ in data_vars]
+      duplicates = sorted({n for n in names if names.count(n) > 1})
+      raise ValueError(
+        f"Data group renames produce variables {duplicates} "
+        f"that already exist in partition {self._partition_key}"
+      )
+
     for name, group in self.data_groups().items():
       for key in DATA_GROUP_VARIABLE_KEYS:
         if (var_name := group[key]) not in variable_names:
@@ -678,6 +727,24 @@ class CorrelatedFactory(DatasetFactory):
 
     return FrozenDict(sorted(data_vars + coordinates))
 
+  def _rename_secondary_variables(
+    self, secondary_vars: List[Tuple[str, Variable]]
+  ) -> List[Tuple[str, Variable]]:
+    """Applies the :code:`(source, destination)` renames
+    of the data groups to the secondary variables"""
+    renames = data_group_renames(self._data_groups)
+    secondary_names = {n for n, _ in secondary_vars}
+
+    if invalid := sorted(set(renames) - secondary_names):
+      raise ValueError(
+        f"Data groups rename {invalid}, which are not secondary variables "
+        f"of partition {self._partition_key}. Only non-standard MSv2 columns, "
+        f"presented as secondary variables, can be renamed. "
+        f"Secondary variables are {sorted(secondary_names)}"
+      )
+
+    return [(renames.get(n, n), v) for n, v in secondary_vars]
+
   def data_groups(self) -> Dict[str, Dict[str, str]]:
     """Returns the data groups of this partition, mapping their names onto
     the data group keys in :data:`DATA_GROUP_KEYS`.
@@ -686,10 +753,15 @@ class CorrelatedFactory(DatasetFactory):
     correlated data is present, and are updated with any user
     overrides. User data groups that are not standard inherit
     their flag, weight and uvw from the base data group."""
+    # Refer to renamed variables by their destination
+    user_groups = {
+      name: {k: v[1] if isinstance(v, tuple) else v for k, v in group.items()}
+      for name, group in self._data_groups.items()
+    }
     groups: Dict[str, Dict[str, str]] = {}
 
     for name, var_name in STANDARD_DATA_GROUPS.items():
-      override = self._data_groups.get(name, {})
+      override = user_groups.get(name, {})
       column = MSV4_to_MSV2_COLUMN_SCHEMAS[var_name].name
       present = name == "base" or column in self._main_table_desc
 
@@ -710,7 +782,7 @@ class CorrelatedFactory(DatasetFactory):
 
     base = groups["base"]
 
-    for name, group in self._data_groups.items():
+    for name, group in user_groups.items():
       if name not in STANDARD_DATA_GROUPS:
         groups[name] = {
           "flag": base["flag"],
