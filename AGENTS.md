@@ -80,13 +80,42 @@ well-defined:
 
 - auto-correlations are dropped if the canonical grid excludes them,
 - antenna pairs with `ANTENNA1 > ANTENNA2` are swapped to the upper-triangle
-  convention,
+  convention, and the swapped cells are recorded in `PartitionData.flipped`
+  (see [Baseline orientation](#baseline-orientation)),
 - antenna IDs are remapped to a contiguous `0..antenna-1` range when
   `FEED::ANTENNA_ID` is not already contiguous.
 
 Two rows landing on the same `(time, baseline_id)` cell is an error: it means the
 partition cannot be expressed as a grid, and `PartitioningError` is raised. The
-fix is generally a finer `partition_schema`.
+fix is generally a finer `partition_schema`, unless the two rows are one baseline
+stored in both orientations at the same `TIME`, which gets its own message.
+
+#### Baseline orientation
+
+Baselines are always labelled upper-triangular, so `baseline_id` follows
+`np.triu_indices`. A row stored as `ANTENNA1 > ANTENNA2` holds the data of the
+*reversed* baseline, which `MainMSv2Array` converts on read, per cell, using
+`PartitionData.flipped` (`(time, baseline_id)`, `None` when nothing is flipped).
+`V_qp = V_pqᴴ` (the Hermitian transpose of the 2x2 correlation matrix), so each
+variable declares how it transforms, as a `BaselineOrientation` in
+[casa_types.py](xarray_ms/casa_types.py):
+
+- `HERMITIAN`: swap cross-hands along `polarization`
+  (`Polarisations.transpose_permutation`, e.g. `XY↔YX`), and conjugate if
+  complex. This covers `DATA`, and also `FLAG`, `WEIGHT` and `SIGMA`: they are
+  the same operation on a real dtype.
+- `ANTISYMMETRIC`: negate, e.g. `UVW`, and any column with `uvw` measures.
+- `INVARIANT`: unchanged, e.g. `TIME`, `EXPOSURE`, `FLAG_ROW`.
+
+Standard columns carry their orientation in `MSV4_to_MSV2_COLUMN_SCHEMAS` and
+`SECONDARY_COLUMN_ORIENTATIONS` in
+[correlated.py](xarray_ms/backend/msv2/factories/correlated.py). Dtype and shape
+cannot determine the orientation: a real per-baseline phase is antisymmetric,
+while a real weight is Hermitian. So a secondary column of unknown orientation
+is omitted, with a `BaselineOrientationWarning`, from partitions that contain
+flipped cells, unless the user declares one via
+`open_datatree(..., baseline_orientation={...})`. Every orientation is its own
+inverse, so the same transform applies on write.
 
 #### 4. `-1` means "missing row"
 
