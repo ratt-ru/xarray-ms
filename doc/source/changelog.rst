@@ -13,7 +13,7 @@ X.Y.Z (DD-MM-YYYY)
   Non-standard columns are omitted from affected partitions unless their
   orientation is declared with ``baseline_orientation``.
   A baseline stored in both orientations at the same time now raises
-  a specific ``PartitioningError`` (:issue:`199`).
+  a specific ``PartitioningError`` (:issue:`199`, :pr:`201`).
 
 0.5.13 (20-10-2026)
 -------------------
