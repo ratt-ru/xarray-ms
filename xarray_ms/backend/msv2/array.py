@@ -15,6 +15,7 @@ from xarray.core.indexing import (
   explicit_indexing_adapter,
 )
 
+from xarray_ms.casa_types import BaselineOrientation
 from xarray_ms.errors import MismatchedWriteRegion
 from xarray_ms.msv4_types import MAIN_PREFIX_DIMS
 
@@ -107,7 +108,11 @@ class MainMSv2Array(MSv2Array):
   """Backend array containing functionality for reading an MSv2 column
   from the MAIN table. Columns are assumed to have ("time", "baseline_id")
   as the first dimensions. These are mapped onto the "row" dimension
-  via the partition row map"""
+  via the partition row map.
+
+  Rows stored as ``ANTENNA1 > ANTENNA2`` are presented on the
+  upper-triangular baseline ``(ANTENNA2, ANTENNA1)``, and are
+  converted to that orientation as described by ``orientation``."""
 
   __slots__ = (
     "_table_factory",
@@ -116,6 +121,9 @@ class MainMSv2Array(MSv2Array):
     "_column",
     "_default",
     "_transform",
+    "_orientation",
+    "_pol_axis",
+    "_pol_perm",
   )
 
   _table_factory: MainTableFactory
@@ -124,6 +132,9 @@ class MainMSv2Array(MSv2Array):
   _column: str
   _default: Any | None
   _transform: TransformerT | None
+  _orientation: BaselineOrientation
+  _pol_axis: int | None
+  _pol_perm: npt.NDArray[np.intp] | None
 
   def __init__(
     self,
@@ -135,7 +146,21 @@ class MainMSv2Array(MSv2Array):
     dtype: npt.DTypeLike,
     default: Any | None = None,
     transform: TransformerT | None = None,
+    orientation: BaselineOrientation = BaselineOrientation.INVARIANT,
+    pol_axis: int | None = None,
+    pol_perm: npt.NDArray[np.intp] | None = None,
   ):
+    """
+    Args:
+      orientation: How the column transforms when its baseline is reversed.
+      pol_axis: The polarization axis of the array, if any.
+        Cross-hand correlations along it are swapped on reversed baselines
+        if ``orientation`` is :attr:`BaselineOrientation.HERMITIAN`.
+      pol_perm: For each correlation, the index of the correlation
+        measured on the reversed baseline, or -1 if absent.
+        See :meth:`~xarray_ms.casa_types.Polarisations.transpose_permutation`.
+        Required if ``pol_axis`` is given.
+    """
     super().__init__(shape, dtype)
     self._table_factory = table_factory
     self._structure_factory = structure_factory
@@ -143,8 +168,15 @@ class MainMSv2Array(MSv2Array):
     self._column = column
     self._default = default
     self._transform = transform
+    self._orientation = BaselineOrientation(orientation)
+    self._pol_axis = pol_axis
+    self._pol_perm = None if pol_perm is None else np.asarray(pol_perm, np.intp)
 
     assert len(shape) >= len(MAIN_PREFIX_DIMS), f"{MAIN_PREFIX_DIMS} required"
+    assert pol_axis is None or 2 <= pol_axis < len(shape)
+    assert pol_axis is None or (
+      self._pol_perm is not None and self._pol_perm.shape == (shape[pol_axis],)
+    )
 
   def __getitem__(self, key) -> npt.NDArray:
     return explicit_indexing_adapter(
@@ -168,14 +200,32 @@ class MainMSv2Array(MSv2Array):
       return np.empty(expected_shape, dtype=self.dtype)
     # Map the (time, baseline_id) coordinates onto row indices.
     # Index each axis separately, as the key is an outer indexer
-    row_map = self._structure_factory.instance[self._partition].row_map
-    rows = row_map[key[0]][:, key[1]]
-    row_key = (rows.ravel(),) + key[2:]
-    row_shape = (rows.size,) + expected_shape[2:]
+    partition = self._structure_factory.instance[self._partition]
+    rows = partition.row_map[key[0]][:, key[1]]
+    flip = self._flipped_cells(partition.flipped, key)
+    read_key, read_shape = list(key[2:]), list(expected_shape[2:])
+    requested = pol_union = None
+
+    # Flipped cells require the correlations measured on the reversed
+    # baseline, so read the union of those and the requested correlations
+    if flip is not None and (pol_axis := self._hermitian_pol_axis) is not None:
+      assert self._pol_perm is not None
+      requested = np.arange(self.shape[pol_axis])[key[pol_axis]]
+      partners = self._pol_perm[requested]
+      pol_union = np.union1d(requested, partners[partners >= 0])
+      read_key[pol_axis - 2] = pol_union
+      read_shape[pol_axis - 2] = pol_union.size
+
+    row_key = (rows.ravel(),) + tuple(read_key)
+    row_shape = (rows.size,) + tuple(read_shape)
     result = np.full(row_shape, self._default, dtype=self.dtype)
     with rethrow_arcae_exceptions():
       self._table_factory.instance.getcol(self._column, row_key, result)
-    result = result.reshape(rows.shape + expected_shape[2:])
+    result = result.reshape(rows.shape + tuple(read_shape))
+
+    if flip is not None:
+      result = self._orient(result, flip, requested, pol_union)
+
     # arcae doesn't handle squeezing out the selecting axis so we do it here.
     result = result.squeeze(axis=squeeze_axis)
     return self._transform(result) if self._transform else result
@@ -190,6 +240,62 @@ class MainMSv2Array(MSv2Array):
     value = value.reshape(row_shape)
     with rethrow_arcae_exceptions():
       self._table_factory.instance.putcol(self._column, value, index=row_key)
+
+  @property
+  def _hermitian_pol_axis(self) -> int | None:
+    if self._orientation is BaselineOrientation.HERMITIAN:
+      return self._pol_axis
+    return None
+
+  def _flipped_cells(
+    self, flipped: npt.NDArray[np.bool_] | None, key
+  ) -> npt.NDArray[np.bool_] | None:
+    """Returns the selected (time, baseline_id) cells
+    that are stored in reversed orientation, or None if there are none,
+    or the column is invariant under baseline reversal"""
+    if flipped is None or self._orientation is BaselineOrientation.INVARIANT:
+      return None
+    flip = flipped[key[0]][:, key[1]]
+    return flip if flip.any() else None
+
+  def _orient(
+    self,
+    data: npt.NDArray,
+    flip: npt.NDArray[np.bool_],
+    requested: npt.NDArray[np.intp] | None = None,
+    pol_union: npt.NDArray[np.intp] | None = None,
+  ) -> npt.NDArray:
+    """Converts the flipped cells of ``(time, baseline_id, ...)`` data,
+    read in stored orientation, to the upper-triangular orientation.
+
+    If the column has a polarization axis, ``data`` holds the
+    correlations in ``pol_union`` along it, while the result holds
+    the ``requested`` correlations.
+    """
+    if self._orientation is BaselineOrientation.ANTISYMMETRIC:
+      data[flip] = -data[flip]
+      return data
+
+    assert self._orientation is BaselineOrientation.HERMITIAN
+
+    if (pol_axis := self._hermitian_pol_axis) is None:
+      flipped = data[flip]
+    else:
+      assert requested is not None and pol_union is not None
+      assert self._pol_perm is not None
+      partners = self._pol_perm[requested]
+      present = partners >= 0
+      # Unflipped cells take the requested correlations,
+      # flipped cells the correlations measured on the reversed baseline
+      partner_index = np.searchsorted(pol_union, np.where(present, partners, 0))
+      flipped = np.take(data[flip], partner_index, axis=pol_axis - 1)
+      data = np.take(data, np.searchsorted(pol_union, requested), axis=pol_axis)
+      # Correlations without a partner cannot be reversed
+      missing = (slice(None),) * (pol_axis - 1) + (~present,)
+      flipped[missing] = self._default
+
+    data[flip] = np.conj(flipped) if np.iscomplexobj(flipped) else flipped
+    return data
 
   @property
   def transform(self) -> TransformerT | None:

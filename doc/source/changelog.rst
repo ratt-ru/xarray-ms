@@ -3,6 +3,18 @@
 Changelog
 =========
 
+X.Y.Z (DD-MM-YYYY)
+------------------
+* Convert rows stored as ``ANTENNA1 > ANTENNA2`` to their upper-triangular
+  baseline on read: ``VISIBILITY`` is conjugated with its cross-hand
+  correlations swapped, ``UVW`` is negated, and the cross-hands of ``FLAG``,
+  ``WEIGHT`` and ``SIGMA_SPECTRUM`` are swapped. Previously these baselines were
+  labelled upper-triangular, but their data was returned in the stored orientation.
+  Non-standard columns are omitted from affected partitions unless their
+  orientation is declared with ``baseline_orientation``.
+  A baseline stored in both orientations at the same time now raises
+  a specific ``PartitioningError`` (:issue:`199`, :pr:`201`).
+
 0.5.13 (20-10-2026)
 -------------------
 * Bump the minimum ``arcae`` version to 0.5.8 (:pr:`196`).

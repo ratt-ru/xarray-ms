@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Any, Collection, Dict, List, Mapping, Set, Tuple
 
 import numpy as np
+import numpy.typing as npt
 from xarray import Variable
 from xarray.coding.variables import unpack_for_decoding
 from xarray.core.indexing import LazilyIndexedArray
@@ -24,6 +25,7 @@ from xarray_ms.backend.msv2.imputation import (
 from xarray_ms.backend.msv2.measures_encoders import (
   MSv2Coder,
   MSv2CoderFactory,
+  UvwCoder,
   VisibilityCoder,
 )
 from xarray_ms.backend.msv2.structure import (
@@ -32,8 +34,9 @@ from xarray_ms.backend.msv2.structure import (
   PartitionKeyT,
   SubtableFactory,
 )
-from xarray_ms.casa_types import ColumnDesc, Polarisations
+from xarray_ms.casa_types import BaselineOrientation, ColumnDesc, Polarisations
 from xarray_ms.errors import (
+  BaselineOrientationWarning,
   ColumnShapeImputationWarning,
   FrameConversionWarning,
   IrregularBaselineGridWarning,
@@ -49,6 +52,8 @@ class MSv2ColumnSchema:
   default: Any = None
   coder: MSv2Coder | None = None
   low_res_dims: Tuple[str, ...] | None = None
+  # How the column transforms when its baseline is reversed
+  orientation: BaselineOrientation = BaselineOrientation.INVARIANT
 
 
 MSV4_to_MSV2_COLUMN_SCHEMAS = {
@@ -56,13 +61,29 @@ MSV4_to_MSV2_COLUMN_SCHEMAS = {
   "INTEGRATION_TIME": MSv2ColumnSchema("INTERVAL", (), np.nan, None),
   "TIME_CENTROID": MSv2ColumnSchema("TIME_CENTROID", (), np.nan, None),
   "EFFECTIVE_INTEGRATION_TIME": MSv2ColumnSchema("EXPOSURE", (), np.nan, None),
-  "UVW": MSv2ColumnSchema("UVW", ("uvw_label",), np.nan, None),
+  "UVW": MSv2ColumnSchema(
+    "UVW",
+    ("uvw_label",),
+    np.nan,
+    None,
+    orientation=BaselineOrientation.ANTISYMMETRIC,
+  ),
   "FLAG_ROW": MSv2ColumnSchema(
     "FLAG_ROW", ("frequency", "polarization"), 1, None, low_res_dims=()
   ),
-  "FLAG": MSv2ColumnSchema("FLAG", ("frequency", "polarization"), 1, None),
+  "FLAG": MSv2ColumnSchema(
+    "FLAG",
+    ("frequency", "polarization"),
+    1,
+    None,
+    orientation=BaselineOrientation.HERMITIAN,
+  ),
   "VISIBILITY": MSv2ColumnSchema(
-    "DATA", ("frequency", "polarization"), np.nan + np.nan * 1j, VisibilityCoder()
+    "DATA",
+    ("frequency", "polarization"),
+    np.nan + np.nan * 1j,
+    VisibilityCoder(),
+    orientation=BaselineOrientation.HERMITIAN,
   ),
   "WEIGHT_ROW": MSv2ColumnSchema(
     "WEIGHT",
@@ -70,9 +91,14 @@ MSV4_to_MSV2_COLUMN_SCHEMAS = {
     np.nan,
     None,
     low_res_dims=("polarization",),
+    orientation=BaselineOrientation.HERMITIAN,
   ),
   "WEIGHT": MSv2ColumnSchema(
-    "WEIGHT_SPECTRUM", ("frequency", "polarization"), np.nan, None
+    "WEIGHT_SPECTRUM",
+    ("frequency", "polarization"),
+    np.nan,
+    None,
+    orientation=BaselineOrientation.HERMITIAN,
   ),
   "SIGMA_ROW": MSv2ColumnSchema(
     "SIGMA",
@@ -80,10 +106,24 @@ MSV4_to_MSV2_COLUMN_SCHEMAS = {
     np.nan,
     None,
     low_res_dims=("polarization",),
+    orientation=BaselineOrientation.HERMITIAN,
   ),
   "SIGMA_SPECTRUM": MSv2ColumnSchema(
-    "SIGMA_SPECTRUM", ("frequency", "polarization"), np.nan, None
+    "SIGMA_SPECTRUM",
+    ("frequency", "polarization"),
+    np.nan,
+    None,
+    orientation=BaselineOrientation.HERMITIAN,
   ),
+}
+
+# How the standard secondary MAIN columns transform
+# when their baseline is reversed
+SECONDARY_COLUMN_ORIENTATIONS = {
+  "CORRECTED_DATA": BaselineOrientation.HERMITIAN,
+  "MODEL_DATA": BaselineOrientation.HERMITIAN,
+  "FLOAT_DATA": BaselineOrientation.HERMITIAN,
+  "CORRECTED_WEIGHT_SPECTRUM": BaselineOrientation.HERMITIAN,
 }
 
 FIXED_DIMENSION_SIZES = {"uvw_label": 3}
@@ -106,6 +146,7 @@ class CorrelatedFactory(DatasetFactory):
   _obs_factory: SubtableFactory
   _main_table_desc: Dict[str, Collection[str]]
   _coder_factory: MSv2CoderFactory
+  _baseline_orientation: Mapping[str, BaselineOrientation]
 
   def __init__(
     self,
@@ -114,16 +155,23 @@ class CorrelatedFactory(DatasetFactory):
     ms_factory: MainTableFactory,
     subtable_factories: Dict[str, SubtableFactory],
     structure_factory: MSv2StructureFactory,
+    baseline_orientation: Mapping[str, BaselineOrientation] | None = None,
   ):
     super().__init__(partition_key, structure_factory, subtable_factories)
     self._preferred_chunks = preferred_chunks
     self._ms_factory = ms_factory
+    self._baseline_orientation = baseline_orientation or {}
 
     ms = ms_factory.instance
     self._main_table_desc = ms.tabledesc()
     self._coder_factory = MSv2CoderFactory.from_table_desc(self._main_table_desc)
 
-  def _variable_from_column(self, column: str, dim_sizes: Dict[str, int]) -> Variable:
+  def _variable_from_column(
+    self,
+    column: str,
+    dim_sizes: Dict[str, int],
+    pol_perm: npt.NDArray[np.intp],
+  ) -> Variable:
     """Derive an xarray Variable from the MSv2 column descriptor and schemas"""
     try:
       schema = MSV4_to_MSV2_COLUMN_SCHEMAS[column]
@@ -146,6 +194,7 @@ class CorrelatedFactory(DatasetFactory):
 
     high_res_shape = shape
     low_res_index: Tuple[slice | None, ...] = tuple(slice(None) for _ in shape)
+    array_dims = dims
 
     if schema.low_res_dims:
       low_res_dims = ("time", "baseline_id") + schema.low_res_dims
@@ -156,6 +205,11 @@ class CorrelatedFactory(DatasetFactory):
         raise KeyError(f"No dimension size found for {e.args[0]}")
       low_res_index = tuple(slice(None) if d in shape_map else None for d in dims)
       shape = tuple(shape_map.values())
+      array_dims = low_res_dims
+
+    pol_axis = (
+      array_dims.index("polarization") if "polarization" in array_dims else None
+    )
 
     array: MSv2Array = MainMSv2Array(
       self._ms_factory,
@@ -165,6 +219,9 @@ class CorrelatedFactory(DatasetFactory):
       shape,
       column_desc.dtype,
       default,
+      orientation=schema.orientation,
+      pol_axis=pol_axis,
+      pol_perm=None if pol_axis is None else pol_perm,
     )
 
     if schema.low_res_dims:
@@ -185,7 +242,10 @@ class CorrelatedFactory(DatasetFactory):
     return Variable(dims, LazilyIndexedArray(data), attrs, encoding, fastpath=True)
 
   def secondary_variables(
-    self, processed_columns: Set[str], dim_sizes: Dict[str, int]
+    self,
+    processed_columns: Set[str],
+    dim_sizes: Dict[str, int],
+    pol_perm: npt.NDArray[np.intp],
   ) -> List[Tuple[str, Variable]]:
     """Add any secondary, non-standard variables"""
     import pyarrow as pa
@@ -269,6 +329,27 @@ class CorrelatedFactory(DatasetFactory):
         column_desc = ColumnDesc.from_descriptor(column, self._main_table_desc)
         coder = self._coder_factory.create(column)
 
+        if (orientation := self._secondary_orientation(column, coder)) is None:
+          if partition.flipped is not None:
+            warnings.warn(
+              f"Ignoring secondary column {column} in partition "
+              f"{self._partition_key}, which contains baselines stored as "
+              f"ANTENNA1 > ANTENNA2. It is not known how {column} "
+              f"transforms when its baseline is reversed. "
+              f"Specify this with open_datatree(..., "
+              f"baseline_orientation={{{column!r}: 'hermitian' | "
+              f"'antisymmetric' | 'invariant'}}). "
+              f"See {PARTITIONING_LINK}",
+              BaselineOrientationWarning,
+            )
+            continue
+          orientation = BaselineOrientation.INVARIANT
+
+        column_dims = ("time", "baseline_id") + column_dims
+        pol_axis = (
+          column_dims.index("polarization") if "polarization" in column_dims else None
+        )
+
         array = MainMSv2Array(
           self._ms_factory,
           self._structure_factory,
@@ -277,11 +358,12 @@ class CorrelatedFactory(DatasetFactory):
           (sizes["time"], sizes["baseline_id"]) + row_shape,
           column_desc.dtype,
           np.nan,
+          orientation=orientation,
+          pol_axis=pol_axis,
+          pol_perm=None if pol_axis is None else pol_perm,
         )
 
-        variables.append(
-          (column, coder.decode(Variable(("time", "baseline_id") + column_dims, array)))
-        )
+        variables.append((column, coder.decode(Variable(column_dims, array))))
       elif isinstance(pa_row_shapes, pa.NullArray):
         raise NotImplementedError(f"Secondary scalar column {column}")
       else:
@@ -291,6 +373,20 @@ class CorrelatedFactory(DatasetFactory):
         continue
 
     return variables
+
+  def _secondary_orientation(
+    self, column: str, coder: MSv2Coder
+  ) -> BaselineOrientation | None:
+    """Returns how a secondary column transforms when its baseline
+    is reversed, or None if this is not known"""
+    if (orientation := self._baseline_orientation.get(column)) is not None:
+      return orientation
+    if (orientation := SECONDARY_COLUMN_ORIENTATIONS.get(column)) is not None:
+      return orientation
+    # Columns with uvw measures are baseline vectors
+    if isinstance(coder, UvwCoder):
+      return BaselineOrientation.ANTISYMMETRIC
+    return None
 
   def get_variables(self) -> Mapping[str, Variable]:
     structure = self._structure_factory.instance
@@ -319,7 +415,22 @@ class CorrelatedFactory(DatasetFactory):
     freq_coder = spw_coder_factory.create("CHAN_FREQ")
     ref_freq_coder = spw_coder_factory.create("REF_FREQUENCY")
 
-    corr_type = Polarisations.from_values(pol["CORR_TYPE"][0].as_py()).to_str()
+    polarisations = Polarisations.from_values(pol["CORR_TYPE"][0].as_py())
+    corr_type = polarisations.to_str()
+    pol_perm = polarisations.transpose_permutation()
+
+    if partition.flipped is not None and np.any(pol_perm < 0):
+      unpaired = [c for c, p in zip(corr_type, pol_perm) if p < 0]
+      warnings.warn(
+        f"Partition {self._partition_key} contains baselines stored as "
+        f"ANTENNA1 > ANTENNA2, but the correlations {unpaired} "
+        f"measured on the reversed baselines are not present. "
+        f"Correlations {unpaired} on these baselines will be "
+        f"padded with nans in the case of data variables "
+        f"and flags will be set. "
+        f"See {PARTITIONING_LINK}",
+        BaselineOrientationWarning,
+      )
 
     dim_sizes = {
       "time": len(partition.time),
@@ -356,33 +467,42 @@ class CorrelatedFactory(DatasetFactory):
     }
 
     data_vars = [
-      (v, self._variable_from_column(v, dim_sizes)) for v in STANDARD_VARIABLES
+      (v, self._variable_from_column(v, dim_sizes, pol_perm))
+      for v in STANDARD_VARIABLES
     ]
 
     if "FLAG" in self._main_table_desc:
-      data_vars.append(("FLAG", self._variable_from_column("FLAG", dim_sizes)))
+      data_vars.append(
+        ("FLAG", self._variable_from_column("FLAG", dim_sizes, pol_perm))
+      )
       processed_columns.add("FLAG")
     else:
-      data_vars.append(("FLAG", self._variable_from_column("FLAG_ROW", dim_sizes)))
+      data_vars.append(
+        ("FLAG", self._variable_from_column("FLAG_ROW", dim_sizes, pol_perm))
+      )
       processed_columns.add("FLAG_ROW")
 
     if "WEIGHT_SPECTRUM" in self._main_table_desc:
-      data_vars.append(("WEIGHT", self._variable_from_column("WEIGHT", dim_sizes)))
+      data_vars.append(
+        ("WEIGHT", self._variable_from_column("WEIGHT", dim_sizes, pol_perm))
+      )
       processed_columns.add("WEIGHT_SPECTRUM")
     else:
-      data_vars.append(("WEIGHT", self._variable_from_column("WEIGHT_ROW", dim_sizes)))
+      data_vars.append(
+        ("WEIGHT", self._variable_from_column("WEIGHT_ROW", dim_sizes, pol_perm))
+      )
       processed_columns.add("WEIGHT_ROW")
 
     if "SIGMA_SPECTRUM" in self._main_table_desc:
-      sigma = self._variable_from_column("SIGMA_SPECTRUM", dim_sizes)
+      sigma = self._variable_from_column("SIGMA_SPECTRUM", dim_sizes, pol_perm)
       data_vars.append(("SIGMA_SPECTRUM", sigma))
       processed_columns.add("SIGMA_SPECTRUM")
     elif "SIGMA" in self._main_table_desc:
-      sigma = self._variable_from_column("SIGMA_ROW", dim_sizes)
+      sigma = self._variable_from_column("SIGMA_ROW", dim_sizes, pol_perm)
       data_vars.append(("SIGMA_SPECTRUM", sigma))
       processed_columns.add("SIGMA")
 
-    data_vars.extend(self.secondary_variables(processed_columns, dim_sizes))
+    data_vars.extend(self.secondary_variables(processed_columns, dim_sizes, pol_perm))
     field = maybe_impute_field_table(field, partition.field_ids)
     field_names = field.take(partition.field_ids)["NAME"].to_numpy().astype(str)
 
@@ -450,10 +570,10 @@ class CorrelatedFactory(DatasetFactory):
       time_attrs["integration_time"]["data"] = np.nan
       data_vars.extend(
         [
-          ("TIME", self._variable_from_column("TIME", dim_sizes)),
+          ("TIME", self._variable_from_column("TIME", dim_sizes, pol_perm)),
           (
             "INTEGRATION_TIME",
-            self._variable_from_column("INTEGRATION_TIME", dim_sizes),
+            self._variable_from_column("INTEGRATION_TIME", dim_sizes, pol_perm),
           ),
         ]
       )
