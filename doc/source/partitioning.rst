@@ -131,6 +131,82 @@ auto-correlations are requested, but none are present in the data.
 ``xarray-ms`` will impute these missing data points with default values
 (``nan`` in the case of data, ``1`` in the case of flags).
 
+.. _baseline-orientation:
+
+Baseline Orientation
+--------------------
+
+Baselines are always presented in upper-triangular order:
+``baseline_antenna1_name`` precedes ``baseline_antenna2_name`` in the
+antenna ordering, and ``baseline_id`` follows ``numpy.triu_indices``.
+
+Some Measurement Sets store rows as ``ANTENNA1 > ANTENNA2``.
+Such a row holds data measured on the *reversed* baseline, which
+``xarray-ms`` converts to the upper-triangular orientation on read.
+As the visibilities of the reversed baseline are the Hermitian transpose
+of the 2x2 correlation matrix, :math:`V_{qp} = V_{pq}^H`,
+each variable is transformed according to its
+:class:`~xarray_ms.casa_types.BaselineOrientation`:
+
+.. list-table::
+  :header-rows: 1
+
+  * - Orientation
+    - Transform
+    - Variables
+  * - ``hermitian``
+    - Cross-hand correlations are swapped (``XY`` ↔ ``YX``, ``RL`` ↔ ``LR``)
+      and complex values are conjugated
+    - ``VISIBILITY``, ``FLAG``, ``WEIGHT``, ``SIGMA_SPECTRUM``,
+      ``VISIBILITY_CORRECTED``, ``VISIBILITY_MODEL``, ``FLOAT_DATA``,
+      ``CORRECTED_WEIGHT_SPECTRUM``
+  * - ``antisymmetric``
+    - Values are negated
+    - ``UVW`` and columns with ``uvw`` measures
+  * - ``invariant``
+    - None
+    - ``TIME_CENTROID``, ``EFFECTIVE_INTEGRATION_TIME``, ``TIME``,
+      ``INTEGRATION_TIME``
+
+Weights, sigmas and flags are not conjugated, as they are real,
+but their cross-hands are swapped.
+If a cross-hand is present without its partner, for example ``XY`` without
+``YX``, it is padded on reversed baselines with ``nan`` and flagged,
+and a :class:`~xarray_ms.errors.BaselineOrientationWarning` is issued.
+
+The orientation of other, non-standard, columns cannot be inferred from
+their type or shape: a real-valued per-baseline phase must be negated,
+while a real-valued weight must not.
+Such columns are omitted, with a
+:class:`~xarray_ms.errors.BaselineOrientationWarning`,
+from partitions that contain baselines stored as ``ANTENNA1 > ANTENNA2``.
+Their orientation can be declared to retain them:
+
+.. code-block:: python
+
+  dt = xarray.open_datatree(
+    ms, baseline_orientation={"BASELINE_PHASE": "antisymmetric"}
+  )
+
+A baseline may be stored in different orientations at different times,
+as each ``(time, baseline_id)`` cell is converted independently.
+A baseline stored in both orientations at the *same* time
+raises a :class:`~xarray_ms.errors.PartitioningError`.
+
+Writes apply the same conversion, as every orientation is its own inverse:
+values written on the upper-triangular baseline are stored in the
+orientation of the existing row.
+As data cannot be omitted on write, a
+:class:`~xarray_ms.errors.BaselineOrientationError` is raised
+when writing to partitions that contain baselines stored as
+``ANTENNA1 > ANTENNA2``
+
+* a column whose orientation is unknown. Declare it with
+  ``baseline_orientation`` when opening the Measurement Set,
+  even if the column will only be created on write.
+* a cross-hand correlation whose partner is absent, for example ``XY``
+  without ``YX``.
+
 Irregular Grid Warnings
 -----------------------
 

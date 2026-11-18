@@ -3,6 +3,39 @@
 Changelog
 =========
 
+X.Y.Z (DD-MM-YYYY)
+------------------
+* Add the standard ``corrected`` and ``model`` data groups to correlated
+  datasets if the ``CORRECTED_DATA`` and ``MODEL_DATA`` columns are present.
+  **Breaking**: these columns are now presented as the ``VISIBILITY_CORRECTED``
+  and ``VISIBILITY_MODEL`` variables, instead of under their MSv2 names.
+  Add a ``data_groups`` argument to ``open_dataset`` and ``open_datatree``
+  that adds custom data groups, or overrides standard data groups,
+  via strings, ``(data_group_name, correlated_data_column)`` tuples,
+  lists of these, or mappings.
+  ``(source, destination)`` tuples in this argument rename non-standard
+  columns, e.g. ``("RESIDUAL_DATA", "VISIBILITY_RESIDUAL")``.
+  Each data group refers to its own ``field_and_source_<data_group>_xds``.
+  ``open_dataset`` now also presents the ``data_groups`` attribute (:pr:`203`).
+* Convert rows stored as ``ANTENNA1 > ANTENNA2`` to their upper-triangular
+  baseline on read: ``VISIBILITY`` is conjugated with its cross-hand
+  correlations swapped, ``UVW`` is negated, and the cross-hands of ``FLAG``,
+  ``WEIGHT`` and ``SIGMA_SPECTRUM`` are swapped. Previously these baselines were
+  labelled upper-triangular, but their data was returned in the stored orientation.
+  Non-standard columns are omitted from affected partitions unless their
+  orientation is declared with ``baseline_orientation``.
+  A baseline stored in both orientations at the same time now raises
+  a specific ``PartitioningError`` (:issue:`199`, :pr:`201`).
+* Convert values written to rows stored as ``ANTENNA1 > ANTENNA2`` back to
+  the stored orientation, the inverse of the conversion on read.
+  ``baseline_orientation`` is retained in the dataset encoding for writes.
+  Writing a column of unknown orientation, or a cross-hand correlation
+  whose partner is absent, to such rows raises a
+  ``BaselineOrientationError`` (:issue:`199`).
+* Write the correlated data of the standard data groups to its MSv2 column,
+  ``VISIBILITY_CORRECTED`` to ``CORRECTED_DATA`` and ``VISIBILITY_MODEL``
+  to ``MODEL_DATA``, rather than creating new columns.
+
 0.5.13 (20-10-2026)
 -------------------
 * Bump the minimum ``arcae`` version to 0.5.8 (:pr:`196`).
