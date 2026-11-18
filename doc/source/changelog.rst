@@ -5,6 +5,18 @@ Changelog
 
 X.Y.Z (DD-MM-YYYY)
 ------------------
+* Convert values written to rows stored as ``ANTENNA1 > ANTENNA2`` back to
+  the stored orientation, the inverse of the conversion on read.
+  ``baseline_orientation`` is retained in the dataset encoding for writes.
+  Writing a column of unknown orientation, or a cross-hand correlation
+  whose partner is absent, to such rows raises a
+  ``BaselineOrientationError`` (:issue:`199`, :pr:`202`).
+* Write the correlated data of the standard data groups to its MSv2 column,
+  ``VISIBILITY_CORRECTED`` to ``CORRECTED_DATA`` and ``VISIBILITY_MODEL``
+  to ``MODEL_DATA``, rather than creating new columns (:pr:`202`).
+
+0.5.14 (09-11-2026)
+------------------
 * Add the standard ``corrected`` and ``model`` data groups to correlated
   datasets if the ``CORRECTED_DATA`` and ``MODEL_DATA`` columns are present.
   **Breaking**: these columns are now presented as the ``VISIBILITY_CORRECTED``
@@ -26,15 +38,6 @@ X.Y.Z (DD-MM-YYYY)
   orientation is declared with ``baseline_orientation``.
   A baseline stored in both orientations at the same time now raises
   a specific ``PartitioningError`` (:issue:`199`, :pr:`201`).
-* Convert values written to rows stored as ``ANTENNA1 > ANTENNA2`` back to
-  the stored orientation, the inverse of the conversion on read.
-  ``baseline_orientation`` is retained in the dataset encoding for writes.
-  Writing a column of unknown orientation, or a cross-hand correlation
-  whose partner is absent, to such rows raises a
-  ``BaselineOrientationError`` (:issue:`199`).
-* Write the correlated data of the standard data groups to its MSv2 column,
-  ``VISIBILITY_CORRECTED`` to ``CORRECTED_DATA`` and ``VISIBILITY_MODEL``
-  to ``MODEL_DATA``, rather than creating new columns.
 
 0.5.13 (20-10-2026)
 -------------------
