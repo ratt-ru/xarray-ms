@@ -1,18 +1,23 @@
 from __future__ import annotations
 
+import re
+from contextlib import contextmanager
 from functools import reduce
 from operator import mul
-from typing import TYPE_CHECKING, Any, Callable, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Literal, Tuple
 
 import numpy as np
 from xarray.backends import BackendArray
 from xarray.core.indexing import (
   IndexingSupport,
   OuterIndexer,
+  expanded_indexer,
   explicit_indexing_adapter,
 )
 
 from xarray_ms.casa_types import BaselineOrientation
+from xarray_ms.errors import BaselineOrientationError, MismatchedWriteRegion
+from xarray_ms.msv4_types import MAIN_PREFIX_DIMS
 
 if TYPE_CHECKING:
   import numpy.typing as npt
@@ -27,17 +32,48 @@ if TYPE_CHECKING:
 
   TransformerT = Callable[[npt.NDArray], npt.NDArray]
 
+DATA_COLUMN_DIM_MISMATCH_RE = re.compile(
+  r"Number of data dimensions (?P<data>\d+) does not "
+  r"match number of column dimensions (?P<column>\d+)"
+)
 
-def slice_length(s: npt.NDArray | slice, max_len) -> int:
+
+def slice_length(
+  s: npt.NDArray | slice, max_len: int, op: Literal["read", "write"]
+) -> int:
   if isinstance(s, np.ndarray):
     if s.ndim != 1:
       raise NotImplementedError("Slicing with non-1D numpy arrays")
     return len(s)
 
-  start, stop, step = s.indices(min(max_len, s.stop) if s.stop is not None else max_len)
+  clamp_op = min if op == "read" else max
+  start, stop, step = s.indices(
+    clamp_op(max_len, s.stop) if s.stop is not None else max_len
+  )
   if step != 1:
     raise NotImplementedError(f"Slicing with steps {s} other than 1 not supported")
   return stop - start
+
+
+@contextmanager
+def rethrow_arcae_exceptions():
+  import pyarrow as pa
+
+  try:
+    yield
+  except pa.lib.ArrowInvalid as e:
+    if m := re.match(DATA_COLUMN_DIM_MISMATCH_RE, str(e)):
+      data_dims = m.group("data")
+      column_dims = m.group("column")
+      raise MismatchedWriteRegion(
+        f"Attempted to write an array of dimensionality {data_dims} "
+        f"to a column of dimensionality {column_dims} "
+        f"This can occur if xarray variable dimensions "
+        f"have been selected out with integer indices. "
+        f"Prefer xarray semantics that retain dimensionality "
+        f"such as slicing during selection or sum(..., keepdims=True)"
+      )
+    raise
 
 
 class MSv2Array(BackendArray):
@@ -54,6 +90,9 @@ class MSv2Array(BackendArray):
     self.dtype = dtype
 
   def __getitem__(self, key) -> npt.NDArray:
+    raise NotImplementedError
+
+  def __setitem__(self, key, value) -> None:
     raise NotImplementedError
 
   @property
@@ -133,10 +172,14 @@ class MainMSv2Array(MSv2Array):
     self._pol_axis = pol_axis
     self._pol_perm = None if pol_perm is None else np.asarray(pol_perm, np.intp)
 
-    assert len(shape) >= 2, "(time, baseline_ids) required"
+    assert len(shape) >= len(MAIN_PREFIX_DIMS), f"{MAIN_PREFIX_DIMS} required"
     assert pol_axis is None or 2 <= pol_axis < len(shape)
+    # Write targets have the shape of the written region,
+    # but pol_perm spans every correlation of the partition
     assert pol_axis is None or (
-      self._pol_perm is not None and self._pol_perm.shape == (shape[pol_axis],)
+      self._pol_perm is not None
+      and self._pol_perm.ndim == 1
+      and self._pol_perm.size >= shape[pol_axis]
     )
 
   def __getitem__(self, key) -> npt.NDArray:
@@ -156,7 +199,7 @@ class MainMSv2Array(MSv2Array):
   def _getitem(self, key) -> npt.NDArray:
     assert len(key) == len(self.shape)
     key, squeeze_axis = self.promote_integer_dims(key)
-    expected_shape = tuple(slice_length(k, s) for k, s in zip(key, self.shape))
+    expected_shape = tuple(slice_length(k, s, "read") for k, s in zip(key, self.shape))
     if reduce(mul, expected_shape, 1) == 0:
       return np.empty(expected_shape, dtype=self.dtype)
     # Map the (time, baseline_id) coordinates onto row indices.
@@ -180,7 +223,8 @@ class MainMSv2Array(MSv2Array):
     row_key = (rows.ravel(),) + tuple(read_key)
     row_shape = (rows.size,) + tuple(read_shape)
     result = np.full(row_shape, self._default, dtype=self.dtype)
-    self._table_factory.instance.getcol(self._column, row_key, result)
+    with rethrow_arcae_exceptions():
+      self._table_factory.instance.getcol(self._column, row_key, result)
     result = result.reshape(rows.shape + tuple(read_shape))
 
     if flip is not None:
@@ -189,6 +233,53 @@ class MainMSv2Array(MSv2Array):
     # arcae doesn't handle squeezing out the selecting axis so we do it here.
     result = result.squeeze(axis=squeeze_axis)
     return self._transform(result) if self._transform else result
+
+  def __setitem__(self, key, value: npt.NDArray) -> None:
+    key, _ = self.promote_integer_dims(expanded_indexer(key, len(self.shape)))
+    expected_shape = tuple(slice_length(k, s, "write") for k, s in zip(key, self.shape))
+    # Index each axis separately, as the key is an outer indexer
+    partition = self._structure_factory.instance[self._partition]
+    rows = partition.row_map[key[0]][:, key[1]]
+    flip = self._flipped_cells(partition.flipped, key)
+    value = self._transform(value) if self._transform else value
+    value = np.reshape(value, rows.shape + expected_shape[2:])
+
+    if flip is None:
+      self._putcol(rows, key, value)
+    elif (pol_axis := self._hermitian_pol_axis) is not None:
+      # Flipped cells hold the correlations measured on the reversed
+      # baseline, so write them separately, onto those correlations
+      assert self._pol_perm is not None
+      # The key indexes the partition's correlations, not the region's
+      requested = np.arange(self._pol_perm.size)[key[pol_axis]]
+      partners = self._pol_perm[requested]
+      if np.any(partners < 0):
+        unpaired = requested[partners < 0].tolist()
+        raise BaselineOrientationError(
+          f"Cannot write correlations {unpaired} of {self._column} "
+          f"to baselines stored as ANTENNA1 > ANTENNA2 in partition "
+          f"{self._partition}, as the correlations measured on the "
+          f"reversed baselines are not present"
+        )
+      flipped_key = list(key)
+      flipped_key[pol_axis] = partners
+      self._putcol(np.where(flip, -1, rows), key, value)
+      if np.iscomplexobj(value):
+        value = np.conj(value)
+      self._putcol(np.where(flip, rows, -1), tuple(flipped_key), value)
+    else:
+      # Every orientation is its own inverse
+      self._putcol(rows, key, self._orient(np.array(value, copy=True), flip))
+
+  def _putcol(self, rows: npt.NDArray, key, value: npt.NDArray) -> None:
+    """Writes ``(time, baseline_id, ...)`` values to ``rows``, a
+    ``(time, baseline_id)`` array of row numbers. arcae skips negative rows"""
+    if np.all(rows < 0):
+      return
+    row_key = (rows.ravel(),) + tuple(key[2:])
+    value = value.reshape((rows.size,) + value.shape[2:])
+    with rethrow_arcae_exceptions():
+      self._table_factory.instance.putcol(self._column, value, index=row_key)
 
   @property
   def _hermitian_pol_axis(self) -> int | None:
@@ -307,7 +398,7 @@ class BroadcastMSv2Array(MSv2Array):
       for i, (k, s) in enumerate(zip(key, self.shape))
     )
     squeeze = tuple(0 if i in int_axes else slice(None) for i in range(len(key)))
-    expected_shape = tuple(slice_length(k, s) for k, s in zip(key, self.shape))
+    expected_shape = tuple(slice_length(k, s, "read") for k, s in zip(key, self.shape))
     if reduce(mul, expected_shape, 1) == 0:
       return np.empty(expected_shape, dtype=self.dtype)[squeeze]
     low_res_key = tuple(k for i, k in zip(self._low_res_index, key) if i is not None)
@@ -403,7 +494,7 @@ class SubtableMSv2Array(MSv2Array):
   def _getitem(self, key) -> npt.NDArray:
     assert len(key) == len(self.shape)
     key, squeeze_axis = MainMSv2Array.promote_integer_dims(key)
-    expected_shape = tuple(slice_length(k, s) for k, s in zip(key, self.shape))
+    expected_shape = tuple(slice_length(k, s, "read") for k, s in zip(key, self.shape))
     if reduce(mul, expected_shape, 1) == 0:
       return np.empty(expected_shape, dtype=self.dtype)
     # Map the (time, antenna) coordinates onto subtable rows
